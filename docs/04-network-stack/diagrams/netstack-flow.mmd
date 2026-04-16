@@ -1,0 +1,58 @@
+%% netstack-flow.mmd
+%% UserSpace 模式：gotatun 解密 → VirtualDevice → smoltcp Interface → ServiceRouter → proxy
+%% 源码: crates/netstack/src/stack.rs:66 (NetStack::poll)
+flowchart LR
+    subgraph gotatun["gotatun (WG userspace)"]
+        DEC[decrypt]
+    end
+
+    subgraph netstack["netstack (this module)"]
+        INJECT[("inject_rx (mpsc 256)")]
+        POLL{"NetStack::poll<br/>stack.rs:66"}
+        DEV[VirtualDevice<br/>device.rs:34]
+        IFACE[smoltcp Interface]
+        UDPPARSE[udp_info<br/>stack.rs:342]
+        LISTENERS["HashMap&lt;port, SocketHandle&gt;<br/>ensure_tcp_listener"]
+        TCP[tcp::Socket<br/>Established]
+        UDPREPLY[build_udp_reply<br/>stack.rs:378]
+        TXOUT[("tx_out (mpsc 256)")]
+    end
+
+    subgraph nat["nat (ServiceRouter)"]
+        RESOLVE["ServiceRouter::resolve<br/>router.rs:71"]
+    end
+
+    subgraph proxy["proxy (relay layer)"]
+        NEWCONN[(NewTcpConnection)]
+        NEWDGRAM[(NewUdpDatagram)]
+        RELAY_TCP[relay_*_connection]
+        RELAY_UDP[relay_datagram]
+        BACKEND[(backend TCP/UDP)]
+    end
+
+    DEC -->|"Vec&lt;u8&gt; IPv4"| INJECT
+    INJECT --> POLL
+
+    POLL -->|"proto == 17"| UDPPARSE
+    UDPPARSE --> NEWDGRAM
+    NEWDGRAM --> RELAY_UDP
+    RELAY_UDP --> RESOLVE
+    RELAY_UDP --> BACKEND
+    RELAY_UDP -. "reply_tx.send" .-> POLL
+    POLL --> UDPREPLY
+    UDPREPLY --> TXOUT
+
+    POLL -->|"proto == 6"| LISTENERS
+    LISTENERS --> DEV
+    DEV --> IFACE
+    IFACE --> TCP
+    TCP -->|"state==Established"| NEWCONN
+    NEWCONN --> RELAY_TCP
+    RELAY_TCP --> RESOLVE
+    RELAY_TCP --> BACKEND
+    RELAY_TCP -. "data_tx" .-> TCP
+    TCP -. "data_rx" .-> RELAY_TCP
+    IFACE --> DEV
+    DEV -->|"drain_tx"| TXOUT
+
+    TXOUT --> |"Vec&lt;u8&gt; IPv4"| DEC

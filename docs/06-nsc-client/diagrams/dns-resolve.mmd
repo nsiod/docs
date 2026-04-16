@@ -1,0 +1,36 @@
+sequenceDiagram
+  autonumber
+  actor App as App (ssh / curl)
+  participant LIBC as libc / getaddrinfo
+  participant RC as /etc/resolv.conf
+  participant NSCD as NSC DNS<br/>127.0.0.53:53 (UDP)
+  participant MAP as DnsRecords<br/>Arc RwLock HashMap
+  participant UP as Upstream<br/>1.1.1.1:53
+
+  App->>LIBC: getaddrinfo("ssh.office.n.ns")
+  LIBC->>RC: read nameserver
+  RC-->>LIBC: nameserver 127.0.0.53
+  LIBC->>NSCD: DNS query (ID=0xABCD, QTYPE=A)<br/>QNAME = ssh.office.n.ns
+
+  NSCD->>NSCD: parse_question<br/>domain = "ssh.office.n.ns" qtype=1
+  NSCD->>MAP: read().get("ssh.office.n.ns")
+
+  alt 命中
+    MAP-->>NSCD: 127.11.0.1
+    NSCD->>NSCD: build_a_response<br/>flags=0x8400 | RD_bit<br/>TTL=60 RDATA=127.11.0.1
+    NSCD-->>LIBC: DNS response (ID=0xABCD, A 127.11.0.1)
+  else miss (qtype≠A, 或 domain 未登记)
+    MAP-->>NSCD: None
+    NSCD->>UP: 转发原始 query<br/>(UdpSocket::bind 0.0.0.0:0 → send_to 1.1.1.1:53)
+    UP-->>NSCD: upstream 响应
+    alt 2 秒内返回
+      NSCD-->>LIBC: 透传上游响应
+    else 超时
+      NSCD--xLIBC: drop (debug log)
+    end
+  end
+
+  LIBC-->>App: 127.11.0.1
+
+  App->>App: TCP connect 127.11.0.1:22<br/>→ 打中 NSC VIP listener (proxy.rs)
+  Note over App,UP: 对于 OFFICE.N.NS 等大小写变体，<br/>handle_query 用 to_lowercase() 匹配

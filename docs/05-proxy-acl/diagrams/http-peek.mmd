@@ -1,0 +1,32 @@
+%% http-peek.mmd — :80 HTTP/1.1 Host 头路由时序
+%% 引用: crates/nsn/src/main.rs:1187  crates/proxy/src/http_peek.rs:11  crates/nat/src/router.rs:117
+sequenceDiagram
+    autonumber
+    participant Client as Remote Client
+    participant SM as smoltcp<br/>(netstack)
+    participant Relay as relay_http_connection<br/>(nsn/src/main.rs)
+    participant Peek as http_peek::parse_http_host
+    participant Router as ServiceRouter
+    participant ACL as AclEngine
+    participant Proxy as TcpStream (backend)
+    participant SVC as HTTP Backend
+
+    Client->>SM: TCP SYN → dst_port=80
+    SM->>Relay: NewTcpConnection (local=:80)
+    Client->>SM: GET / HTTP/1.1\r\nHost: web.example.com\r\n...
+    SM->>Relay: data_rx.recv() 首个 chunk
+    Relay->>Peek: parse_http_host(&first)
+    Peek->>Peek: 扫描 lines, 找 "host:" (大小写无关)
+    Peek->>Peek: 去除 :port 后缀
+    Peek-->>Relay: Some("web.example.com")
+    Relay->>Router: resolve_by_host(src, dst, host)
+    Router->>Router: find_named_by_domain(host)
+    Router->>ACL: is_allowed(src_ip, dst_ip, 80, Tcp)
+    ACL-->>Router: allowed=true
+    Router->>Router: resolve_host(service.host, service.port)
+    Router-->>Relay: ResolvedService{target}
+    Relay->>Proxy: TcpStream::connect(target)
+    Relay->>Proxy: write_all(first)  %% 原始字节不改写
+    Relay->>Proxy: 双向 relay 后续字节
+    Proxy-->>SVC: 应用层请求
+    SVC-->>Client: HTTP 响应

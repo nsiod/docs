@@ -1,0 +1,42 @@
+%% 控制面: 可插拔 ControlTransport 与事件驱动
+%% 用途: 展示 NSN 如何订阅多个 NSD、三种传输外壳如何复用同一 SSE 事件解析器
+graph LR
+    subgraph NSN["NSN Control Stack (crate: control)"]
+        MCP["MultiControlPlane<br/>并发订阅多个 NSD<br/>配置合并 (wg 并集 / acl 交集)"]
+        Merge["merge.rs<br/>按 chain_id 去重"]
+        SSE_Client["SSE Event Parser<br/>(sse.rs)"]
+    end
+
+    subgraph Transport["ControlTransport trait (可插拔)"]
+        T_SSE["sse<br/>HTTPS/TLS · HTTP/2"]
+        T_NOISE["noise<br/>Noise-IK over TCP<br/>X25519 + ChaCha20 + BLAKE2s"]
+        T_QUIC["quic<br/>QUIC over UDP<br/>pubkey verifier, no CA"]
+    end
+
+    subgraph NSDSide["NSD (mock: Bun + Rust quic-proxy)"]
+        NSD_REG["Device Registry<br/>Ed25519 machinekey + X25519 peerkey"]
+        NSD_POL["Policy Engine<br/>(wg/proxy/acl/gateway/routing/dns)"]
+        NSD_HTTP[":3001 HTTP SSE"]
+        NSD_NOISE[":4001 Noise Listener"]
+        NSD_QUIC[":4002 QUIC Listener"]
+    end
+
+    MCP --> SSE_Client
+    MCP --> Merge
+    SSE_Client --> T_SSE
+    SSE_Client --> T_NOISE
+    SSE_Client --> T_QUIC
+
+    T_SSE -->|"HTTP GET /config/stream"| NSD_HTTP
+    T_NOISE -->|"Noise handshake → inner HTTP SSE"| NSD_NOISE
+    T_QUIC -->|"QUIC stream → inner HTTP SSE"| NSD_QUIC
+
+    NSD_NOISE --> NSD_HTTP
+    NSD_QUIC --> NSD_HTTP
+    NSD_HTTP --> NSD_POL
+    NSD_HTTP --> NSD_REG
+
+    classDef outer fill:#fff3e0,stroke:#f57c00
+    classDef inner fill:#e8f5e9,stroke:#388e3c
+    class T_SSE,T_NOISE,T_QUIC outer
+    class NSD_HTTP,NSD_POL,NSD_REG inner

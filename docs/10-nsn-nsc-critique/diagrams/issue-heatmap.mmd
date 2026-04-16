@@ -1,0 +1,81 @@
+%% NSN/NSC 缺陷热度图: 模块 × 严重度
+%% 数据基于本目录 6 章节缺陷统计 (70+ 条)
+%% 列: P0 致命 / P1 高 / P2 中 / P3 低
+%% 行: 受影响 crate
+
+graph TB
+    subgraph LEGEND["图例"]
+        L0["P0 致命"]:::p0
+        L1["P1 高"]:::p1
+        L2["P2 中"]:::p2
+        L3["P3 低"]:::p3
+    end
+
+    subgraph NSN_ROW["nsn 二进制"]
+        NSN_P0["2 P0:<br/>FUNC-005 (conntrack OOM 来源)<br/>SEC-008 (启动 fail-open)"]:::p0
+        NSN_P1["4 P1:<br/>FAIL-001 panic / FAIL-002 ACL timeout<br/>ARCH-006 main 1633行 / SEC-014 ACL 双写"]:::p1
+        NSN_P23["8 P2/P3:<br/>OBS-007 / OBS-009 / OBS-012<br/>FAIL-007 / FAIL-010 / FUNC-010 / FAIL-011 / PERF-009"]:::p2
+    end
+
+    subgraph NSC_ROW["nsc 二进制"]
+        NSC_P0["1 P0:<br/>(无独立 P0,SEC-001 由 nsn 共享)"]:::p0d
+        NSC_P1["5 P1:<br/>FUNC-001 假 TUN / FUNC-004 token_rx<br/>FUNC-007 health 链接 / SEC-006 无ACL / SEC-010"]:::p1
+        NSC_P23["4 P2/P3:<br/>FUNC-002 device-flow / FUNC-003 status<br/>OBS-010 无 metrics / FUNC-009"]:::p2
+    end
+
+    subgraph CONTROL_ROW["control crate"]
+        CTRL_P0["2 P0:<br/>SEC-002 to_http_base 降级<br/>SEC-005 多 NSD 交集"]:::p0
+        CTRL_P1["3 P1:<br/>ARCH-008 HTTP 旁路 / SEC-003 重放<br/>FAIL-006 空 ACL 雪崩"]:::p1
+        CTRL_P23["6 P2/P3:<br/>SEC-009 token 入日志 / SEC-012 fingerprint pin<br/>SEC-011 device-flow 不持久化 / OBS-005 无 span<br/>FAIL-007 backoff / SEC-013 source"]:::p2
+    end
+
+    subgraph WS_ROW["tunnel-ws"]
+        WS_P1["3 P1:<br/>FAIL-003 单 TCP HOL<br/>SEC-007 Open SSRF / SEC-013 frame 缺 source"]:::p1
+        WS_P23["5 P2/P3:<br/>ARCH-009 单 TCP / FAIL-004 upgrade abort<br/>PERF-002 Vec copy / PERF-001 RwLock<br/>PERF-008 DNS 未缓存"]:::p2
+    end
+
+    subgraph WG_ROW["tunnel-wg"]
+        WG_P23["3 P2/P3:<br/>ARCH-007 AclFilteredSend 死代码<br/>FUNC-008 misnomer / PERF-004 单线程 crypto 待验证"]:::p2
+    end
+
+    subgraph NAT_ROW["nat"]
+        NAT_P0["1 P0:<br/>FUNC-005 ConntrackTable 无 GC"]:::p0
+        NAT_P1["2 P1:<br/>ARCH-001 ServiceRouter fail-open<br/>SEC-001 ACL 不对称"]:::p1
+        NAT_P23["4 P2/P3:<br/>FAIL-005 NAT miss 静默 / OBS-003 无 miss metric<br/>PERF-007 4 层嵌套 / FUNC-006 IPv4 only"]:::p2
+    end
+
+    subgraph CONN_ROW["connector"]
+        CONN_P0["1 P0:<br/>(共享 SEC-005 影响)"]:::p0d
+        CONN_P1["2 P1:<br/>ARCH-004 health_interval 死代码<br/>FUNC-007 NSGW 健康未运行"]:::p1
+        CONN_P23["4 P2/P3:<br/>FAIL-009 proxy_done=1<br/>PERF-010 O(N) 选路 / OBS-004 channel 无 metric<br/>FAIL-008 backpressure 缺指标"]:::p2
+    end
+
+    subgraph ACL_ROW["acl"]
+        ACL_P1["1 P1:<br/>OBS-008 ACL deny 无 counter"]:::p1
+        ACL_P23["2 P2:<br/>(评估时序细节 / 见 SEC-014 双写)"]:::p2
+    end
+
+    subgraph TELE_ROW["telemetry"]
+        TELE_P23["3 P2/P3:<br/>OBS-001 OTel 空跑 / OBS-002 双 struct<br/>OBS-007 format 拼接"]:::p2
+    end
+
+    subgraph COMMON_ROW["common"]
+        COM_P1["1 P1:<br/>SEC-004 私钥明文落盘"]:::p1
+        COM_P23["1 P3:<br/>OBS-012 日志无大小限制"]:::p3
+    end
+
+    subgraph PROXY_ROW["proxy"]
+        PROXY_P23["2 P3:<br/>FUNC-011 生产未使用 / ARCH-003 双 relay"]:::p3
+    end
+
+    classDef p0 fill:#fa8072,stroke:#000,color:#000,font-weight:bold
+    classDef p0d fill:#fcd5b5,stroke:#000,color:#000
+    classDef p1 fill:#ffd966,stroke:#000,color:#000
+    classDef p2 fill:#bdd7ee,stroke:#000,color:#000
+    classDef p3 fill:#c6e0b4,stroke:#000,color:#000
+
+    NSN_ROW ~~~ NSC_ROW ~~~ CONTROL_ROW
+    CONTROL_ROW ~~~ WS_ROW ~~~ WG_ROW
+    WG_ROW ~~~ NAT_ROW ~~~ CONN_ROW
+    CONN_ROW ~~~ ACL_ROW ~~~ TELE_ROW
+    TELE_ROW ~~~ COMMON_ROW ~~~ PROXY_ROW

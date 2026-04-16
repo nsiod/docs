@@ -1,0 +1,44 @@
+%% NSD authentication state machine (as seen by one node's MachineState).
+%% Source: crates/common/src/state.rs + crates/control/src/auth.rs + device_flow.rs
+stateDiagram-v2
+    [*] --> Unregistered
+
+    state Unregistered {
+        [*] --> DetectAuthMethod
+        DetectAuthMethod --> HasAuthKey: auth_key 已配置
+        DetectAuthMethod --> NeedsDeviceFlow: 无 auth_key + auth_methods ∋ device_flow
+        DetectAuthMethod --> Failed: 无可用方法
+    }
+
+    HasAuthKey --> Registering: POST /machine/register (auth_key)
+    NeedsDeviceFlow --> AwaitDeviceCode: POST /device/code
+    AwaitDeviceCode --> PollingToken: 获得 device_code / user_code
+    PollingToken --> PollingToken: 428 authorization_pending / slow_down
+    PollingToken --> Registering: 200 access_token → register(Bearer)
+    PollingToken --> Failed: expired_token / access_denied
+
+    Registering --> Registered: 201 { machine_id, ... }<br/>写 state 文件
+    Registering --> Failed: 401 / 400
+
+    state Registered {
+        [*] --> NeedsJwt
+        NeedsJwt --> Authenticated: POST /machine/auth 200 { jwt }
+        Authenticated --> Authenticated: SSE: TokenRefresh<br/>set_token(new_jwt)
+        Authenticated --> NeedsJwt: jwt 过期 / SSE 断开
+    }
+
+    Registered --> Unregistered: state 文件被删
+
+    Failed --> [*]: 退出 / 人工介入
+
+    note right of Authenticated
+        已连接 SSE /api/v1/config/stream
+        每条消息都通过 rate limiter
+        与 max_message_size 过滤
+    end note
+
+    note right of PollingToken
+        使用服务端建议的 interval
+        遇 slow_down 建议放大间隔
+        deadline = expires_in + 5s
+    end note

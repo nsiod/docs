@@ -1,0 +1,41 @@
+%% UDP <-> WSS fallback timing
+%% Source: crates/connector/src/lib.rs
+sequenceDiagram
+    autonumber
+    participant NSN as NSN ConnectorManager
+    participant Peer as NSGW peer endpoint
+    participant Relay as wss://{gw}/relay
+
+    Note over NSN: connect(wg_config) — lib.rs:205
+
+    loop 3 attempts, 3s delay
+        NSN->>Peer: UDP 148B probe to peer.endpoint (lib.rs:254)
+        alt UDP reachable (any reply or send OK within 5s)
+            Peer-->>NSN: reply / send succeeds
+            NSN->>NSN: active = Transport::Udp
+            Note over NSN: done — TunnelManager drives WG
+        else send fails / ICMP unreachable
+            Peer-->>NSN: error
+        end
+    end
+
+    Note over NSN: All 3 UDP attempts failed → fallback
+
+    NSN->>Relay: WSS connect with Bearer token<br/>(tunnel-ws/src/lib.rs:308)
+    Relay-->>NSN: 101 Switching Protocols
+    NSN->>NSN: active = Transport::Wss(WsTunnel)
+
+    par WSS data-plane
+        NSN->>Relay: Message::Binary(WsFrame) * N
+        Relay-->>NSN: Message::Binary(WsFrame) * N
+    and Periodic upgrade probe (every 300s, lib.rs:328)
+        NSN->>Peer: UDP probe
+        alt UDP recovered
+            Peer-->>NSN: reply
+            NSN->>NSN: abort proxy_handle<br/>active = Transport::Udp
+            Note over NSN: seamless upgrade WSS → UDP
+        else still blocked
+            Peer-->>NSN: timeout / err
+            Note over NSN: stay on WSS
+        end
+    end

@@ -1,0 +1,99 @@
+%% NSD 生产态架构图 (目标状态)
+%% 对照 nsd-vision.md 中 F1-F6 六大能力簇
+
+graph TB
+  subgraph EXT[外部系统]
+    IDP[IdP<br/>OIDC/SAML/SCIM]
+    MDM[MDM/EDR<br/>设备态势]
+    SIEM[SIEM<br/>Splunk/Elastic]
+    BILLING[计费系统]
+    TF[Terraform<br/>K8s Operator]
+  end
+
+  subgraph EDGE[边缘入口]
+    LB[L7 负载均衡<br/>Traefik/Envoy]
+    RL[API Rate Limit]
+  end
+
+  subgraph NSD[NSD 控制面集群]
+    subgraph API[API 层]
+      REST[REST/gRPC API]
+      GQL[GraphQL Admin]
+      WH[Webhook 发布器]
+    end
+    subgraph CORE[核心服务]
+      AUTH[身份/凭据服务]
+      POL[Policy Engine<br/>Rego/CEL]
+      TOPO[拓扑服务]
+      EVT[事件总线<br/>NATS/Kafka]
+      AUDIT[审计服务]
+      BP[Blueprint 编排]
+    end
+    subgraph DATA[数据层]
+      PG[(Postgres<br/>主从)]
+      CACHE[(Redis<br/>Cache)]
+      OBJ[(对象存储<br/>WORM 审计)]
+      VAULT[Vault/KMS<br/>密钥管理]
+    end
+    subgraph OBS[观测栈]
+      PROM[Prometheus]
+      LOKI[Loki 日志]
+      OTEL[OTel Collector]
+    end
+  end
+
+  subgraph CP[可选联邦]
+    NSD2[NSD 联邦节点<br/>multi.rs MultiControlPlane]
+  end
+
+  subgraph DOWN[下游]
+    NSGW[NSGW 数据面]
+    NSN[NSN 站点]
+    NSC[NSC 客户端]
+  end
+
+  IDP --> AUTH
+  MDM --> POL
+  TF --> REST
+  BILLING --> WH
+  SIEM <-- WH
+
+  NSC --> LB
+  NSN --> LB
+  NSGW --> LB
+  LB --> RL --> REST
+  LB --> GQL
+
+  REST --> AUTH
+  REST --> POL
+  REST --> TOPO
+  REST --> BP
+  POL --> AUDIT
+  AUTH --> VAULT
+  CORE --> PG
+  CORE --> CACHE
+  AUDIT --> OBJ
+  EVT --> WH
+  EVT --> NSGW
+  EVT --> NSN
+
+  CORE --> PROM
+  CORE --> LOKI
+  CORE --> OTEL
+
+  NSD -.联邦同步.- NSD2
+
+  classDef ext fill:#fff3e0
+  classDef edge fill:#e3f2fd
+  classDef api fill:#e8f5e9
+  classDef core fill:#f3e5f5
+  classDef data fill:#fce4ec
+  classDef obs fill:#e0f2f1
+  classDef fed fill:#ffebee
+  class IDP,MDM,SIEM,BILLING,TF ext
+  class LB,RL edge
+  class REST,GQL,WH api
+  class AUTH,POL,TOPO,EVT,AUDIT,BP core
+  class PG,CACHE,OBJ,VAULT data
+  class PROM,LOKI,OTEL obs
+  class NSD2 fed

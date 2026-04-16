@@ -1,0 +1,101 @@
+%% NSN/NSC 当前耦合 vs 改进后解耦对比
+%% 左: 现状 (问题点用红色框出)
+%% 右: 改造后 (依赖关系简化)
+
+graph LR
+    subgraph CURRENT["当前 (问题: 中心化 main + 双 ACL Arc + HTTP 旁路)"]
+        direction TB
+        MAIN_NOW["nsn/main.rs<br/>1633 行<br/>30+ tokio::spawn<br/>装配所有 crate"]:::warn
+
+        subgraph ACL_NOW["ACL 引擎双 Arc"]
+            ACL1["nat::ServiceRouter::acl_engine<br/>(fail-OPEN)"]:::bad
+            ACL2["connector::Manager::acl<br/>共享给 WsTunnel<br/>(fail-CLOSED)"]:::bad
+            ACL_LOAD["load_acl_config_for_runtime<br/>同时写两份, 无回滚"]:::bad
+        end
+
+        subgraph CTRL_NOW["control 双通道"]
+            SSE_NOW["SSE / Noise / QUIC<br/>加密通道"]
+            HTTP_NOW["HTTP API 旁路<br/>register/auth/heartbeat<br/>to_http_base() → http://"]:::bad
+        end
+
+        subgraph DATA_NOW["数据面"]
+            WSS_NOW["tunnel-ws<br/>单 WSS TCP<br/>HOL blocking"]:::warn
+            WG_NOW["tunnel-wg<br/>userspace WG"]
+            NAT_NOW["nat<br/>无 GC/TTL/cap"]:::bad
+        end
+
+        subgraph CONN_NOW["connector"]
+            HEALTH_NOW["health_interval<br/>#[allow(dead_code)]"]:::bad
+        end
+
+        subgraph NSC_NOW["NSC"]
+            NSC_RX["_acl_rx _token_rx<br/>显式丢弃"]:::bad
+            NSC_TUN["--data-plane tun<br/>仅改 VIP 前缀"]:::bad
+        end
+
+        MAIN_NOW --> ACL1
+        MAIN_NOW --> ACL2
+        ACL_LOAD --> ACL1
+        ACL_LOAD --> ACL2
+        MAIN_NOW --> SSE_NOW
+        MAIN_NOW --> HTTP_NOW
+        MAIN_NOW --> WSS_NOW
+        MAIN_NOW --> WG_NOW
+        MAIN_NOW --> NAT_NOW
+        MAIN_NOW --> CONN_NOW
+        WSS_NOW -. uses .-> ACL2
+        NAT_NOW -. uses .-> ACL1
+    end
+
+    subgraph PROPOSED["改造后 (单 ACL ArcSwap + 统一 transport + 子模块装配)"]
+        direction TB
+
+        subgraph BUILDER["AppBuilder 模式"]
+            BLD_ACL["startup_acl.rs"]
+            BLD_WG["startup_wg.rs"]
+            BLD_PROXY["startup_proxy.rs"]
+            BLD_MON["startup_monitor.rs"]
+        end
+
+        ACL_NEW["AppState.acl: ArcSwap&lt;AclEngine&gt;<br/>所有数据面入口共享一份<br/>fail-CLOSED 默认"]:::good
+
+        subgraph CTRL_NEW["control 统一"]
+            TRANS_NEW["ControlTransport trait<br/>承载 register/auth/heartbeat<br/>+ SSE config push"]:::good
+        end
+
+        subgraph DATA_NEW["数据面"]
+            WSS_NEW["tunnel-ws<br/>多 TCP 通道<br/>HOL 缓解"]:::good
+            WG_NEW["tunnel-wg<br/>userspace WG"]
+            NAT_NEW["nat<br/>ConntrackTable<br/>+ TTL/GC/cap"]:::good
+        end
+
+        subgraph CONN_NEW["connector"]
+            HEALTH_NEW["MultiGatewayManager<br/>health probe 30s 真运行"]:::good
+        end
+
+        subgraph NSC_NEW["NSC"]
+            NSC_ACL["nsc::router 接 acl_rx<br/>消费 ACL"]:::good
+            NSC_TOKEN["接 token_rx<br/>SSE → set_token"]:::good
+            NSC_TUN_NEW["--data-plane tun<br/>真 TUN 或删除"]:::good
+        end
+
+        OBS_NEW["统一 OTel meter<br/>+ histogram + span<br/>+ MeteredSender"]:::good
+
+        BUILDER --> ACL_NEW
+        BUILDER --> CTRL_NEW
+        BUILDER --> DATA_NEW
+        BUILDER --> CONN_NEW
+        BUILDER --> OBS_NEW
+
+        ACL_NEW -.- WSS_NEW
+        ACL_NEW -.- NAT_NEW
+        ACL_NEW -.- NSC_ACL
+
+        TRANS_NEW -.- HTTP_NEW_NOTE["B.1 短期:https<br/>B.2 长期:走 transport"]
+    end
+
+    CURRENT ==>|"7 主题改造<br/>~69 人日"| PROPOSED
+
+    classDef good fill:#c6e0b4,stroke:#000,color:#000
+    classDef bad fill:#fa8072,stroke:#000,color:#000,font-weight:bold
+    classDef warn fill:#ffd966,stroke:#000,color:#000

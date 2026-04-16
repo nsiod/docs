@@ -1,0 +1,150 @@
+%% common crate shared state and downstream service registration relationships
+classDiagram
+    direction LR
+
+    class ConnectorConfig {
+        +server_url: String
+        +control_centers: Vec~ControlCenterConfig~
+        +gateways: Vec~GatewayConfig~
+        +state_dir: String
+        +auth_key: Option~String~
+        +machine_id: Option~String~
+        +ws_max_messages_per_sec: u32
+        +ws_max_message_size: usize
+        +control_mode: String
+        +nsd_pubkey: Option~String~
+        +effective_control_centers()
+        +effective_gateways()
+        +has_endpoint()
+    }
+
+    class ControlCenterConfig {
+        +id: String
+        +url: String
+        +priority: u32
+    }
+
+    class GatewayConfig {
+        +id: String
+        +endpoint: String
+        +priority: u32
+        +transport_mode: String
+        +enabled: bool
+    }
+
+    class MachineState {
+        -signing_key: Ed25519 SigningKey
+        +machine_key_pub: bytes32
+        -peer_key_priv: SecretBox
+        +peer_key_pub: bytes32
+        +realm: String
+        +machine_id: Option~String~
+        +registered: bool
+        +server_peer_pub: Option~bytes32~
+        +server_endpoint: Option~SocketAddr~
+        +domain_base: Option~String~
+        +load_or_create_for_realm(state_dir, realm)
+        +from_credentials(auth_key, machine_id)
+        +sign(message) bytes64
+        +set_registered(...)
+        +save(state_dir)
+    }
+
+    class MachineIdentity {
+        +machine_key_pub: bytes32
+        +peer_key_pub: bytes32
+        +signing_key: SigningKey
+        +peer_key_priv: SecretBox
+    }
+
+    class RealmRegistration {
+        +realm: String
+        +machine_id: Option~String~
+        +registered: bool
+        +server_peer_pub: Option~bytes32~
+        +server_endpoint: Option~SocketAddr~
+    }
+
+    class NsdInfo {
+        +nsd_type: NsdType
+        +realm: String
+        +auth_methods: Vec~AuthMethod~
+        +provider: String
+        +version: String
+    }
+
+    class NsdType {
+        <<enum>>
+        Cloud
+        SelfHosted
+    }
+
+    class AuthMethod {
+        <<enum>>
+        AuthKey
+        OAuth2
+        DeviceFlow
+    }
+
+    class ServicesConfig {
+        +settings: ServiceSettings
+        +services: HashMap~String, ServiceDef~
+        +load(path) fail-closed
+        +is_strict()
+        +is_allowed(host, port, proto)
+        +is_cidr_allowed(cidr, range, proto)
+        +find_by_port(port, proto)
+        +find_by_domain(host)
+    }
+
+    class ServiceDef {
+        +protocol: Protocol
+        +host: String
+        +port: u16
+        +domain: Option~String~
+        +description: Option~String~
+        +enabled: bool
+        +tunnel: TunnelPreference
+        +gateway: GatewayPreference
+        +is_local()
+        +fqid(name, node_id)
+    }
+
+    class TunnelPreference {
+        <<enum>>
+        Auto
+        Wg
+        Ws
+    }
+
+    class GatewayPreference {
+        <<enum>>
+        Auto
+        Specific(String)
+    }
+
+    class Tunnel {
+        <<trait>>
+        +transport_type() TransportType
+        +is_connected() bool
+    }
+
+    class TransportType {
+        <<enum>>
+        WireGuard
+        WebSocket
+    }
+
+    ConnectorConfig "1" --> "*" ControlCenterConfig : control_centers
+    ConnectorConfig "1" --> "*" GatewayConfig : gateways
+
+    MachineState ..|> MachineIdentity : embeds (identity fields)
+    MachineState ..|> RealmRegistration : embeds (realm fields)
+    NsdInfo --> NsdType
+    NsdInfo --> AuthMethod
+
+    ServicesConfig "1" --> "*" ServiceDef : services
+    ServiceDef --> TunnelPreference
+    ServiceDef --> GatewayPreference
+
+    Tunnel --> TransportType : transport_type() returns

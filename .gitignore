@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+.next/
+.turbo/
+.vite/
+.cache/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated code
+**/routeTree.gen.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Lock files kept (bun.lock is source of truth)
+# bun.lock — committed
+# Other lock files can appear if mixed tooling — keep or drop per policy
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Review artifacts
+.code-review-graph/

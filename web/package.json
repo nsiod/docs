@@ -1,0 +1,14 @@
+{
+  "name": "nsio-docs-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter=@nsio-docs/web dev",
+    "build": "bun run --filter=@nsio-docs/web build",
+    "preview": "bun run --filter=@nsio-docs/web preview",
+    "typecheck": "bun run --filter=@nsio-docs/web typecheck",
+    "lint": "bun run --filter=@nsio-docs/web lint",
+    "test": "bun run --filter=@nsio-docs/web test"
+  }
+}

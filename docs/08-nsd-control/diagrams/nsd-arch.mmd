@@ -1,0 +1,54 @@
+%% NSD internal layered architecture.
+%% Source: tests/docker/nsd-mock/src/index.ts + auth.ts + registry.ts + noise-listener.ts + quic-listener.ts
+%% Production parallels: tmp/control/server/* (routers, db, auth)
+graph TB
+    subgraph Transport["传输适配层"]
+        HTTP["HTTP /api/*<br/>Bun.serve :3000"]
+        NOISE["Noise IK :4001<br/>TCP TLV 帧"]
+        QUIC["QUIC :4002<br/>子进程 nsd-quic-proxy"]
+    end
+
+    subgraph API["API 层"]
+        DISCOVERY["GET /api/v1/info"]
+        REG_AUTH["POST /machine/register<br/>POST /machine/auth<br/>POST /device/code<br/>POST /device/token<br/>POST /machine/heartbeat"]
+        REPORT["POST /services/report<br/>POST /gateway/report"]
+        SSE_EP["GET /api/v1/config/stream"]
+        ADMIN["GET /api/v1/machines<br/>GET /api/v1/services<br/>GET /ready"]
+    end
+
+    subgraph Business["业务层"]
+        AUTH_SVC["Auth Service<br/>auth.ts"]
+        REGISTRY["Device Registry<br/>registry.ts"]
+        POLICY["Policy Composer<br/>buildNsnWgConfig<br/>buildProxyConfig<br/>buildRoutingConfig<br/>buildDnsConfig"]
+        SSE_HUB["SSE Hub<br/>subscribers Map<br/>broadcast* helpers"]
+    end
+
+    subgraph Storage["存储层 (mock: 进程内 Map; 生产: PG/SQLite)"]
+        MACHINES["machines<br/>(machine_id ↔ keys)"]
+        GATEWAYS["gateways<br/>(gateway_id ↔ WG/WSS)"]
+        SERVICES["nsnServices<br/>(machine_id ↔ services)"]
+        DEVICE_CODES["deviceCodes<br/>(device_code ↔ token)"]
+    end
+
+    NOISE -.->|解密为 HTTP| HTTP
+    QUIC -.->|解密为 HTTP| HTTP
+    HTTP --> DISCOVERY
+    HTTP --> REG_AUTH
+    HTTP --> REPORT
+    HTTP --> SSE_EP
+    HTTP --> ADMIN
+
+    DISCOVERY --> AUTH_SVC
+    REG_AUTH --> AUTH_SVC
+    REPORT --> REGISTRY
+    SSE_EP --> SSE_HUB
+    ADMIN --> REGISTRY
+
+    AUTH_SVC --> MACHINES
+    AUTH_SVC --> DEVICE_CODES
+    REGISTRY --> MACHINES
+    REGISTRY --> GATEWAYS
+    REGISTRY --> SERVICES
+    REGISTRY --> POLICY
+    POLICY --> SSE_HUB
+    SSE_HUB --> SSE_EP

@@ -1,0 +1,44 @@
+%% WSS relay packet flow: NSC /client <-> NSGW <-> NSN /relay
+%% Source: tests/docker/nsgw-mock/src/wss-relay.ts + src/index.ts + crates/tunnel-ws/
+sequenceDiagram
+    autonumber
+    participant NSC as NSC (tunnel-ws client)
+    participant GWC as NSGW /client<br/>clientSessions
+    participant GWM as NSGW stitch tables<br/>connectorStreamToClient
+    participant GWR as NSGW /relay<br/>activeSessions
+    participant NSN as NSN (tunnel-ws client)
+    participant SVC as Target service
+
+    Note over NSC,NSN: Bootstrap: NSN already connected to /relay -> activeSessions has entry
+
+    NSC->>GWC: WSS upgrade /client<br/>sessionId=client-1
+    Note over GWC: clientSessions[client-1] created
+
+    NSC->>GWC: Open frame s_id=42<br/>target 1.2.3.4:80/tcp
+    GWC->>GWM: allocate connectorStreamId=0x10000001<br/>pick first activeSessions entry (relay-1)
+    GWM->>GWR: Open frame s_id=0x10000001<br/>target 1.2.3.4:80/tcp
+    GWR->>NSN: binary WsFrame (Open)
+    NSN->>SVC: TCP connect
+    SVC-->>NSN: ok
+
+    loop payload loop
+        NSC->>GWC: Data s_id=42, bytes
+        GWC->>GWM: lookup connectorStreams[42]<br/>=> {0x10000001, relay-1}
+        GWM->>GWR: Data s_id=0x10000001
+        GWR->>NSN: binary WsFrame (Data)
+        NSN->>SVC: write
+        SVC-->>NSN: read
+        NSN-->>GWR: Data s_id=0x10000001
+        GWR-->>GWM: lookup connectorStreamToClient[0x10000001]<br/>=> {client-1, 42}
+        GWM-->>GWC: Data s_id=42
+        GWC-->>NSC: binary WsFrame (Data)
+    end
+
+    NSC->>GWC: Close s_id=42
+    GWC->>GWR: Close s_id=0x10000001 (via stitch)
+    GWR->>NSN: Close
+    NSN-->>GWR: CloseAck s_id=0x10000001
+    GWR-->>GWC: CloseAck s_id=42 (via stitch)
+    GWC-->>NSC: CloseAck
+
+    Note over NSC,NSN: Fallback: no NSN on /relay -> NSGW opens direct TCP via net.createConnection

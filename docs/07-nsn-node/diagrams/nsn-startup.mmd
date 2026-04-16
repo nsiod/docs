@@ -1,0 +1,80 @@
+%% NSN 启动时序图
+%% 用途: 说明 nsn 从 exec 到 serving 的完整装配顺序
+%% 源: crates/nsn/src/main.rs
+sequenceDiagram
+    autonumber
+    participant U as User / systemd
+    participant MAIN as main.rs
+    participant FIG as Figment (defaults+toml+env+cli)
+    participant TEL as telemetry::init_telemetry
+    participant RUN as run()
+    participant AUTH as control::auth
+    participant NSD as NSD
+    participant APP as AppState
+    participant AX as Axum Monitor (127.0.0.1:9090)
+    participant MCP as MultiControlPlane
+    participant HB as Heartbeat Task (60s)
+    participant MGW as MultiGatewayManager
+    participant CM as ConnectorManager
+    participant TM as TunnelManager (WG)
+    participant NET as NetStack (smoltcp)
+
+    U->>MAIN: exec nsn
+    MAIN->>FIG: merge defaults + toml + env + cli
+    FIG-->>MAIN: ConnectorConfig
+    MAIN->>MAIN: validate_transport_mode
+    MAIN->>MAIN: init tracing (stdout + optional JSON file)
+    MAIN->>TEL: init_telemetry()
+    TEL-->>MAIN: Arc<prometheus::Registry>
+    MAIN->>RUN: run(RunParams)
+
+    Note over RUN,NSD: A. 鉴权 / 每 realm 注册
+    RUN->>AUTH: discover_nsd_info(url) for each NSD
+    AUTH->>NSD: GET /api/v1/info
+    NSD-->>AUTH: {nsd_type, realm, auth_methods}
+    RUN->>AUTH: register(auth_key) or device_flow
+    AUTH->>NSD: POST /api/v1/machine/register
+    NSD-->>AUTH: MachineState (keys, machine_id)
+    AUTH-->>RUN: save to state_dir (non-stateless)
+
+    Note over RUN,APP: B. AppState + Monitor API
+    RUN->>RUN: ServicesConfig::load(services.toml)
+    RUN->>APP: AppState::new(...)
+    RUN-)AX: spawn axum::serve on monitor_addr
+    AX-->>U: /healthz + /api/* ready
+
+    Note over RUN,MCP: C. 控制面
+    RUN->>MCP: new(nsd_entries) -> 8 rx channels
+    RUN-)MCP: spawn run()
+    MCP->>NSD: SSE subscribe (or Noise/QUIC)
+    NSD-->>MCP: wg_config / proxy_config / acl_config / gateway_config / routing / dns
+    MCP-->>APP: tasks fan-in updates
+    RUN-)HB: spawn heartbeat task (60s)
+    HB->>NSD: POST /api/v1/machine/heartbeat
+
+    Note over RUN,MGW: D. 数据面 (先 ACL / WgConfig / GatewayConfig)
+    RUN->>MGW: new(gateways) + with_event_sender(tx)
+    RUN-)RUN: spawn drain GatewayEvent → AppState
+    RUN->>MCP: await acl_config (timeout 2s)
+    RUN->>MCP: await wg_config (blocking)
+    RUN->>MCP: await gateway_config (timeout 5s)
+    RUN->>CM: ConnectorManager::new(config, relay_token, peer_key_priv)
+
+    alt transport_mode ∈ {auto, udp}
+        RUN->>CM: connect(wg_config)
+        CM->>TM: TunnelManager::new(wg_cfg_rx, ...)
+        TM->>NSD: WG handshake via UDP (or NSGW)
+        TM-->>RUN: decrypted_rx / to_encrypt_tx
+        RUN->>NET: NetStack::new(ip_address)
+        NET-->>RUN: new_conn_rx / new_dgram_rx
+        RUN-)RUN: spawn relay_connection / relay_datagram
+    else transport_mode == wss
+        RUN->>CM: connect_forced_wss()
+        CM->>NSD: WSS upgrade via NSGW relay
+    end
+
+    Note over RUN,U: E. 服务中 + 优雅关停
+    U-->>RUN: SIGTERM / Ctrl-C
+    RUN->>RUN: shutdown_signal() resolves
+    RUN-->>MAIN: Ok(())
+    MAIN-->>U: exit 0

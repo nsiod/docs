@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NSIO · Architecture Docs</title>
+    <meta
+      name="description"
+      content="NSIO 生态架构文档 — 四大组件 (NSD · NSGW · NSN · NSC) 与 11 个模块的描述 / 批判 / 预测三层视角"
+    />
+    <script>
+      try {
+        var t = localStorage.getItem('nsio-theme') || 'system';
+        var d =
+          t === 'dark' ||
+          (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', d);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

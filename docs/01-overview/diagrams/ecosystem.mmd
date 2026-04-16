@@ -1,0 +1,46 @@
+%% NSIO 生态四组件关系图
+%% 用途: 说明 NSD/NSGW/NSN/NSC 四个组件的职责边界与连接关系
+graph TB
+    subgraph Control["控制面"]
+        NSD1["NSD-1<br/>Control Center<br/>Bun + SSE / Noise / QUIC"]
+        NSD2["NSD-2<br/>Control Center<br/>(HA / Multi-Realm)"]
+    end
+
+    subgraph Bridge["桥接层 (Region-Scoped)"]
+        GW1["NSGW-1<br/>traefik v3.6.13<br/>kernel WG + WSS Relay"]
+        GW2["NSGW-2<br/>traefik v3.6.13<br/>kernel WG + WSS Relay"]
+    end
+
+    subgraph Site["站点侧 (服务提供方)"]
+        NSN["NSN<br/>Site Node<br/>Rust · 12 crates<br/>tunnel-wg / tunnel-ws<br/>ServiceRouter + ACL + Proxy"]
+        LOCAL["本地服务<br/>127.0.0.1:22/80/5432"]
+        REMOTE["远程服务<br/>192.168.x.x · *.example.com"]
+    end
+
+    subgraph User["用户侧 (访问方)"]
+        NSC["NSC<br/>Client Binary<br/>Virtual IP 127.11.x.x<br/>Local DNS *.n.ns<br/>NscRouter"]
+        APP["User App<br/>ssh / curl / psql"]
+    end
+
+    NSD1 -. "SSE config push<br/>(wg/proxy/acl/gateway)" .-> NSN
+    NSD2 -. "SSE config push" .-> NSN
+    NSD1 -. "SSE config push" .-> GW1
+    NSD1 -. "SSE config push" .-> NSC
+
+    APP -->|"*.n.ns → 127.11.x.x"| NSC
+    NSC ==>|"WG :51820 / WSS :443"| GW1
+    NSC ==>|"WG / WSS"| GW2
+    GW1 ==>|"WG / WSS 桥接"| NSN
+    GW2 ==>|"WG / WSS 桥接"| NSN
+
+    NSN --> LOCAL
+    NSN --> REMOTE
+
+    classDef ctrl fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
+    classDef gw fill:#fff3e0,stroke:#f57c00,color:#e65100
+    classDef site fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef user fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c
+    class NSD1,NSD2 ctrl
+    class GW1,GW2 gw
+    class NSN,LOCAL,REMOTE site
+    class NSC,APP user

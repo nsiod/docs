@@ -1,0 +1,41 @@
+%% proxy-arch.mmd — 代理层端到端数据通路
+%% 引用: crates/nat/src/router.rs:71  crates/proxy/src/tcp.rs:12  crates/proxy/src/udp.rs:14
+graph LR
+    subgraph Ingress["Ingress (解密后数据)"]
+        SM["smoltcp<br/>TCP/UDP 五元组<br/>crates/netstack"]
+        WS["tunnel-ws<br/>WsFrame.Open{port,proto}"]
+    end
+
+    subgraph Router["ServiceRouter (nat crate)"]
+        LOOKUP["服务查找<br/>find_named_by_port / _by_domain / _by_sni"]
+        ACL["ACL.is_allowed<br/>(AccessRequest 五元组)"]
+        DNS["resolve_host<br/>(IP 或 tokio lookup_host)"]
+    end
+
+    subgraph L7["L7 Peek (仅 :80 / :443)"]
+        HPEEK["http_peek::parse_http_host"]
+        SPEEK["sni_peek::parse_tls_sni"]
+    end
+
+    subgraph Relay["Proxy Relay (proxy crate)"]
+        TCP["handle_tcp_connection<br/>copy_bidirectional"]
+        UDP["handle_udp<br/>单流往返"]
+    end
+
+    SVC[("Local / Remote<br/>Service")]
+
+    SM -->|五元组| LOOKUP
+    WS -->|Open 帧| LOOKUP
+
+    SM -- "dst_port=80" --> HPEEK
+    SM -- "dst_port=443" --> SPEEK
+    HPEEK --> LOOKUP
+    SPEEK --> LOOKUP
+
+    LOOKUP --> ACL
+    ACL -- "allowed" --> DNS
+    ACL -. "deny: 默认拒绝" .-> X[(drop 连接)]
+    DNS --> TCP
+    DNS --> UDP
+    TCP --> SVC
+    UDP --> SVC

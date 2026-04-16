@@ -1,0 +1,67 @@
+%% Metrics 采集与暴露
+%% 源: crates/telemetry/src/lib.rs, crates/telemetry/src/metrics.rs,
+%%    crates/nsn/src/main.rs:260-267, crates/nsn/src/monitor.rs:306-376
+graph LR
+    subgraph Init["启动阶段"]
+        MAIN["main.rs<br/>init_telemetry()"]
+        REG["Prometheus Registry<br/>(Arc)"]
+        EXP["opentelemetry_prometheus<br/>exporter"]
+        PROV["SdkMeterProvider<br/>(global)"]
+    end
+
+    subgraph Consumers["业务 crate (via global meter)"]
+        PX["proxy<br/>bytes_tx / bytes_rx<br/>active_connections"]
+        TW["tunnel-wg<br/>wg_handshakes<br/>wg_rx_bytes / wg_tx_bytes"]
+    end
+
+    subgraph Atomic["metrics.rs 原子结构 (可选容器)"]
+        PM["ProxyMetrics<br/>AtomicU64 / AtomicU32"]
+        TMET["TunnelMetrics<br/>AtomicU64 / AtomicI64"]
+    end
+
+    subgraph NSNState["AppState (state.rs)"]
+        NAT["NatStats atomics<br/>bytes_tx / bytes_rx / active_entries / ..."]
+        CT["ConnectionTracker<br/>active / total counters"]
+        GWS["gateway_states"]
+        CPS["control_plane_states"]
+    end
+
+    subgraph Endpoint["/api/metrics (monitor.rs)"]
+        ENC["TextEncoder.encode_to_string<br/>OTel + registry.gather()"]
+        HAND["手写 nsn_* 汇总指标"]
+        OUT["text/plain; version=0.0.4"]
+    end
+
+    MAIN --> EXP
+    MAIN --> REG
+    EXP -. shares registry .-> REG
+    EXP --> PROV
+    MAIN -. set global .-> PROV
+
+    PROV -. global meter .-> PX
+    PROV -. global meter .-> TW
+    PX -.-> PM
+    TW -.-> TMET
+    PX --> REG
+    TW --> REG
+
+    REG --> ENC
+    NAT --> HAND
+    CT --> HAND
+    GWS --> HAND
+    CPS --> HAND
+    ENC --> OUT
+    HAND --> OUT
+
+    OUT -. HTTP 200 .-> PROM["Prometheus scraper"]
+
+    classDef init fill:#fff3e0,stroke:#f57c00
+    classDef cons fill:#e3f2fd,stroke:#1976d2
+    classDef atomic fill:#f3e5f5,stroke:#7b1fa2
+    classDef state fill:#e8f5e9,stroke:#388e3c
+    classDef ep fill:#fce4ec,stroke:#c2185b
+    class MAIN,REG,EXP,PROV init
+    class PX,TW cons
+    class PM,TMET atomic
+    class NAT,CT,GWS,CPS state
+    class ENC,HAND,OUT,PROM ep

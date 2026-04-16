@@ -1,0 +1,43 @@
+%% 愿景路线图 Gantt 图
+%% 对应 roadmap.md 中的 Phase 0/1/2/3
+
+gantt
+    title NSD + NSGW 生产化路线图
+    dateFormat  YYYY-MM-DD
+    axisFormat  %Y-%m
+
+    section Phase 0 (当前)
+    Mock NSD/NSGW              :done, p0a, 2025-09-01, 2026-03-01
+    文档矩阵 Sub-1-11           :active, p0b, 2026-02-01, 2026-05-01
+
+    section Phase 1 MVP
+    NSD 身份/凭据服务           :p1a, 2026-05-01, 90d
+    NSD 基础 ACL DSL            :p1b, after p1a, 60d
+    NSD 事件总线 + Webhook      :p1c, after p1a, 60d
+    NSGW wgctrl 集成            :p1d, 2026-05-01, 75d
+    NSGW SNI + PROXY v1         :p1e, after p1d, 45d
+    Postgres 主从 + PITR        :p1f, 2026-06-01, 60d
+    E2E 集成测试                :p1g, after p1b, 45d
+    MVP 发布                    :milestone, m1, after p1g, 0d
+
+    section Phase 2 GA
+    SCIM + Device Posture       :p2a, after m1, 90d
+    Policy Rego/CEL 引擎        :p2b, after p2a, 75d
+    多区域 + Anycast 调度       :p2c, after m1, 120d
+    P2P 打洞 + QUIC             :p2d, after p2c, 75d
+    分布式 Trace + SLA 看板      :p2e, after p2a, 90d
+    Terraform Provider          :p2f, after p2b, 60d
+    K8s Operator                :p2g, after p2f, 60d
+    BBR/FEC + 边缘 NSN          :p2h, after p2d, 75d
+    合规认证 SOC2/ISO            :p2i, after p2e, 90d
+    GA 发布                     :milestone, m2, after p2i, 0d
+
+    section Phase 3 Enterprise
+    BYO-CA + HSM                :p3a, after m2, 90d
+    多 NSD 联邦                 :p3b, after m2, 120d
+    硬件加速 + QoS              :p3c, after m2, 90d
+    WORM 审计 + SIEM 对接       :p3d, after p3a, 75d
+    air-gapped 私有化           :p3e, after p3b, 90d
+    FedRAMP / 等保合规          :p3f, after p3d, 120d
+    跨区域 BCP 演练             :p3g, after p3b, 60d
+    Enterprise 发布             :milestone, m3, after p3f, 0d

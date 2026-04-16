@@ -1,0 +1,23 @@
+%% traefik routing decision tree (SNI / Host / path) on NSGW
+%% Source: tests/docker/nsgw-mock/traefik.yml + traefik-config.ts
+flowchart TD
+    IN["Inbound TCP to NSGW"] --> PORT{"Listening port?"}
+
+    PORT -->|":8080 (web)"| H_WEB["HTTP entryPoint<br/>no TLS"]
+    PORT -->|":443 (websecure)"| TLS_TERM["TLS terminate<br/>default cert from tls store"]
+    PORT -->|":51820/udp"| WG_IN["kernel wg0<br/>(not traefik)"]
+    PORT -->|":9091 / :9443 (Bun)"| BUN_IN["Bun.serve endpoints<br/>(not traefik)"]
+
+    H_WEB --> HOST_HDR["Read HTTP Host header"]
+    TLS_TERM --> SNI["SNI extension = hostname"]
+    SNI --> HOST_HDR
+    HOST_HDR --> RT_MATCH{"routes.yml<br/>router rule<br/>Host(name) match?"}
+
+    RT_MATCH -->|"exact domain hit"| LB["service[name].loadBalancer<br/>servers[0].url = http://wg_ip:virtual_port"]
+    RT_MATCH -->|"no match"| T404["traefik 404<br/>(no default router)"]
+
+    LB --> FWD["TCP dial wg_ip:virtual_port<br/>plaintext"]
+    FWD --> KERN["kernel route<br/>dst in allowed-ips -> wg0 peer"]
+    KERN --> OUT["UDP :51820 to NSN peer<br/>encrypted tunnel"]
+
+    WG_IN --> KERN

@@ -1,0 +1,59 @@
+%% 功能分层图 (MVP / GA / Enterprise)
+%% 对应 methodology.md 中的分层定义 + feature-matrix.md 的计数
+
+graph TB
+  subgraph L0[T0 当前形态 mock]
+    direction LR
+    L0A["NSD: 注册 + SSE 下发<br/>nsd-mock/src/index.ts"]
+    L0B["NSGW: WG + WSS 中继<br/>nsgw-mock/src/index.ts"]
+    L0C["容量: 5-10 节点 / 单机"]
+  end
+
+  subgraph L1[T1 MVP - 10 人团队可用]
+    direction LR
+    L1A[Identity: 用户/机器账号 + OIDC]
+    L1B[Policy: 基础 ACL + Allow-only]
+    L1C[Topology: 子网 + Relay 策略]
+    L1D[Observability: 指标 + 日志 + 事件]
+    L1E[Ecosystem: REST/gRPC API + CLI]
+    L1F[Reliability: 主从 + PITR + 灰度]
+    L1G[NSGW: wgctrl + SNI + PROXY v1]
+    L1H[跨组件: Webhook + Health + OTel]
+  end
+
+  subgraph L2[T2 GA - 100-1000 节点企业]
+    direction LR
+    L2A[IdP SCIM + Device Posture]
+    L2B[Policy DSL Rego/CEL + 审计回放]
+    L2C[多区域 + P2P 打洞 + MPTCP]
+    L2D[分布式 Trace + SLA 看板 + WORM]
+    L2E[Terraform + K8s Operator + Marketplace]
+    L2F[Multi-AZ 共识 + RTO<15min]
+    L2G[QUIC + Anycast + DDoS 防护]
+    L2H[BBR/FEC + 边缘节点 + Cross-cloud]
+  end
+
+  subgraph L3[T3 Enterprise - 大型/金融/政府]
+    direction LR
+    L3A[BYO-CA + HSM + 硬件 MFA]
+    L3B[合规策略 PCI/HIPAA + 零信任]
+    L3C[多 NSD 联邦 + 跨区域共识]
+    L3D[对接 SIEM + 哈希链审计]
+    L3E[私有化 + air-gapped + 供应链签名]
+    L3F[跨区域 RTO<5min + BCP 演练]
+    L3G[硬件加速 + QoS + 专线]
+    L3H[Zero-trust Authz Proxy + FedRAMP]
+  end
+
+  L0 ==> L1
+  L1 ==> L2
+  L2 ==> L3
+
+  classDef t0 fill:#eeeeee
+  classDef t1 fill:#c8e6c9
+  classDef t2 fill:#90caf9
+  classDef t3 fill:#f48fb1
+  class L0,L0A,L0B,L0C t0
+  class L1,L1A,L1B,L1C,L1D,L1E,L1F,L1G,L1H t1
+  class L2,L2A,L2B,L2C,L2D,L2E,L2F,L2G,L2H t2
+  class L3,L3A,L3B,L3C,L3D,L3E,L3F,L3G,L3H t3

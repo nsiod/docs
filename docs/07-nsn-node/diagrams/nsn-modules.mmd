@@ -1,0 +1,73 @@
+%% NSN 模块装配图
+%% 用途: 说明 nsn 二进制如何把 10 个内部 crate 组装成一条运行时管线
+%% 源: crates/nsn/src/main.rs:run(), 依赖关系来自 CLAUDE.md
+graph TB
+    subgraph CLI["CLI & Config"]
+        CLIP["clap Cli"]
+        FIG["figment<br/>defaults → toml → env → cli"]
+    end
+
+    subgraph Internal["内部 crate"]
+        COMMON["common<br/>ConnectorConfig<br/>ServicesConfig<br/>MachineState<br/>DataPlaneMode<br/>SystemInfo"]
+        CONTROL["control<br/>AuthClient<br/>MultiControlPlane<br/>DeviceFlow<br/>Messages"]
+        CONNECTOR["connector<br/>ConnectorManager<br/>MultiGatewayManager<br/>GatewayEvent"]
+        TWG["tunnel-wg<br/>TunnelManager<br/>gotatun Device<br/>GatewayStatusUpdate"]
+        TWS["tunnel-ws<br/>WsTunnel<br/>WssConnectionEvent"]
+        NETSTACK["netstack<br/>NetStack<br/>smoltcp<br/>NewTcpConnection<br/>NewUdpDatagram"]
+        NAT["nat<br/>ServiceRouter<br/>PacketNat"]
+        ACL["acl<br/>AclEngine"]
+        PROXY["proxy<br/>http_peek (Host)<br/>sni_peek (TLS SNI)"]
+        TEL["telemetry<br/>init_telemetry<br/>Prometheus Registry"]
+    end
+
+    subgraph NSN["nsn binary (crates/nsn/src)"]
+        MAIN["main.rs<br/>run() 编排"]
+        STATE["state.rs<br/>AppState + GatewayState<br/>TunnelMetrics / ConnectionTracker<br/>NatStats / AclState"]
+        HEALTH["health.rs<br/>/healthz"]
+        MON["monitor.rs<br/>/api/*"]
+        VAL["validator.rs<br/>find_violations"]
+    end
+
+    subgraph External["外部"]
+        NSD["NSD"]
+        NSGW["NSGW"]
+        LOCAL["local / remote services"]
+        PROM["Prometheus scrape"]
+    end
+
+    CLIP --> FIG
+    FIG --> MAIN
+    MAIN --> COMMON
+    MAIN --> CONTROL
+    MAIN --> CONNECTOR
+    MAIN --> TWG
+    MAIN --> TWS
+    MAIN --> NETSTACK
+    MAIN --> NAT
+    MAIN --> ACL
+    MAIN --> PROXY
+    MAIN --> TEL
+
+    MAIN --> STATE
+    HEALTH --> STATE
+    MON --> STATE
+    VAL --> COMMON
+    VAL --> CONTROL
+
+    CONTROL -. SSE/Noise/QUIC .-> NSD
+    CONNECTOR -. UDP (WG) .-> NSGW
+    CONNECTOR -. WSS relay .-> NSGW
+    TWG --> gotatun[gotatun<br/>external crate]
+    NETSTACK --> PROXY
+    PROXY --> LOCAL
+    NAT --> PROXY
+
+    TEL --> MON
+    MON -. text/plain .-> PROM
+
+    classDef bin fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef internal fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
+    classDef ext fill:#fff3e0,stroke:#f57c00,color:#e65100
+    class MAIN,STATE,HEALTH,MON,VAL bin
+    class COMMON,CONTROL,CONNECTOR,TWG,TWS,NETSTACK,NAT,ACL,PROXY,TEL internal
+    class NSD,NSGW,LOCAL,PROM,gotatun ext

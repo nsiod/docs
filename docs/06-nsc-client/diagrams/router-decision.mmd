@@ -1,0 +1,47 @@
+flowchart TD
+  START["TCP connect to 127.11.x.x:port<br/>(app → NSC VIP listener)"]
+  START --> LOOKUP1
+
+  subgraph NscRouter["NscRouter::resolve(vip, port)"]
+    LOOKUP1{"sites_by_vip.get(vip)?"}
+    LOOKUP1 -- miss --> R_NONE1["return None"]
+    LOOKUP1 -- hit --> LOOKUP2{"routes.get((site, port))?"}
+    LOOKUP2 -- miss --> R_NONE2["return None"]
+    LOOKUP2 -- hit --> R_SOME["return Some(NscRoute)<br/>{ site, service, fqid,<br/>  port, gateway_wss, gateway_wg }"]
+  end
+
+  R_NONE1 --> DROP1["proxy.rs: warn 'no route found'<br/>关闭 TCP"]
+  R_NONE2 --> DROP1
+
+  R_SOME --> CHECK{"gateway_wss<br/>非空?"}
+  CHECK -- "空 (gateway_config 还未到)" --> DROP2["proxy.rs: warn 'no gateway configured yet'<br/>关闭 TCP"]
+  CHECK -- 非空 --> WSS
+
+  subgraph PROXY["proxy.rs: handle_connection"]
+    WSS["connect_async(gateway_wss + '/relay')<br/>Authorization: Bearer &lt;token&gt;"]
+    WSS --> OPEN["send Binary(build_open_frame)<br/>[stream_id:4][CMD_OPEN_V4:1]<br/>[127.0.0.1:4][service_port:2][PROTO_TCP:1]"]
+    OPEN --> PAIR["spawn TCP→WS 任务<br/>( build_data_frame )"]
+    PAIR --> WS2TCP["while ws_rx.next() → 判断<br/>CMD_DATA / CMD_CLOSE / CMD_CLOSE_ACK"]
+  end
+
+  subgraph SSE["SSE 事件影响路由表"]
+    direction LR
+    E1["routing_config"] --> U1["update_routing<br/>(&mut allocator)<br/>- allocator.allocate(site)<br/>- sites_by_name/vip 插入<br/>- routes 建立/刷新"]
+    E2["gateway_config"] --> U2["update_gateway<br/>- gateways.clear + 重建<br/>- primary_gateway_id = first<br/>- 刷新所有 routes.gateway_*"]
+    E3["dns_config"] --> U3["DnsRecords 插入<br/>(domain → vip_for_site)"]
+  end
+
+  U1 -. 写 .-> LOOKUP1
+  U1 -. 写 .-> LOOKUP2
+  U2 -. 写 .-> R_SOME
+  U3 -. 写 .-> DNSMAP[/"DnsRecords"/]
+
+  classDef decision fill:#fef3c7,stroke:#b45309,color:#111
+  classDef success fill:#dcfce7,stroke:#166534,color:#111
+  classDef drop fill:#fee2e2,stroke:#b91c1c,color:#111
+  classDef sse fill:#e0e7ff,stroke:#4338ca,color:#111
+
+  class LOOKUP1,LOOKUP2,CHECK decision
+  class R_SOME,WSS,OPEN,PAIR,WS2TCP success
+  class R_NONE1,R_NONE2,DROP1,DROP2 drop
+  class E1,E2,E3,U1,U2,U3 sse
