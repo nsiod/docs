@@ -6,6 +6,9 @@ import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  // For GitHub Pages at https://nsiod.github.io/docs/ — override with
+  // BASE_PATH env for custom domain or other hosts.
+  base: process.env.BASE_PATH ?? '/docs/',
   plugins: [
     TanStackRouterVite({
       routesDirectory: 'src/app/routes',
