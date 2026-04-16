@@ -15,9 +15,6 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 
-# Generated code
-**/routeTree.gen.ts
-
 # Logs
 *.log
 npm-debug.log*
