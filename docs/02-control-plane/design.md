@@ -302,39 +302,129 @@ pub trait ControlTransport: Send + Sync {
 4. **不能时间回放**：`ts` 允许时钟偏差 ±5min；`nonce` 在同一 chain_id 内必须唯一；`chain_id` 在同一目标上单调递增（旧版本 chain_id 拒绝）。
 5. **不能裁切**：`canonical_json(payload)` 按 [RFC 8785 JCS](https://datatracker.ietf.org/doc/html/rfc8785) 规范化后再哈希，避免 key 顺序 / 空白 / 数字表示差异导致的签名歧义。
 
-**密钥来源**：NSD 注册响应中 `server_peer_key_pub`（目前用于 Noise/QUIC）**不再复用**于配置签名，另起一个 `server_signing_key_pub` 字段：
-
-```jsonc
-// POST /api/v1/machine/register 响应扩展
-{
-  "machine_id": "ab3xk9mnpq",
-  "server_peer_key_pub":    "<32B hex>",   // X25519 —— Noise/QUIC 传输层
-  "server_signing_key_pub": "<32B hex>",   // Ed25519 —— 配置事件签名（新增）
-  "signing_key_kids": ["nsd-primary-2026q2", "nsd-primary-2026q3"],
-  ...
-}
-```
-
-分离的原因：Noise IK 里的 X25519 静态密钥无法直接做签名（DH ≠ 签名原语），而且两类密钥的轮换周期与安全等级不同——传输密钥可以短周期轮换 + HSM，签名密钥可以长周期 + 离线存储。`signing_key_kids` 允许 NSD 提前宣告"下一把"，为热轮换留出 grace window。
-
-**验签路径**：
-
-- NSN：`crates/control/src/sse.rs` 在分派给 `merge.rs` 之前校验；验签失败 → **丢弃事件 + WARN + metrics++**，绝不应用到数据面。
-- NSC：同 NSN 路径，在 `NscControlPlane::dispatch` 处校验。
-- 多 NSD 场景下每个 NSD 的事件用各自的 `server_signing_key_pub`（每个 realm 一把）；merge 层只接受**已验签**的事件，因此并集结果里每条规则的 `sources` 标注天然等同于"这些 NSD 用其签名密钥为这条规则背书"。
-
-**轮换**：NSD 通过带新 `kid` 的 `signing_key_update` 事件（自身也带旧 kid 签名）宣告新公钥；NSN / NSC 接受过渡期内用旧或新 kid 签名的事件。旧 kid 被 NSD `revoked_kids` 字段列入后立即拒绝。
+**密钥体系**：采用**两级签名链**（root + signing cert）—— NSN/NSC 在注册时 *pin 一次 root 公钥*，之后所有运行态密钥都由 root 签发的证书携带，**签名密钥泄漏只需轮换证书，不需要重新 pin root**。参见 §7.2。
 
 **与 transport 的关系**：
 
 | 层 | 保证 | 失效时的影响 |
 |-----|------|--------------|
 | TLS / Noise / QUIC（transport）| 对端鉴权 + 抗被动嗅探 | 被反代 / 降级 → 需要签名层兜底 |
-| 配置事件签名（应用层）| 事件完整性 + 来源 + 抗重放 + 抗跨 realm / 跨 machine | 密钥外泄 → 立即 `revoked_kids` 轮换，旧签名全部作废 |
+| 配置事件签名（应用层）| 事件完整性 + 来源 + 抗重放 + 抗跨 realm / 跨 machine | 签名密钥泄漏 → root 吊销旧证书 + 签发新证书，旧签名全部作废 |
 
 这解决了 transport 被中间人降级、或 SSE 走普通 TLS 经企业反代时事件被改写的问题——两层都被攻破才能影响配置，而不是单层被攻破就放行篡改。
 
+### 7.2 两级签名链：Root + Signing Cert
 
+**动机**：若只有一把 `server_signing_key_pub` 在线持有，一旦它泄露，所有已注册的 NSN / NSC 都必须重新走注册流程才能 pin 到新密钥。在有成千上万个节点 + 多 realm 的场景下，这等于"一次小事故 = 全网手动运维一次"。
+
+把密钥拆成两层，借鉴 [DNSSEC KSK/ZSK](https://datatracker.ietf.org/doc/html/rfc6781#section-3.1)、[TUF 根/目标密钥](https://theupdateframework.io/specification/latest/#threat-model)、[X.509 CA/中间证书](https://datatracker.ietf.org/doc/html/rfc5280)的做法：
+
+| 层 | 密钥 | 生命周期 | 存储位置 | 职责 |
+|----|------|----------|---------|------|
+| **Root** | `realm_root_key`（Ed25519） | 多年（3–5 年）| **离线** HSM / YubiKey / 气隙机 | 只做一件事：签发 signing cert。绝不参与在线流量，绝不加载进 NSD 进程内存 |
+| **Signing** | `realm_signing_key_{n}`（Ed25519） | 短期（30–90 天，可配）| NSD 在线热路径（内存 / KMS） | 对每条配置事件签名 |
+
+**Root 签发的签名证书 (`SigningCert`)**：
+
+```jsonc
+{
+  "kid":        "sign-2026q2-01",          // 本证书的指纹
+  "realm":      "company.internal",         // 绑定 realm，不可跨用
+  "pub":        "<32B hex Ed25519 pub>",    // 本证书授权的在线签名公钥
+  "not_before": 1713340800,                 // 生效时间
+  "not_after":  1721203200,                 // 过期时间（短）
+  "root_kid":   "root-2026-v1",             // 指向哪个 root 签发（允许 root 自身未来滚动）
+  "root_sig":   "base64(64B Ed25519)"        // root_signing_key 对以上字段（canonical JSON）的签名
+}
+```
+
+NSN / NSC 本地只需要长期保管 **root 公钥** `realm_root_key_pub`。每次收到事件，按下面流程校验：
+
+```mermaid
+flowchart LR
+    E["SSE 事件<br/>{payload, sig{kid,value}}"] --> L1["查找 kid 对应的<br/>SigningCert (来自 signing_certs 事件)"]
+    L1 -->|未找到或已过期| DROP1["丢弃 + WARN"]
+    L1 --> L2["验 root_sig:<br/>realm_root_key_pub 是否签了这张 cert?"]
+    L2 -->|失败| DROP2["丢弃 + WARN"]
+    L2 --> L3["验事件 sig.value:<br/>cert.pub 是否签了 payload digest?"]
+    L3 -->|失败| DROP3["丢弃 + WARN"]
+    L3 --> APPLY["应用到 merge.rs / 数据面"]
+```
+
+两步验签缓存友好：`SigningCert` 的 `root_sig` 只在**第一次见到这张 cert** 时验证一次，后续同 `kid` 的事件只走 cert.pub 的签名校验；cert 过期或被吊销时从缓存中清除。
+
+**配置事件签名信封**扩展为携带 kid 指向 cert，而不是直接公钥：
+
+```jsonc
+{
+  "event":    "acl_config",
+  "chain_id": "acl-2026-04-17-001",
+  "payload":  { /* AclConfig */ },
+  "sig": {
+    "alg":   "ed25519",
+    "kid":   "sign-2026q2-01",              // 指向 SigningCert
+    "ts":    1713340800,
+    "nonce": "base64(16B)",
+    "value": "base64(64B)"                   // cert.pub 对 digest 的签名
+  }
+}
+```
+
+**分发 SigningCert**：NSD 通过一条新的 SSE 事件 `signing_certs` 主动推送当前有效的 cert 列表，这条事件**自身也用 root 签名**（因为它必须被 pin 在 root 之下）：
+
+```jsonc
+{
+  "event": "signing_certs",
+  "certs": [ /* SigningCert[] */ ],
+  "revoked_kids": ["sign-2025q4-03"],
+  "issued_at": 1713340800,
+  "sig": {
+    "alg":   "ed25519",
+    "kid":   "root-2026-v1",                 // 指向 root 自身
+    "value": "base64(64B root sig)"
+  }
+}
+```
+
+- NSN / NSC 订阅上第一件事：接收 `signing_certs`，验 root 签名后把证书加载进本地 cert store；
+- 同一 realm 同一时刻可以有**多张有效 cert**（便于无缝滚动），每张各带 `not_before` / `not_after`；
+- NSD 每 N 分钟重发一次 `signing_certs` 作为 liveness 心跳。
+
+**注册响应**因此只下发 root 公钥 + 初始 cert 列表：
+
+```jsonc
+// POST /api/v1/machine/register 响应扩展
+{
+  "machine_id":            "ab3xk9mnpq",
+  "server_peer_key_pub":   "<32B hex>",      // X25519 —— Noise/QUIC 传输层（不变）
+  "realm_root_key_pub":    "<32B hex>",      // Ed25519 —— root 签名公钥（长期 pin）
+  "root_kid":              "root-2026-v1",
+  "initial_signing_certs": [ /* SigningCert[] */ ]  // 首批有效签名证书
+}
+```
+
+NSN 把 `realm_root_key_pub` + `root_kid` 永久写入 `{state_dir}/registrations/{realm}.json`（权限 0600）。后续所有配置事件、`signing_certs` 更新，都靠这把 root 公钥递归可信。
+
+### 7.3 密钥轮换与吊销
+
+| 场景 | 处置 | NSN / NSC 端工作量 |
+|------|------|---------------------|
+| **Signing key 按期滚动**（每 30–90 天） | NSD 提前生成新 kid 的 `SigningCert`，root 离线签发后推入线上。通过 `signing_certs` 事件广播；新旧 cert 在 grace window 内**同时有效** | 零。事件驱动，自动缓存新 cert |
+| **Signing key 泄漏** | Root 立即发出带 `revoked_kids: ["<kid>"]` 的 `signing_certs` 事件；新 cert 同步推送；持久化吊销列表 | 零。从收到 revoked 广播起，带该 kid 的所有事件一律拒绝；已应用的历史配置**不会被回溯撤销**（因为它们已经落盘生效；若要失效需要 NSD 推新版覆盖） |
+| **Root key 轮换**（计划内，多年一次） | 离线仪式：生成 `realm_root_key_v2`，用**旧 root 签**一张带过渡标志的 `root_transition` 证书 `{old_kid, new_pub, new_kid, not_after}` | 少。事件携带 `root_transition`，NSN 验旧 root 签名后把新 root 公钥追加到本地信任集；等所有 SigningCert 都迁到新 root 后，旧 root 可以从本地清除 |
+| **Root key 丢失 / 泄漏**（灾难） | 无法用旧 root 自证继任者 → 必须**所有 NSN / NSC 人工重 pin** | 手动：通过带外渠道（邮件 / 员工门户 / MDM）分发新 root 公钥，管理员通过 `nsn register --force-root-pin=<hex>` 覆盖本地 registration 文件 |
+
+- **好处**：99.9% 的密钥问题（"签名密钥怀疑泄漏"）都是 *签名密钥* 级别——用两级链把这类事件从"全网重 pin"降为"root 离线签个新证书、推送一条广播事件"。
+- **代价**：
+  1. 注册响应多几百字节（一批初始 cert + root 公钥）。
+  2. NSD 多维护一条 `signing_certs` SSE 通道（周期 ~分钟级）。
+  3. 每个事件验签从一次 Ed25519 校验变成一次（cert store hit 时）或两次（首次见 cert）——绝对值仍是 ~30µs / 次，在 SSE ≤100 eps 的上限下微不足道。
+- **Root 管理实操**：
+  - 气隙签发：root 私钥永远不进 NSD 主机；签发操作由 ops 人员在专用离线机上执行，产物是一张 `SigningCert` JSON，通过只读介质拷到 NSD。
+  - 双人制：root 签发流程要求双人授权（`m-of-n` HSM 门限或 YubiKey 物理同意）。
+  - 应急储备：每个 realm 至少 2 把 root 公钥（主 + 备），注册响应里一并下发；主 root 丢失时可立即用备 root 推 `root_transition`，避免走"全网人工重 pin"灾难路径。
+
+## 8. 配置入口（ConnectorConfig）
 
 下列字段直接影响控制面行为（`crates/common/src/lib.rs:71`）：
 
