@@ -1,0 +1,47 @@
+direction: right
+
+root: "NSIO\nWorkspace" {
+  shape: hexagon
+}
+
+bin: "二进制" {
+  nsn: "nsn\n站点节点"
+  nsc: "nsc\n用户客户端"
+}
+
+tunnel: "隧道" {
+  tunnel_wg: "tunnel-wg\n用户态 WG"
+  tunnel_ws: "tunnel-ws\nWSS 中继"
+  connector: "connector\n多网关选路"
+}
+
+data: "数据面" {
+  netstack: "netstack\nsmoltcp"
+  nat: "nat\nDNAT/SNAT"
+  proxy: "proxy\nTCP/UDP 转发"
+}
+
+policy: "策略" {
+  acl: "acl\n允许规则"
+}
+
+control: "控制面" {
+  control_crate: "control\nSSE/Noise/QUIC"
+}
+
+base: "基础" {
+  common: "common\n消息与配置"
+  telemetry: "telemetry\nOTel/Prom"
+}
+
+external: "外部" {
+  gotatun: "gotatun\nWG 用户态"
+}
+
+root -> bin
+root -> tunnel
+root -> data
+root -> policy
+root -> control
+root -> base
+root -> external

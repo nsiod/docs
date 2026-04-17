@@ -116,19 +116,7 @@ const nodeId = customAlphabet(alphabet, 10)();
 
 ### `*.n.ns` 的解析路径
 
-```mermaid
-flowchart TD
-    App["User App"] --> R{查询<br/>*.n.ns?}
-    R -->|Yes| NSC_DNS["NSC Local DNS<br/>:53 UDP<br/>(nsc::dns)"]
-    R -->|No| SysDNS["系统 DNS<br/>(8.8.8.8 / 1.1.1.1 ...)"]
-    SysDNS --> Public[Public DNS]
-    NSC_DNS --> VIP["A 记录 = 127.11.x.x<br/>(Virtual IP)"]
-    VIP --> NscConn["用户后续 connect(127.11.x.x:port)"]
-    NscConn --> NscRouter["NscRouter<br/>VIP → (site, service)"]
-    NscRouter --> Tunnel["走 WG / WSS 隧道"]
-    Tunnel --> NSGW
-    NSGW -->|"Host / SNI<br/>路由"| NSN
-```
+[*.n.ns 解析路径](./diagrams/ns-resolution-path.d2)
 
 > 入站面的另一条路径: 当站点主动把某个 HTTP(S) 服务**对公网暴露**时,NSD 会为它单独签发一个**公网域名**(例如 `myapp.<tenant>.example.com`,CNAME 到 NSGW),浏览器/`curl` 直接 `https://` 访问该域名。NSGW 的 traefik 按 `Host` / SNI 匹配这个公网域名(**不是 `*.n.ns`**)后桥接到目标 NSN,并可在这一层叠加 OIDC / 鉴权 / 限速等中间件。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。`*.n.ns` 只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN,浏览器**永远到不了** `*.n.ns`。
 
@@ -220,22 +208,7 @@ NSC 的 VIP 管理代码在 `crates/nsc/src/vip.rs`,路由聚合在 `crates/nsc/
 
 ## DNS 流程图
 
-```mermaid
-flowchart LR
-    App[用户 App<br/>ssh / curl / psql] --> Resolver[System Resolver]
-    Resolver -->|"*.ns"| NSC_DNS["NSC Local DNS<br/>:53/udp"]
-    Resolver -->|"其他"| Public[Public DNS]
-
-    NSC_DNS -->|"查 routing_config<br/>dns_config"| NSC_State["NSC 内部状态<br/>(来自 NSD)"]
-    NSC_DNS -->|"A record"| VIP["127.11.x.x"]
-
-    App -->|"connect(VIP:port)"| NSC_VIP[NSC VIP Listener]
-    NSC_VIP -->|"按 VIP+port"| NscRouter
-    NscRouter -->|"按 FQID → 选 NSGW"| Gateway
-    Gateway -->|"WG/WSS"| NSN_Dest[NSN]
-    NSN_Dest -->|"按目的端口"| ServiceRouter
-    ServiceRouter -->|"127.0.0.1:22"| TrueService[Real SSH Server]
-```
+[NSC DNS 与数据面流程](./diagrams/dns-flow.d2)
 
 ## 使用示例
 

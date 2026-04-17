@@ -1,0 +1,25 @@
+direction: right
+
+nsn_side: "NSN (crate: control)" {
+  parser: "SSE Event Parser\nsse.rs\n(所有模式共用)"
+  merge: "merge.rs"
+}
+
+outer: "ControlTransport trait (transport/mod.rs)" {
+  t_sse: "sse.rs\nrustls + reqwest"
+  t_noise: "noise.rs\nsnow 0.9"
+  t_quic: "quic.rs\nquinn 0.11"
+}
+
+nsd_side: "NSD (nsd-mock 同一进程)" {
+  l_http: ":3001 HTTP SSE"
+  l_noise: ":4001 Noise listener"
+  l_quic: ":4002 QUIC listener\n(内嵌 Rust 子进程 nsd-quic-proxy)"
+}
+
+nsn_side.parser -> outer
+outer.t_sse -> nsd_side.l_http: "HTTPS GET /config/stream"
+outer.t_noise -> nsd_side.l_noise: "Noise handshake → 内部 HTTP"
+outer.t_quic -> nsd_side.l_quic: "QUIC stream → 内部 HTTP"
+nsd_side.l_noise -> nsd_side.l_http
+nsd_side.l_quic -> nsd_side.l_http

@@ -1,0 +1,37 @@
+shape: sequence_diagram
+
+gw: "NSGW (kernel WG)"
+wg: "gotatun Device\n(tunnel-wg)"
+ns: "smoltcp\n(netstack)"
+sr: "ServiceRouter\n(nat::router)"
+acl: "ACL Engine\n(acl::engine)"
+px: "proxy::tcp / udp"
+svc: Local / Remote Service
+
+gw -> wg: "WG 加密 UDP 报文"
+wg -> wg: "Noise 握手 / 会话解密"
+wg -> ns: "原始 IPv4/IPv6 包\n(经 NsnIpSend → mpsc channel)"
+ns -> ns: "smoltcp 解析\n得到 TCP/UDP 流 (socket)"
+ns -> sr: "五元组 + payload"
+sr -> acl: "check(five_tuple)"
+
+deny: "deny" {
+  acl -> sr: Denied
+  sr -> ns: "drop (warn log)"
+}
+
+allow: "allow" {
+  acl -> sr: Allowed
+  sr -> sr: "按 local.port 查服务定义\nDNS 解析 target"
+  sr -> px: "target = (host, port)"
+  px -> svc: "TcpStream::connect / UdpSocket"
+
+  loop_transfer: "双向转发" {
+    ns -> px: "应用字节"
+    px -> svc: "应用字节"
+    svc -> px: "回复字节"
+    px -> ns: "回复字节"
+    ns -> wg: "构造回包 (IP header)"
+    wg -> gw: "WG 加密 UDP"
+  }
+}

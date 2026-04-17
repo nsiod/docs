@@ -1,0 +1,34 @@
+shape: sequence_diagram
+
+u: User App
+nsc: "NSC\n(VIP + DNS + Router)"
+gw: "NSGW\n(traefik + kernel WG)"
+wg: "gotatun Device\n(NSN 侧)"
+dp: "Data-Plane 分流"
+sr: "ServiceRouter\n(ACL + resolve)"
+kn: Kernel TCP
+px: "Proxy (TCP/UDP)"
+svc: Local / Remote Service
+
+u -> nsc: "connect(ssh.ab3xk9mnpq.n.ns:22)"
+nsc -> gw: "WG encrypted UDP (peer=NSGW)"
+gw -> wg: "解密后按 peer 路由到 NSN\n再次 WG 加密 UDP"
+wg -> dp: "gotatun Device 解密得到\n原始 IPv4/IPv6 包"
+
+alt_tun: "data_plane = TUN (需要 root / CAP_NET_ADMIN)" {
+  dp -> dp: "HybridNatSend: 直接读 IP 头做 ACL"
+  dp -> kn: "命中本地服务 → DNAT 重写目的地址\n写入 TUN 接口"
+  kn -> svc: "内核 TCP/IP 栈直接投递"
+}
+
+alt_us: "data_plane = UserSpace (默认, 无 root)" {
+  dp -> sr: "smoltcp 解析成 TCP/UDP stream\n提取五元组"
+  sr -> sr: "ACL 检查 + 服务查找 + DNS 解析"
+  sr -> px: "target = (host, port)"
+  px -> svc: "proxy.connect() + 双向转发"
+}
+
+svc -> wg: "回包 (同一 peer 回路)"
+wg -> gw: "WG encrypt"
+gw -> nsc: "转发至 NSC 相同 peer"
+nsc -> u: "字节流"

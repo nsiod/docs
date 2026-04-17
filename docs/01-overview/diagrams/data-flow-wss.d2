@@ -1,0 +1,42 @@
+shape: sequence_diagram
+
+u: User App
+nsc: NSC
+gw: "NSGW\n(traefik :443 WSS Relay)"
+ws: "tunnel-ws\n(NSN WsFrame codec)"
+acl: ACL Engine
+sr: ServiceRouter
+px: Proxy
+svc: Service
+
+u -> nsc: "connect(ssh.ab3xk9mnpq.n.ns:22)"
+nsc -> gw: "TLS 1.3 + WSS\nWsFrame Open port=22 proto=tcp fqid"
+gw -> ws: "WSS 中继至 NSN (WsFrame)"
+
+ws -> acl: "check(target port + proto)"
+
+deny: "ACL 拒绝" {
+  acl -> ws: deny
+  ws -> gw: "WsFrame Close + 错误码"
+}
+
+allow: "ACL 通过" {
+  acl -> sr: "resolve(service)"
+  sr -> px: "target = 127.0.0.1:22"
+  px -> svc: "TCP connect"
+
+  exchange: "数据交换" {
+    nsc -> gw: "WsFrame Data payload"
+    gw -> ws: "透传 WsFrame Data"
+    ws -> px: "写 payload"
+    px -> svc: "转发字节"
+    svc -> px: "回复"
+    px -> ws: "字节"
+    ws -> gw: "WsFrame Data reply"
+    gw -> nsc: "WSS 数据帧"
+  }
+
+  nsc -> gw: "WsFrame Close"
+  gw -> ws: "WsFrame Close"
+  ws -> px: close
+}

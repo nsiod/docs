@@ -1,0 +1,44 @@
+direction: right
+
+classes: {
+  outer: { style: { fill: "#fff3e0"; stroke: "#f57c00"; font-color: "#e65100" } }
+  inner: { style: { fill: "#e8f5e9"; stroke: "#388e3c"; font-color: "#1b5e20" } }
+}
+
+nsn: "NSN Control Stack (crate: control)" {
+  mcp: "MultiControlPlane\n并发订阅多个 NSD\n配置合并 (wg/proxy/acl 全部并集)\n最终 ACL 与本地 services.toml 交集"
+  merge: "merge.rs\n按 chain_id 去重 + 来源标注"
+  sigv: "EventSigVerifier\n(规划中)\nEd25519 配置事件签名校验"
+  sse_client: "SSE Event Parser\n(sse.rs)"
+}
+
+transport: "ControlTransport trait (可插拔)" {
+  t_sse: "sse\nHTTPS/TLS · HTTP/2" { class: outer }
+  t_noise: "noise\nNoise-IK over TCP\nX25519 + ChaCha20 + BLAKE2s" { class: outer }
+  t_quic: "quic\nQUIC over UDP\npubkey verifier, no CA" { class: outer }
+}
+
+nsd_side: "NSD (mock: Bun + Rust quic-proxy)" {
+  nsd_reg: "Device Registry\nEd25519 machinekey + X25519 peerkey" { class: inner }
+  nsd_pol: "Policy Engine\n(wg/proxy/acl/gateway/routing/dns)" { class: inner }
+  nsd_http: ":3001 HTTP SSE" { class: inner }
+  nsd_noise: ":4001 Noise Listener"
+  nsd_quic: ":4002 QUIC Listener"
+}
+
+nsn.mcp -> nsn.sse_client
+nsn.sse_client -> nsn.sigv
+nsn.sigv -> nsn.merge
+nsn.mcp -> nsn.merge
+nsn.sse_client -> transport.t_sse
+nsn.sse_client -> transport.t_noise
+nsn.sse_client -> transport.t_quic
+
+transport.t_sse -> nsd_side.nsd_http: "HTTP GET /config/stream"
+transport.t_noise -> nsd_side.nsd_noise: "Noise handshake → inner HTTP SSE"
+transport.t_quic -> nsd_side.nsd_quic: "QUIC stream → inner HTTP SSE"
+
+nsd_side.nsd_noise -> nsd_side.nsd_http
+nsd_side.nsd_quic -> nsd_side.nsd_http
+nsd_side.nsd_http -> nsd_side.nsd_pol
+nsd_side.nsd_http -> nsd_side.nsd_reg

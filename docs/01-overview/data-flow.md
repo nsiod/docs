@@ -22,41 +22,7 @@ NSN 支持三种数据面形态,由 CLI 参数 `--data-plane` 选择:
 
 默认模式,也是生产上**最常用**的部署形态。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant GW as NSGW (kernel WG)
-    participant WG as gotatun Device<br/>(tunnel-wg)
-    participant NS as smoltcp<br/>(netstack)
-    participant SR as ServiceRouter<br/>(nat::router)
-    participant ACL as ACL Engine<br/>(acl::engine)
-    participant PX as proxy::tcp / udp
-    participant SVC as Local / Remote Service
-
-    GW->>WG: WG 加密 UDP 报文
-    WG->>WG: Noise 握手 / 会话解密
-    WG->>NS: 原始 IPv4/IPv6 包<br/>(经 NsnIpSend → mpsc channel)
-    NS->>NS: smoltcp 解析<br/>得到 TCP/UDP 流 (socket)
-    NS->>SR: 五元组 + payload
-    SR->>ACL: check(five_tuple)
-    alt deny
-        ACL-->>SR: Denied
-        SR-->>NS: drop(warn log)
-    else allow
-        ACL-->>SR: Allowed
-        SR->>SR: 按 local.port 查服务定义<br/>DNS 解析 target
-        SR->>PX: target = (host, port)
-        PX->>SVC: TcpStream::connect / UdpSocket
-        loop 双向转发
-            NS->>PX: 应用字节
-            PX->>SVC: 应用字节
-            SVC-->>PX: 回复字节
-            PX-->>NS: 回复字节
-            NS-->>WG: 构造回包 (IP header)
-            WG-->>GW: WG 加密 UDP
-        end
-    end
-```
+[WG UserSpace 模式数据流](./diagrams/wg-userspace-flow.d2)
 
 ### 关键阶段与源码位置
 
@@ -81,42 +47,7 @@ UserSpace 模式中:
 
 TUN 模式在有 root 或 `CAP_NET_ADMIN` 的环境下更高效 —— 把**内核**重新拉进链路,省掉 smoltcp 这层用户态状态机。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant GW as NSGW
-    participant WG as gotatun Device
-    participant HYB as HybridNatSend<br/>(tunnel-wg)
-    participant ACL as ACL Engine
-    participant NAT as PacketNat<br/>(nat::packet_nat)
-    participant TUN as TUN 接口<br/>(tun crate)
-    participant KN as 内核 TCP/IP
-    participant SVC as Local Service
-
-    GW->>WG: WG 加密 UDP
-    WG->>HYB: 原始 IP 包
-    HYB->>ACL: 按 IP 头解析五元组
-    alt deny
-        ACL-->>HYB: drop
-    else allow
-        HYB->>NAT: 分类: 本地? 远程?
-        alt 目标是本地服务 (host.docker.internal 或 127.0.0.1)
-            NAT->>NAT: DNAT: 重写目的地址 + 重算校验和
-            NAT->>TUN: 写入 TUN
-            TUN->>KN: 内核路由
-            KN->>SVC: 正常 TCP 交付
-        else 目标是远程服务 (非本地 IP)
-            NAT->>NAT: 拦截,不交给内核
-            NAT->>HYB: 交给用户态 proxy (同 UserSpace 路径)
-        end
-    end
-
-    SVC-->>KN: 回包
-    KN-->>TUN: 路由回 TUN
-    TUN-->>NAT: 反向 NAT(SNAT)
-    NAT-->>WG: 反向解析回包
-    WG-->>GW: WG 加密
-```
+[WG TUN 模式数据流](./diagrams/wg-tun-flow.d2)
 
 ### TUN 模式的价值所在
 
@@ -150,45 +81,7 @@ let dst_port = u16::from_be_bytes([packet[ihl+2], packet[ihl+3]]);
 
 WSS 模式完全不使用 WireGuard。NSGW 只扮演一个 **TLS 1.3 + WebSocket 中继**的角色,NSN 和 NSC 之间通过自定义的 `WsFrame` 二进制协议承载应用流。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant NSC
-    participant GW as NSGW traefik<br/>:443 WSS Relay
-    participant WS as tunnel-ws<br/>(NSN 解帧)
-    participant ACL
-    participant SR as ServiceRouter
-    participant PX as proxy
-    participant SVC as Service
-
-    NSC->>GW: WSS握手 + TLS 1.3<br/>Upgrade: websocket
-    GW->>WS: 透传 WSS 会话
-    NSC->>GW: WsFrame Open{port=22, proto=tcp, fqid}
-    GW->>WS: 透传帧
-    WS->>ACL: check(target)
-    alt deny
-        ACL-->>WS: Denied
-        WS-->>GW: WsFrame Close{code=acl_deny}
-        GW-->>NSC: 透传 Close
-    else allow
-        ACL->>SR: resolve service
-        SR->>PX: target = 127.0.0.1:22
-        PX->>SVC: TCP connect
-        loop Data 帧
-            NSC->>GW: WsFrame Data{payload}
-            GW->>WS: 透传
-            WS->>PX: 写字节
-            PX->>SVC: 转发
-            SVC-->>PX: 回复
-            PX-->>WS: 字节
-            WS-->>GW: WsFrame Data{reply}
-            GW-->>NSC: 透传
-        end
-        NSC->>GW: WsFrame Close
-        GW->>WS: 透传
-        WS->>PX: close
-    end
-```
+[WSS 模式数据流](./diagrams/wss-flow.d2)
 
 ### WSS 模式的关键差异
 
@@ -202,31 +95,7 @@ sequenceDiagram
 
 把 NSC 这一端补齐,就是一个完整的"用户访问远端服务"链路。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User<br/>(ssh client)
-    participant DNS as NSC Local DNS<br/>(nsc::dns)
-    participant VIP as NSC VIP Listener<br/>(nsc::vip)
-    participant ROUTE as NscRouter<br/>(nsc::router)
-    participant NSC_TUN as NSC Tunnel<br/>(tunnel-wg / ws)
-    participant GW as NSGW
-    participant NSN
-    participant SVC as Local Service
-
-    U->>DNS: A query "ssh.ab3xk9mnpq.n.ns"
-    DNS-->>U: 127.11.0.1 (VIP)
-    U->>VIP: connect("127.11.0.1:22")
-    VIP->>ROUTE: local_addr → (site=ab3xk9mnpq, svc=ssh)
-    ROUTE->>ROUTE: 选路: 最低 RTT 的 NSGW
-    ROUTE->>NSC_TUN: 发送 open(fqid=ssh.ab3xk9mnpq.n.ns, tcp)
-    NSC_TUN->>GW: WG UDP 或 WSS 帧
-    GW->>GW: Host/SNI 路由到 NSN peer
-    GW->>NSN: WG UDP 或 WSS 帧 (可能协议不同!)
-    NSN->>NSN: 按 WG 模式或 WSS 模式处理 (见上)
-    NSN->>SVC: proxy.connect("127.0.0.1", 22)
-    SVC-->>U: 双向字节流 (经过上述所有节点)
-```
+[NSC → NSGW → NSN 端到端数据流](./diagrams/end-to-end-flow.d2)
 
 > 图上 `GW` 到 `NSN` 可以与 `NSC` 到 `GW` 使用不同的传输协议。这正是 "两跳独立选路" 的设计初衷,详见 [transport-design.md](./transport-design.md)。
 

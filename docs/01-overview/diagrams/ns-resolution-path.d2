@@ -1,0 +1,24 @@
+direction: down
+
+app: "User App"
+r: "查询 *.n.ns?" { shape: diamond }
+nsc_dns: "NSC Local DNS\n:53 UDP\n(nsc::dns)"
+sys_dns: "系统 DNS\n(8.8.8.8 / 1.1.1.1 ...)"
+public: Public DNS
+vip: "A 记录 = 127.11.x.x\n(Virtual IP)"
+nsc_conn: "用户后续 connect(127.11.x.x:port)"
+nsc_router: "NscRouter\nVIP → (site, service)"
+tunnel: "走 WG / WSS 隧道"
+nsgw: NSGW
+nsn: NSN
+
+app -> r
+r -> nsc_dns: Yes
+r -> sys_dns: No
+sys_dns -> public
+nsc_dns -> vip
+vip -> nsc_conn
+nsc_conn -> nsc_router
+nsc_router -> tunnel
+tunnel -> nsgw
+nsgw -> nsn: "Host / SNI 路由"

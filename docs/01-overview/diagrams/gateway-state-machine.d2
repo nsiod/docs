@@ -1,0 +1,19 @@
+direction: down
+
+start: "起点" { shape: circle }
+connecting: Connecting
+connected: Connected
+wss_fallback: WssFallback
+reconnecting: Reconnecting
+failed: Failed
+end: "终点" { shape: circle }
+
+start -> connecting
+connecting -> connected: "WG handshake ok"
+connecting -> wss_fallback: "UDP 阻断 / 握手超时"
+wss_fallback -> connected: "WSS relay ok"
+connected -> reconnecting: "peer 超时 / 传输错误"
+reconnecting -> connected: "重建成功"
+reconnecting -> failed: "连续失败超阈值"
+failed -> reconnecting: "退避重试"
+connected -> end: shutdown

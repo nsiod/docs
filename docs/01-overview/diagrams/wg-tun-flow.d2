@@ -1,0 +1,40 @@
+shape: sequence_diagram
+
+gw: NSGW
+wg: gotatun Device
+hyb: "HybridNatSend\n(tunnel-wg)"
+acl: ACL Engine
+nat: "PacketNat\n(nat::packet_nat)"
+tun: "TUN 接口\n(tun crate)"
+kn: 内核 TCP/IP
+svc: Local Service
+
+gw -> wg: "WG 加密 UDP"
+wg -> hyb: "原始 IP 包"
+hyb -> acl: "按 IP 头解析五元组"
+
+deny: "deny" {
+  acl -> hyb: drop
+}
+
+allow: "allow" {
+  hyb -> nat: "分类: 本地? 远程?"
+
+  local: "目标是本地服务 (host.docker.internal 或 127.0.0.1)" {
+    nat -> nat: "DNAT: 重写目的地址 + 重算校验和"
+    nat -> tun: "写入 TUN"
+    tun -> kn: "内核路由"
+    kn -> svc: "正常 TCP 交付"
+  }
+
+  remote: "目标是远程服务 (非本地 IP)" {
+    nat -> nat: "拦截, 不交给内核"
+    nat -> hyb: "交给用户态 proxy (同 UserSpace 路径)"
+  }
+}
+
+svc -> kn: "回包"
+kn -> tun: "路由回 TUN"
+tun -> nat: "反向 NAT (SNAT)"
+nat -> wg: "反向解析回包"
+wg -> gw: "WG 加密"

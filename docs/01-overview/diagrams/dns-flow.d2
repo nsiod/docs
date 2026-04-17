@@ -1,0 +1,28 @@
+direction: right
+
+app: "用户 App\nssh / curl / psql"
+resolver: System Resolver
+nsc_dns: "NSC Local DNS\n:53/udp"
+public: Public DNS
+nsc_state: "NSC 内部状态\n(来自 NSD)"
+vip: "127.11.x.x"
+nsc_vip: NSC VIP Listener
+router: NscRouter
+gateway: Gateway
+nsn_dest: NSN
+service_router: ServiceRouter
+true_service: Real SSH Server
+
+app -> resolver
+resolver -> nsc_dns: "*.ns"
+resolver -> public: "其他"
+
+nsc_dns -> nsc_state: "查 routing_config\ndns_config"
+nsc_dns -> vip: "A record"
+
+app -> nsc_vip: "connect(VIP:port)"
+nsc_vip -> router: "按 VIP+port"
+router -> gateway: "按 FQID → 选 NSGW"
+gateway -> nsn_dest: "WG/WSS"
+nsn_dest -> service_router: "按目的端口"
+service_router -> true_service: "127.0.0.1:22"

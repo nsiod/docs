@@ -1,0 +1,23 @@
+shape: sequence_diagram
+
+u: "User\n(ssh client)"
+dns: "NSC Local DNS\n(nsc::dns)"
+vip: "NSC VIP Listener\n(nsc::vip)"
+route: "NscRouter\n(nsc::router)"
+nsc_tun: "NSC Tunnel\n(tunnel-wg / ws)"
+gw: NSGW
+nsn: NSN
+svc: Local Service
+
+u -> dns: "A query ssh.ab3xk9mnpq.n.ns"
+dns -> u: "127.11.0.1 (VIP)"
+u -> vip: "connect(127.11.0.1:22)"
+vip -> route: "local_addr → (site=ab3xk9mnpq, svc=ssh)"
+route -> route: "选路: 最低 RTT 的 NSGW"
+route -> nsc_tun: "发送 open(fqid=ssh.ab3xk9mnpq.n.ns, tcp)"
+nsc_tun -> gw: "WG UDP 或 WSS 帧"
+gw -> gw: "Host/SNI 路由到 NSN peer"
+gw -> nsn: "WG UDP 或 WSS 帧 (可能协议不同)"
+nsn -> nsn: "按 WG 模式或 WSS 模式处理 (见上)"
+nsn -> svc: "proxy.connect(127.0.0.1, 22)"
+svc -> u: "双向字节流 (经过上述所有节点)"

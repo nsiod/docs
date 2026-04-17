@@ -19,45 +19,7 @@
 
 ## 四个组件: NSD · NSGW · NSN · NSC
 
-```mermaid
-graph TB
-    subgraph Control["控制面"]
-        NSD1["NSD-1<br/>Control Center"]
-        NSD2["NSD-2<br/>Control Center"]
-    end
-
-    subgraph Bridge["桥接层"]
-        GW1["NSGW-1<br/>WG + WSS + HTTP 转发<br/>+ L4 端口映射"]
-        GW2["NSGW-2<br/>WG + WSS + HTTP 转发<br/>+ L4 端口映射"]
-    end
-
-    subgraph Site["站点侧"]
-        NSN["NSN<br/>Rust · 12 crates"]
-        LOCAL["Local Services"]
-    end
-
-    subgraph User["用户侧"]
-        NSC["NSC<br/>VIP 127.11.x.x<br/>DNS *.n.ns"]
-        APP["User App"]
-        BROWSER["Browser / curl<br/>(无 NSC · L7)"]
-        SSHCLI["SSH / psql / 任意 TCP<br/>(无 NSC · L4)"]
-    end
-
-    NSD1 -. "SSE config push" .-> NSN
-    NSD1 -. "SSE config push" .-> GW1
-    NSD1 -. "SSE config push" .-> NSC
-    NSD2 -. "SSE" .-> NSN
-
-    APP --> NSC
-    NSC ==>|"WG / WSS"| GW1
-    NSC ==>|"WG / WSS"| GW2
-    GW1 ==>|"WG / WSS"| NSN
-    GW2 ==>|"WG / WSS"| NSN
-    NSC -. "WG direct peer (规划中)" .-> NSN
-    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(L7: OIDC / 鉴权 / 限速 / WAF)"| GW1
-    SSHCLI ==>|"公网 TCP :map_port<br/>(L4: IP 白名单 / 限速 / 配额)"| GW1
-    NSN --> LOCAL
-```
+[NSIO 生态全景](./diagrams/ecosystem.d2)
 
 > 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
 >
@@ -103,7 +65,7 @@ graph TB
 | [data-flow.md](./data-flow.md) | WG 模式 (TUN + UserSpace) 与 WSS 模式的端到端数据流、关键代码位置 |
 | [dns-naming.md](./dns-naming.md) | `*.n.ns` / `*.gw.ns` / `*.d.ns` / `*.c.ns` 命名体系、FQID、nanoid 规则 |
 | [transport-design.md](./transport-design.md) | 数据面 UDP↔WSS fallback、控制面 SSE/Noise/QUIC 可插拔、两跳独立选路 |
-| [diagrams/](./diagrams/) | 本目录所有 Mermaid 源文件 (ecosystem / data-flow-wg / data-flow-wss / control-plane) |
+| [diagrams/](./diagrams/) | 本目录所有 d2 源文件,构建时渲染为 SVG |
 
 ## 其他模块文档
 

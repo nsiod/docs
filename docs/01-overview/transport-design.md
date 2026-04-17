@@ -31,18 +31,7 @@ NSIO 把"传输"分成两个独立的层面,各自独立选型:
 
 `connector::MultiGatewayManager` 对每个网关独立维护 WG 和 WSS 状态。回退策略:
 
-```mermaid
-stateDiagram-v2
-    [*] --> TryWG: 默认首选
-    TryWG --> WG_OK: handshake 成功
-    TryWG --> FallbackWSS: 握手超时 / UDP 不通
-    FallbackWSS --> WSS_OK: TLS 握手成功
-    WSS_OK --> RetryWG: 周期重试
-    RetryWG --> WG_OK: UDP 恢复
-    RetryWG --> WSS_OK: 仍无法
-    WG_OK --> TryWG: 连接中断
-    WSS_OK --> FallbackWSS: 连接中断
-```
+[WG / WSS 自动回退状态机](./diagrams/wg-wss-fallback.d2)
 
 关键源码:
 - 多网关选路: `crates/connector/src/multi.rs:152`
@@ -119,34 +108,9 @@ TUN(远程服务):  gotatun decrypt → ACL → TUN → kernel → VIP proxy →
 
 ### 架构: 共享内层,可插拔外壳
 
-```mermaid
-graph LR
-    subgraph NSN_Side["NSN (crate: control)"]
-        Parser["SSE Event Parser<br/>sse.rs<br/>(所有模式共用)"]
-        Merge["merge.rs"]
-    end
+[控制面架构: 共享内层 · 可插拔外壳](./diagrams/control-transport-trait.d2)
 
-    subgraph Outer["ControlTransport trait (transport/mod.rs)"]
-        T_SSE["sse.rs<br/>rustls + reqwest"]
-        T_NOISE["noise.rs<br/>snow 0.9"]
-        T_QUIC["quic.rs<br/>quinn 0.11"]
-    end
-
-    subgraph NSD_Side["NSD (nsd-mock 同一进程)"]
-        L_HTTP[":3001 HTTP SSE"]
-        L_NOISE[":4001 Noise listener"]
-        L_QUIC[":4002 QUIC listener<br/>(内嵌 Rust 子进程 nsd-quic-proxy)"]
-    end
-
-    Parser --> Outer
-    T_SSE -->|"HTTPS GET /config/stream"| L_HTTP
-    T_NOISE -->|"Noise handshake → 内部 HTTP"| L_NOISE
-    T_QUIC -->|"QUIC stream → 内部 HTTP"| L_QUIC
-    L_NOISE --> L_HTTP
-    L_QUIC --> L_HTTP
-```
-
-> 图源文件: [`diagrams/control-plane.mmd`](./diagrams/control-plane.mmd)
+> 更详细的版本(含 EventSigVerifier / merge.rs / NSD 内部组件)见 [`diagrams/control-plane.d2`](./diagrams/control-plane.d2)。
 
 **关键点**: 内层协议永远是 SSE(HTTP/1.1 `text/event-stream`)。只是**外壳**不同。这意味着:
 - 事件解析代码**一份**(`crates/control/src/sse.rs`)。

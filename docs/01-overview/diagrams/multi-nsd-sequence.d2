@@ -1,0 +1,27 @@
+shape: sequence_diagram
+
+nsd1: "NSD-1 (primary)"
+nsn: NSN
+nsd2: "NSD-2 (secondary)"
+
+par_subscribe: "SSE 订阅" {
+  lane1: "lane 1" {
+    nsn -> nsd1: "GET /config/stream (Bearer JWT)"
+    nsd1 -> nsn: "wg_config / acl_policy / ..."
+  }
+  lane2: "lane 2" {
+    nsn -> nsd2: "GET /config/stream (Bearer JWT)"
+    nsd2 -> nsn: "wg_config / acl_policy / ..."
+  }
+}
+
+note: "merge.rs:\nwg = peer 并集\nacl = 并集(带来源) + 本地 ACL 保底\nproxy = chain_id 去重并集"
+
+par_report: "上报" {
+  r1: "report 1" {
+    nsn -> nsd1: "POST /machine/services_report"
+  }
+  r2: "report 2" {
+    nsn -> nsd2: "POST /machine/services_report"
+  }
+}

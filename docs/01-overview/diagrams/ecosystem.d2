@@ -1,0 +1,50 @@
+direction: down
+
+classes: {
+  ctrl: { style: { fill: "#e3f2fd"; stroke: "#1976d2"; font-color: "#0d47a1" } }
+  gw: { style: { fill: "#fff3e0"; stroke: "#f57c00"; font-color: "#e65100" } }
+  site: { style: { fill: "#e8f5e9"; stroke: "#388e3c"; font-color: "#1b5e20" } }
+  user: { style: { fill: "#f3e5f5"; stroke: "#7b1fa2"; font-color: "#4a148c" } }
+}
+
+control: 控制面 {
+  nsd1: "NSD-1\nControl Center\n规划 Rust / Go\n(当前 Bun mock + Rust quic-proxy)" { class: ctrl }
+  nsd2: "NSD-2\nControl Center\n(HA / Multi-Realm)" { class: ctrl }
+}
+
+bridge: 桥接层 (Region-Scoped) {
+  gw1: "NSGW-1\nWG + WSS Relay\n+ HTTP 转发 + L4 端口映射\n(形态待定: 轻 Proxy / Envoy)" { class: gw }
+  gw2: "NSGW-2\nWG + WSS Relay\n+ HTTP 转发 + L4 端口映射" { class: gw }
+}
+
+site: 站点侧 (服务提供方) {
+  nsn: "NSN\nSite Node\nRust · 12 crates\ntunnel-wg / tunnel-ws\nServiceRouter + ACL + Proxy" { class: site }
+  local: "本地服务\n127.0.0.1:22/80/5432" { class: site }
+  remote: "远程服务\n192.168.x.x · *.example.com" { class: site }
+}
+
+user: 用户侧 (访问方) {
+  nsc: "NSC\nClient Binary\nVirtual IP 127.11.x.x\nLocal DNS *.n.ns\nNscRouter" { class: user }
+  app: "User App\nssh / curl / psql" { class: user }
+  browser: "Browser / curl\n无 NSC 入站 · L7\n公网域名由 NSD 分配\n(非 *.n.ns)" { class: user }
+  sshcli: "SSH / psql / 任意 TCP\n无 NSC 入站 · L4\nNSGW 端口由 NSD 分配" { class: user }
+}
+
+control.nsd1 -> site.nsn: "SSE config push\n(wg/proxy/acl/gateway)" { style.stroke-dash: 3 }
+control.nsd2 -> site.nsn: SSE config push { style.stroke-dash: 3 }
+control.nsd1 -> bridge.gw1: SSE config push { style.stroke-dash: 3 }
+control.nsd1 -> user.nsc: SSE config push { style.stroke-dash: 3 }
+
+user.app -> user.nsc: "*.n.ns → 127.11.x.x"
+user.nsc -> bridge.gw1: "WG :51820 / WSS :443" { style.stroke-width: 3 }
+user.nsc -> bridge.gw2: WG / WSS { style.stroke-width: 3 }
+bridge.gw1 -> site.nsn: WG / WSS 桥接 { style.stroke-width: 3 }
+bridge.gw2 -> site.nsn: WG / WSS 桥接 { style.stroke-width: 3 }
+
+user.nsc -> site.nsn: "WG direct peer\n(规划中: direct_peers)" { style.stroke-dash: 3 }
+
+user.browser -> bridge.gw1: "公网 HTTPS :443\nHost = NSD 分配的公网域名\n(L7: OIDC / 鉴权 / 限速 / WAF)" { style.stroke-width: 3 }
+user.sshcli -> bridge.gw1: "公网 TCP :map_port\n(L4: IP 白名单 / 限速 /\n并发上限 / 审计)" { style.stroke-width: 3 }
+
+site.nsn -> site.local
+site.nsn -> site.remote

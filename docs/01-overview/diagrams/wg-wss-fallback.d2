@@ -1,0 +1,18 @@
+direction: down
+
+start: "起点" { shape: circle }
+try_wg: "TryWG\n(默认首选)"
+wg_ok: WG_OK
+fallback_wss: FallbackWSS
+wss_ok: WSS_OK
+retry_wg: RetryWG
+
+start -> try_wg
+try_wg -> wg_ok: "handshake 成功"
+try_wg -> fallback_wss: "握手超时 / UDP 不通"
+fallback_wss -> wss_ok: "TLS 握手成功"
+wss_ok -> retry_wg: "周期重试"
+retry_wg -> wg_ok: "UDP 恢复"
+retry_wg -> wss_ok: "仍无法"
+wg_ok -> try_wg: "连接中断"
+wss_ok -> fallback_wss: "连接中断"
