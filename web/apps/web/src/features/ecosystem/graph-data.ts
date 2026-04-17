@@ -1,130 +1,138 @@
-import type { Edge, Node } from 'reactflow';
+/**
+ * Ecosystem graph domain model + mermaid chart generators.
+ *
+ * Replaces the previous ReactFlow-based rendering. All graphs are now emitted
+ * as mermaid `flowchart` source and rendered via `<Mermaid />`.
+ */
 
 export type NodeCategory = 'component' | 'protocol' | 'data' | 'external';
 
-export interface FlowNodeData {
+interface ModuleNode {
+  readonly id: string;
   readonly label: string;
   readonly category: NodeCategory;
-  readonly moduleLink?: string;
   readonly sublabel?: string;
+  readonly link?: string;
 }
 
-function n(
-  id: string,
-  label: string,
-  category: NodeCategory,
-  x: number,
-  y: number,
-  moduleLink?: string,
-  sublabel?: string,
-): Node<FlowNodeData> {
-  const data: FlowNodeData = { label, category, moduleLink, sublabel };
-  return {
-    id,
-    type: 'nsioNode',
-    position: { x, y },
-    data,
-    draggable: false,
-  };
+interface ModuleEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly label?: string;
+  readonly dashed?: boolean;
 }
 
-function e(
-  id: string,
-  source: string,
-  target: string,
-  label?: string,
-  dashed?: boolean,
-  animated?: boolean,
-): Edge {
-  return {
-    id,
-    source,
-    target,
-    label,
-    animated: animated ?? false,
-    style: dashed ? { strokeDasharray: '5 5', stroke: '#8a8f98' } : { stroke: '#6a707a' },
-    labelStyle: { fontSize: 10, fill: 'currentColor' },
-    labelBgStyle: { fill: 'var(--background)', fillOpacity: 0.85 },
-    labelBgPadding: [3, 1],
-    labelBgBorderRadius: 3,
-  };
-}
-
-/** NSIO ecosystem overview — 17 nodes / 22 edges. */
-export const overviewNodes: Node<FlowNodeData>[] = [
-  // external actors
-  n('user-app', 'User App', 'external', 20, 320, undefined, 'ssh · curl · psql'),
-  n('service-provider', 'Service Provider', 'external', 1520, 320, undefined, 'local · remote'),
-  // control plane
-  n('nsd-1', 'NSD-1', 'component', 520, 40, '08-nsd-control', 'Control Center'),
-  n('nsd-2', 'NSD-2', 'component', 880, 40, '08-nsd-control', 'HA / Multi-Realm'),
-  // control-plane transports
-  n('noise-quic', 'Noise / QUIC', 'protocol', 260, 160, '02-control-plane', 'anti-DPI'),
-  n('sse', 'SSE', 'protocol', 700, 160, '02-control-plane', 'config stream'),
-  // bridges
-  n('nsgw-1', 'NSGW-1', 'component', 700, 320, '09-nsgw-gateway', 'traefik+WG+WSS'),
-  n('nsgw-2', 'NSGW-2', 'component', 700, 500, '09-nsgw-gateway', 'Region 2'),
-  // data plane protocols
-  n('wg', 'WireGuard', 'protocol', 460, 220, '03-data-plane', 'UDP :51820'),
-  n('wss', 'WSS', 'protocol', 460, 420, '03-data-plane', 'TCP :443'),
-  // site / user
-  n('nsc', 'NSC', 'component', 260, 320, '06-nsc-client', 'User Client'),
-  n('nsn', 'NSN', 'component', 1220, 320, '07-nsn-node', 'Site Node · 12 crates'),
-  // NSC-local data
-  n('vip', 'VIP 127.11.x.x', 'data', 260, 500, '06-nsc-client'),
-  n('dns', 'Local DNS', 'data', 40, 500, '06-nsc-client', '*.n.ns'),
-  // NSN-internal data
-  n('netstack', 'netstack', 'data', 1420, 200, '04-network-stack', 'smoltcp'),
-  n('acl', 'ACL', 'data', 1220, 500, '05-proxy-acl', 'allow-only'),
-  n('proxy', 'Proxy / NAT', 'data', 1420, 460, '05-proxy-acl', 'Conntrack'),
-];
-
-export const overviewEdges: Edge[] = [
-  // user path
-  e('u-nsc', 'user-app', 'nsc', 'FQDN → VIP'),
-  e('nsc-wg', 'nsc', 'wg', 'WG'),
-  e('nsc-wss', 'nsc', 'wss', 'WSS fallback', true),
-  e('wg-gw1', 'wg', 'nsgw-1'),
-  e('wss-gw1', 'wss', 'nsgw-1', undefined, true),
-  e('gw1-nsn', 'nsgw-1', 'nsn', 'bridge', false, true),
-  e('nsc-gw2', 'nsc', 'nsgw-2', 'alt', true),
-  e('gw2-nsn', 'nsgw-2', 'nsn', 'alt region', true),
-  // NSN internals
-  e('nsn-netstack', 'nsn', 'netstack'),
-  e('nsn-acl', 'nsn', 'acl'),
-  e('acl-proxy', 'acl', 'proxy'),
-  e('netstack-proxy', 'netstack', 'proxy'),
-  e('proxy-svc', 'proxy', 'service-provider', 'connect()'),
-  // NSC-local
-  e('nsc-vip', 'nsc', 'vip', undefined, true),
-  e('nsc-dns', 'nsc', 'dns', undefined, true),
-  // control plane
-  e('nsd1-sse', 'nsd-1', 'sse', undefined, true),
-  e('nsd2-sse', 'nsd-2', 'sse', 'HA', true),
-  e('sse-nsn', 'sse', 'nsn', 'config push', true),
-  e('sse-gw1', 'sse', 'nsgw-1', undefined, true),
-  e('nsd1-noise', 'nsd-1', 'noise-quic', undefined, true),
-  e('noise-nsc', 'noise-quic', 'nsc', 'config push', true),
-  e('sse-nsc', 'sse', 'nsc', undefined, true),
-];
-
-// Per-module flow specs (deterministic layout computed at render time)
 export interface ModuleFlowSpec {
-  readonly nodes: ReadonlyArray<{
-    readonly id: string;
-    readonly label: string;
-    readonly category: NodeCategory;
-    readonly sublabel?: string;
-    readonly link?: string;
-  }>;
-  readonly edges: ReadonlyArray<{
-    readonly from: string;
-    readonly to: string;
-    readonly label?: string;
-    readonly dashed?: boolean;
-  }>;
+  readonly nodes: ReadonlyArray<ModuleNode>;
+  readonly edges: ReadonlyArray<ModuleEdge>;
   readonly center: string;
 }
+
+// ---------- Ecosystem overview (hand-tuned mermaid chart) ----------
+
+/**
+ * Overview chart — clean top-down layout with three swim-lanes:
+ * control plane / data plane / external actors.
+ *
+ * `basepath` is prepended to internal doc links so clicks work under
+ * GitHub Pages (`/docs/`) or any other subdirectory deployment.
+ */
+export function buildOverviewChart(basepath: string): string {
+  const b = basepath.replace(/\/$/, '');
+  const link = (modId: string) => `${b}/modules/${modId}`;
+  return [
+    'flowchart LR',
+    '  classDef component fill:#a7f3d0,stroke:#047857,color:#064e3b;',
+    '  classDef protocol fill:#fde68a,stroke:#b45309,color:#78350f;',
+    '  classDef data fill:#bfdbfe,stroke:#1d4ed8,color:#1e3a8a;',
+    '  classDef external fill:#e9d5ff,stroke:#7e22ce,color:#581c87;',
+    '',
+    '  subgraph CP["Control Plane"]',
+    '    direction TB',
+    '    NSD1["NSD-1<br/><small>Control Center</small>"]:::component',
+    '    NSD2["NSD-2<br/><small>HA / Multi-Realm</small>"]:::component',
+    '    SSE["SSE<br/><small>config stream</small>"]:::protocol',
+    '    NOISE["Noise / QUIC<br/><small>anti-DPI</small>"]:::protocol',
+    '  end',
+    '',
+    '  subgraph Edge["User Edge"]',
+    '    direction TB',
+    '    USER["User App<br/><small>ssh · curl · psql</small>"]:::external',
+    '    NSC["NSC<br/><small>User Client</small>"]:::component',
+    '    VIP["VIP 127.11.x.x"]:::data',
+    '    DNS["Local DNS<br/><small>*.n.ns</small>"]:::data',
+    '  end',
+    '',
+    '  subgraph Transport["Data-plane transport"]',
+    '    direction TB',
+    '    WG["WireGuard<br/><small>UDP :51820</small>"]:::protocol',
+    '    WSS["WSS<br/><small>TCP :443</small>"]:::protocol',
+    '    NSGW1["NSGW-1<br/><small>traefik+WG+WSS</small>"]:::component',
+    '    NSGW2["NSGW-2<br/><small>Region 2</small>"]:::component',
+    '  end',
+    '',
+    '  subgraph Site["Site Node (NSN)"]',
+    '    direction TB',
+    '    NSN["NSN<br/><small>12 crates</small>"]:::component',
+    '    NETSTACK["netstack<br/><small>smoltcp</small>"]:::data',
+    '    ACL["ACL<br/><small>allow-only</small>"]:::data',
+    '    PROXY["Proxy / NAT<br/><small>conntrack</small>"]:::data',
+    '    SVC["Service Provider<br/><small>local · remote</small>"]:::external',
+    '  end',
+    '',
+    '  %% user plane',
+    '  USER -->|FQDN → VIP| NSC',
+    '  NSC --> VIP',
+    '  NSC --> DNS',
+    '  NSC -->|WG| WG',
+    '  NSC -.->|WSS fallback| WSS',
+    '  WG --> NSGW1',
+    '  WSS --> NSGW1',
+    '  NSC -.->|alt| NSGW2',
+    '  NSGW1 -->|bridge| NSN',
+    '  NSGW2 -.->|alt region| NSN',
+    '',
+    '  %% NSN internals',
+    '  NSN --> NETSTACK',
+    '  NSN --> ACL',
+    '  NETSTACK --> PROXY',
+    '  ACL --> PROXY',
+    '  PROXY -->|connect()| SVC',
+    '',
+    '  %% control plane',
+    '  NSD1 -.-> SSE',
+    '  NSD2 -.->|HA| SSE',
+    '  NSD1 -.-> NOISE',
+    '  SSE -.->|config push| NSN',
+    '  SSE -.-> NSGW1',
+    '  SSE -.-> NSC',
+    '  NOISE -.->|config push| NSC',
+    '',
+    `  click NSD1 href "${link('08-nsd-control')}"`,
+    `  click NSD2 href "${link('08-nsd-control')}"`,
+    `  click SSE href "${link('02-control-plane')}"`,
+    `  click NOISE href "${link('02-control-plane')}"`,
+    `  click NSC href "${link('06-nsc-client')}"`,
+    `  click WG href "${link('03-data-plane')}"`,
+    `  click WSS href "${link('03-data-plane')}"`,
+    `  click NSGW1 href "${link('09-nsgw-gateway')}"`,
+    `  click NSGW2 href "${link('09-nsgw-gateway')}"`,
+    `  click NSN href "${link('07-nsn-node')}"`,
+    `  click NETSTACK href "${link('04-network-stack')}"`,
+    `  click ACL href "${link('05-proxy-acl')}"`,
+    `  click PROXY href "${link('05-proxy-acl')}"`,
+    `  click VIP href "${link('06-nsc-client')}"`,
+    `  click DNS href "${link('06-nsc-client')}"`,
+  ].join('\n');
+}
+
+// Static metadata consumed by routes/index.tsx
+export const OVERVIEW_STATS = {
+  nodes: 17,
+  edges: 22,
+} as const;
+
+// ---------- Per-module flows ----------
 
 const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   '01-overview': {
@@ -155,7 +163,7 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
     center: 'control',
     nodes: [
       { id: 'control', label: 'control crate', category: 'component' },
-      { id: 'common', label: 'common\nmachinekey/peerkey', category: 'data' },
+      { id: 'common', label: 'common<br/>machinekey/peerkey', category: 'data' },
       { id: 'sse', label: 'SSE', category: 'protocol' },
       { id: 'noise', label: 'Noise', category: 'protocol' },
       { id: 'quic', label: 'QUIC', category: 'protocol' },
@@ -178,9 +186,9 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   '03-data-plane': {
     center: 'connector',
     nodes: [
-      { id: 'connector', label: 'connector\nMultiGW 选路', category: 'component' },
-      { id: 'tunnel-wg', label: 'tunnel-wg\ngotatun UAPI', category: 'component' },
-      { id: 'tunnel-ws', label: 'tunnel-ws\nWsFrame', category: 'component' },
+      { id: 'connector', label: 'connector<br/>MultiGW 选路', category: 'component' },
+      { id: 'tunnel-wg', label: 'tunnel-wg<br/>gotatun UAPI', category: 'component' },
+      { id: 'tunnel-ws', label: 'tunnel-ws<br/>WsFrame', category: 'component' },
       { id: 'wg-proto', label: 'WireGuard UDP', category: 'protocol' },
       { id: 'wss-proto', label: 'WSS TCP/443', category: 'protocol' },
       { id: 'gw', label: '09 · NSGW', category: 'component', link: '09-nsgw-gateway' },
@@ -259,8 +267,8 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
     nodes: [
       { id: 'nsn', label: 'nsn binary', category: 'component' },
       { id: 'app', label: 'AppState', category: 'data' },
-      { id: 'monitor', label: 'Monitor API\n:9090/api/*', category: 'protocol' },
-      { id: 'telemetry', label: 'telemetry\nOTel + Prom', category: 'component' },
+      { id: 'monitor', label: 'Monitor API<br/>:9090/api/*', category: 'protocol' },
+      { id: 'telemetry', label: 'telemetry<br/>OTel + Prom', category: 'component' },
       { id: 'ctrl', label: '← control', category: 'component', link: '02-control-plane' },
       { id: 'dp', label: '← data-plane', category: 'component', link: '03-data-plane' },
       { id: 'proxy', label: '← proxy+acl', category: 'component', link: '05-proxy-acl' },
@@ -277,9 +285,9 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   '08-nsd-control': {
     center: 'nsd',
     nodes: [
-      { id: 'nsd', label: 'NSD\nControl Center', category: 'component' },
-      { id: 'auth', label: 'auth\nmachinekey + JWT', category: 'data' },
-      { id: 'reg', label: 'registry\npeers + gateways', category: 'data' },
+      { id: 'nsd', label: 'NSD<br/>Control Center', category: 'component' },
+      { id: 'auth', label: 'auth<br/>machinekey + JWT', category: 'data' },
+      { id: 'reg', label: 'registry<br/>peers + gateways', category: 'data' },
       { id: 'sse', label: 'SSE /api/v1/config/stream', category: 'protocol' },
       { id: 'nsn', label: '→ NSN', category: 'component', link: '07-nsn-node' },
       { id: 'nsgw', label: '→ NSGW', category: 'component', link: '09-nsgw-gateway' },
@@ -297,9 +305,9 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   '09-nsgw-gateway': {
     center: 'nsgw',
     nodes: [
-      { id: 'nsgw', label: 'NSGW\ntraefik + WG + WSS', category: 'component' },
-      { id: 'traefik', label: 'traefik\nhost/SNI route', category: 'protocol' },
-      { id: 'wg', label: 'kernel WG\n:51820', category: 'protocol' },
+      { id: 'nsgw', label: 'NSGW<br/>traefik + WG + WSS', category: 'component' },
+      { id: 'traefik', label: 'traefik<br/>host/SNI route', category: 'protocol' },
+      { id: 'wg', label: 'kernel WG<br/>:51820', category: 'protocol' },
       { id: 'wss', label: 'Bun WSS relay', category: 'protocol' },
       { id: 'nsd', label: '← NSD', category: 'component', link: '08-nsd-control' },
       { id: 'nsn', label: '→ NSN', category: 'component', link: '07-nsn-node' },
@@ -320,14 +328,14 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   '10-nsn-nsc-critique': {
     center: 'critique',
     nodes: [
-      { id: 'critique', label: '10 · Critique\n70+ findings', category: 'component' },
+      { id: 'critique', label: '10 · Critique<br/>70+ findings', category: 'component' },
       { id: 'arch', label: 'architecture-issues', category: 'data' },
       { id: 'func', label: 'functional-gaps', category: 'data' },
       { id: 'fail', label: 'failure-modes', category: 'data' },
       { id: 'perf', label: 'performance-concerns', category: 'data' },
       { id: 'sec', label: 'security-concerns', category: 'data' },
       { id: 'obs', label: 'observability-gaps', category: 'data' },
-      { id: 'roadmap', label: 'improvements\n+ roadmap', category: 'data' },
+      { id: 'roadmap', label: 'improvements<br/>+ roadmap', category: 'data' },
       { id: 'nsn', label: '→ 07 NSN', category: 'component', link: '07-nsn-node' },
       { id: 'nsc', label: '→ 06 NSC', category: 'component', link: '06-nsc-client' },
     ],
@@ -348,9 +356,9 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
     center: 'vision',
     nodes: [
       { id: 'vision', label: '11 · Vision', category: 'component' },
-      { id: 'nsd-cap', label: 'NSD capability\n6 axes', category: 'data' },
-      { id: 'nsgw-cap', label: 'NSGW capability\n6 axes', category: 'data' },
-      { id: 'matrix', label: 'feature-matrix\n173 rows', category: 'data' },
+      { id: 'nsd-cap', label: 'NSD capability<br/>6 axes', category: 'data' },
+      { id: 'nsgw-cap', label: 'NSGW capability<br/>6 axes', category: 'data' },
+      { id: 'matrix', label: 'feature-matrix<br/>173 rows', category: 'data' },
       { id: 'phase', label: 'Phase 0-3 roadmap', category: 'data' },
       { id: 'ctrl-ext', label: 'control-plane ext', category: 'protocol' },
       { id: 'data-ext', label: 'data-plane ext', category: 'protocol' },
@@ -371,64 +379,56 @@ const MODULE_FLOWS: Record<string, ModuleFlowSpec> = {
   },
 };
 
-export function getModuleFlow(
-  moduleId: string,
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } | null {
+const CATEGORY_CLASS: Record<NodeCategory, string> = {
+  component: 'component',
+  protocol: 'protocol',
+  data: 'data',
+  external: 'external',
+};
+
+/**
+ * Generate mermaid source for a module's adjacency graph.
+ * Returns null if the module has no flow spec.
+ */
+export function getModuleChart(moduleId: string, basepath: string): string | null {
   const spec = MODULE_FLOWS[moduleId];
   if (!spec)
     return null;
+  const b = basepath.replace(/\/$/, '');
 
-  const ids = spec.nodes.map((x) => x.id);
-  const centerId = ids.includes(spec.center) ? spec.center : ids[0];
-  if (!centerId)
-    return null;
+  const lines: string[] = [
+    'flowchart LR',
+    '  classDef component fill:#a7f3d0,stroke:#047857,color:#064e3b;',
+    '  classDef protocol fill:#fde68a,stroke:#b45309,color:#78350f;',
+    '  classDef data fill:#bfdbfe,stroke:#1d4ed8,color:#1e3a8a;',
+    '  classDef external fill:#e9d5ff,stroke:#7e22ce,color:#581c87;',
+    '',
+  ];
 
-  const others = ids.filter((id) => id !== centerId);
-  const nodes: Node<FlowNodeData>[] = [];
+  for (const node of spec.nodes) {
+    const safeId = mermaidId(node.id);
+    lines.push(`  ${safeId}["${node.label}"]:::${CATEGORY_CLASS[node.category]}`);
+  }
+  lines.push('');
+  for (const edge of spec.edges) {
+    const from = mermaidId(edge.from);
+    const to = mermaidId(edge.to);
+    const arrow = edge.dashed ? '-.->' : '-->';
+    if (edge.label)
+      lines.push(`  ${from} ${arrow}|${edge.label}| ${to}`);
+    else
+      lines.push(`  ${from} ${arrow} ${to}`);
+  }
+  lines.push('');
+  for (const node of spec.nodes) {
+    if (node.link) {
+      lines.push(`  click ${mermaidId(node.id)} href "${b}/modules/${node.link}"`);
+    }
+  }
+  return lines.join('\n');
+}
 
-  const centerSpec = spec.nodes.find((x) => x.id === centerId)!;
-  nodes.push({
-    id: centerSpec.id,
-    type: 'nsioNode',
-    position: { x: 400, y: 280 },
-    draggable: false,
-    data: {
-      label: centerSpec.label,
-      category: centerSpec.category,
-      sublabel: centerSpec.sublabel,
-      moduleLink: centerSpec.link,
-    },
-  });
-  const radius = 230;
-  const count = others.length;
-  others.forEach((id, i) => {
-    const entry = spec.nodes.find((x) => x.id === id)!;
-    const angle = -Math.PI / 2 + (2 * Math.PI * i) / count;
-    nodes.push({
-      id,
-      type: 'nsioNode',
-      position: { x: 400 + Math.cos(angle) * radius, y: 280 + Math.sin(angle) * radius },
-      draggable: false,
-      data: {
-        label: entry.label,
-        category: entry.category,
-        sublabel: entry.sublabel,
-        moduleLink: entry.link,
-      },
-    });
-  });
-
-  const edges: Edge[] = spec.edges.map((edge, i) => ({
-    id: `e-${i}-${edge.from}-${edge.to}`,
-    source: edge.from,
-    target: edge.to,
-    label: edge.label,
-    style: edge.dashed ? { strokeDasharray: '5 5', stroke: '#8a8f98' } : { stroke: '#6a707a' },
-    labelStyle: { fontSize: 10, fill: 'currentColor' },
-    labelBgStyle: { fill: 'var(--background)', fillOpacity: 0.85 },
-    labelBgPadding: [3, 1],
-    labelBgBorderRadius: 3,
-  }));
-
-  return { nodes, edges };
+/** Sanitize an id for mermaid (alphanumeric + underscore). */
+function mermaidId(id: string): string {
+  return id.replace(/[^a-z0-9]/gi, '_');
 }

@@ -6,9 +6,9 @@ graph TB
     end
 
     subgraph TunnelManager["TunnelManager (tunnel-wg/src/lib.rs:117)"]
-        RunLoop[run() select loop<br/>lib.rs:186]
-        BuildDev[build_device()<br/>lib.rs:269]
-        StatusPoll[spawn_status_poller()<br/>lib.rs:516]
+        RunLoop["run() select loop<br/>lib.rs:186"]
+        BuildDev["build_device()<br/>lib.rs:269"]
+        StatusPoll["spawn_status_poller()<br/>lib.rs:516"]
     end
 
     subgraph Device["gotatun Device (generation N)"]

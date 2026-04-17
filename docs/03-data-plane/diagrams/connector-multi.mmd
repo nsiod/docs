@@ -17,8 +17,8 @@ flowchart TB
             Failed((Failed<br/>reason))
             Disabled((Disabled))
         end
-        Selector[select_gateway()<br/>multi.rs:272]
-        Events[event_tx<br/>GatewayEvent::*<br/>multi.rs:24]
+        Selector["select_gateway()<br/>multi.rs:272"]
+        Events["event_tx<br/>GatewayEvent::*<br/>multi.rs:24"]
     end
 
     subgraph Consumers["Consumers"]

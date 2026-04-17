@@ -2,8 +2,8 @@ import { LAYER_GROUPS } from '@shared/index';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import { getAllModules } from '@/features/content/content';
-import { ReactFlowDiagram } from '@/features/diagram/ReactFlowDiagram';
-import { overviewEdges, overviewNodes } from '@/features/ecosystem/graph-data';
+import { Mermaid } from '@/features/diagram/Mermaid';
+import { buildOverviewChart, OVERVIEW_STATS } from '@/features/ecosystem/graph-data';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 
 export const Route = createFileRoute('/')({
@@ -31,16 +31,11 @@ function HomePage() {
         </section>
 
         <section>
-          <ReactFlowDiagram
-            nodes={overviewNodes}
-            edges={overviewEdges}
-            height={600}
-            showMiniMap
-          />
+          <Mermaid chart={buildOverviewChart(import.meta.env.BASE_URL ?? '/')} />
           <p className="mt-2 text-[11px] text-muted-foreground">
-            <span className="font-mono">{overviewNodes.length}</span> 节点 ·
-            <span className="font-mono ml-1">{overviewEdges.length}</span> 边 ·
-            实线 = 数据面 · 虚线 = 控制面 / fallback
+            <span className="font-mono">{OVERVIEW_STATS.nodes}</span> 节点 ·
+            <span className="font-mono ml-1">{OVERVIEW_STATS.edges}</span> 边 ·
+            点击节点跳转模块文档
           </p>
         </section>
 

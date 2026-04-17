@@ -27,7 +27,7 @@ sequenceDiagram
             NSD-->>SSE: 200
         else error
             NSD-->>SSE: status >= 300
-            Note over CP: backoff_secs *= 2 up to 60s; continue outer loop
+            Note over CP: backoff_secs *= 2 up to 60s, continue outer loop
         end
 
         CP->>SSE: connect()
@@ -81,7 +81,7 @@ sequenceDiagram
         end
 
         NSD-->>SSE: stream ended / chunk error
-        Note over CP: sleep(backoff_secs); backoff *= 2 up to 60s<br/>re-authenticate(); retry outer loop
+        Note over CP: sleep(backoff_secs), backoff *= 2 up to 60s<br/>re-authenticate(), retry outer loop
     end
 
     Note over CP,WG: Any downstream Receiver dropped<br/>=> dispatch_message returns Ok(true)<br/>=> ControlPlane::run() returns

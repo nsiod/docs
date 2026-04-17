@@ -2,8 +2,7 @@ import type { ModuleEntry } from '@/features/content/content';
 import { FileText, Layers, Network } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Mermaid } from '@/features/diagram/Mermaid';
-import { ReactFlowDiagram } from '@/features/diagram/ReactFlowDiagram';
-import { getModuleFlow } from '@/features/ecosystem/graph-data';
+import { getModuleChart } from '@/features/ecosystem/graph-data';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -16,7 +15,10 @@ export function ModuleViewer({ module }: ModuleViewerProps) {
   const firstDocSlug = module.docs[0]?.slug ?? 'readme';
   const [active, setActive] = useState<string>(firstDocSlug);
 
-  const flow = useMemo(() => getModuleFlow(module.id), [module.id]);
+  const moduleChart = useMemo(
+    () => getModuleChart(module.id, import.meta.env.BASE_URL ?? '/'),
+    [module.id],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -33,13 +35,13 @@ export function ModuleViewer({ module }: ModuleViewerProps) {
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full" viewportClassName="px-6 py-6">
           <div id="top" className="space-y-8">
-            {flow && (
+            {moduleChart && (
               <section className="space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <Network className="h-3.5 w-3.5" />
-                  <span>Adjacency · ReactFlow</span>
+                  <span>Adjacency</span>
                 </div>
-                <ReactFlowDiagram nodes={flow.nodes} edges={flow.edges} height={460} />
+                <Mermaid chart={moduleChart} />
               </section>
             )}
 

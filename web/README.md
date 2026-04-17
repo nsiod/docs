@@ -1,7 +1,7 @@
 # NSIO Docs · Static Web Viewer
 
 Vite + React 19 + TanStack Router SPA that renders the 11 NSIO architecture
-modules from `../docs/` with an interactive ReactFlow ecosystem overview and
+modules from `../docs/` with an interactive Mermaid ecosystem overview and
 per-module Mermaid diagrams.
 
 ## Stack
@@ -14,7 +14,7 @@ per-module Mermaid diagrams.
 - **Styling**: Tailwind CSS 4 with `@theme inline` + oklch tokens
 - **UI primitives**: shadcn/ui conventions over `@base-ui-components/react`
 - **Icons**: lucide-react
-- **Graphs**: `reactflow` (overview + per-module adjacency) + `mermaid` (per-doc)
+- **Graphs**: `mermaid` (overview + per-module adjacency + per-doc diagrams)
 - **Markdown**: react-markdown + remark-gfm + rehype-slug + rehype-highlight
 - **Lint**: ESLint + `@antfu/eslint-config` (react enabled)
 
@@ -31,12 +31,12 @@ web/
         routeTree.gen.ts       # auto-generated (TanStackRouterVite)
         routes/
           __root.tsx           # header + sidebar + <Outlet />
-          index.tsx            # home: ReactFlow ecosystem overview
+          index.tsx            # home: Mermaid ecosystem overview
           modules/$moduleId.tsx
       features/
         content/content.ts     # import.meta.glob loader for .md + .mmd
-        diagram/               # Mermaid, MermaidFile, ReactFlowDiagram, SourceRef
-        ecosystem/graph-data.ts  # 17-node overview + 11 per-module flow specs
+        diagram/               # Mermaid, MermaidFile, SourceRef
+        ecosystem/graph-data.ts  # overview chart + 11 per-module mermaid specs
         module-viewer/         # ModuleViewer + MarkdownRenderer
       shared/
         components/
@@ -44,7 +44,7 @@ web/
           ui/                  # tabs, scroll-area (base-ui wrappers)
         hooks/use-theme.ts     # Zustand theme store + matchMedia sync
         lib/utils.ts           # cn()
-      index.css                # Tailwind 4 @theme + design tokens + rf-* classes
+      index.css                # Tailwind 4 @theme + design tokens
       main.tsx                 # StrictMode + AppProviders
   packages/
     config/                    # shared tsconfig/{base,react}.json
@@ -93,18 +93,18 @@ change.
 
 `features/ecosystem/graph-data.ts` defines:
 
-- `overviewNodes` — 17 nodes (user, service, NSD×2, NSGW×2, NSN, NSC,
-  WireGuard, WSS, Noise/QUIC, SSE, VIP, DNS, netstack, ACL, proxy)
-- `overviewEdges` — 22 edges (solid = data, dashed = control / fallback)
+- `buildOverviewChart(basepath)` — top-level NSIO ecosystem mermaid flowchart
+  grouping Control Plane / User Edge / Transport / Site Node
 - `MODULE_FLOWS` — 11 per-module adjacency specs (6–10 nodes, ≥5 edges each)
+- `getModuleChart(moduleId, basepath)` — renders a per-module mermaid chart
+  from a spec, including `click … href` navigation to documentation pages
 
-Clicking any node with a `moduleLink` navigates to that module page.
+Every chart uses mermaid `click` directives so node taps route to the matching
+module page. `basepath` is derived from `import.meta.env.BASE_URL` so links
+work under GitHub Pages (`/docs/`) or any other subdirectory deployment.
 
 ## Gates
 
 - `bun run typecheck` — 0 errors
-- `bun run lint` — 0 errors (1 `react-refresh/only-export-components` warning on
-  `node-types.tsx` which exports both `nodeTypes` and the node component)
+- `bun run lint` — 0 errors
 - `bun run build` — succeeds; mermaid chunks split automatically
-- Headless smoke (dev): home 17 nodes + 22 edges; per-module pages render
-  ReactFlow + 3–7 Mermaid SVGs each

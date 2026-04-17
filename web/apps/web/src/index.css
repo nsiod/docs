@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import 'reactflow/dist/style.css' layer(components);
 
 @custom-variant dark (&:is(.dark *));
 
@@ -180,53 +179,6 @@
   .prose-doc img {
     @apply max-w-full rounded border;
   }
-}
-
-/* ReactFlow overrides */
-.react-flow__attribution {
-  display: none !important;
-}
-.react-flow__node {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border-width: 2px;
-  border-style: solid;
-}
-.rf-node-component {
-  background: var(--cat-component);
-  border-color: var(--cat-component-border);
-  color: #0f2b15;
-}
-.rf-node-protocol {
-  background: var(--cat-protocol);
-  border-color: var(--cat-protocol-border);
-  color: #3b1d00;
-}
-.rf-node-data {
-  background: var(--cat-data);
-  border-color: var(--cat-data-border);
-  color: #0a1d3a;
-}
-.rf-node-external {
-  background: var(--cat-external);
-  border-color: var(--cat-external-border);
-  color: #2c0b42;
-}
-.dark .rf-node-component {
-  color: oklch(0.97 0.03 150);
-}
-.dark .rf-node-protocol {
-  color: oklch(0.97 0.03 60);
-}
-.dark .rf-node-data {
-  color: oklch(0.97 0.03 240);
-}
-.dark .rf-node-external {
-  color: oklch(0.97 0.03 310);
 }
 
 /* highlight.js minimal light/dark */

@@ -39,7 +39,7 @@ sequenceDiagram
         NSD-->>NSN: 200 {machine_id, server_peer_key_pub, server_endpoint, domain_base?}
         NSN->>State: set_registered + save
     else Subsequent run (already registered)
-        Note over NSN: skip register; reuse machine_id<br/>auth.rs:238 authenticate()
+        Note over NSN: skip register, reuse machine_id<br/>auth.rs:238 authenticate()
     end
 
     Note over NSN: Build message = "{machine_id}:{unix_secs}"<br/>signature = Ed25519(signing_key, message)
