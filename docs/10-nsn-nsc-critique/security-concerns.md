@@ -328,7 +328,7 @@ flowchart LR
 
 ---
 
-## SEC-013 · NSGW 主动推送的 WSS Open frame 缺少 source identity, 无法进行 per-connection 审计
+## SEC-013 · NSGW 主动推送的 WSS Open frame 缺少 source identity, 无法进行 per-connection 审计 `[RESOLVED]`
 
 - **Severity**: P2（中）
 - **Location**: `crates/tunnel-ws/src/lib.rs:480-498`（`FrameCommand::Open` 仅含 `target_ip / target_port / protocol`）
@@ -340,12 +340,13 @@ flowchart LR
 - **Impact**：
   - 安全审计能力残缺
   - ACL 表达力降级（"src=user-A" 类规则形同虚设）
-- **Fix**：
-  - 扩展 `FrameCommand::Open` 增加 `source: Option<SourceIdentity>` 字段（向后兼容）
-  - NSGW 端在转发时填入 NSC 的 machine_id / vip
-  - NSN 端把 source 透传给 ACL 评估和审计日志
+- **Fix**（已决议，2026-04-17）：
+  - 从 **ACL 数据模型层**解决——把规则里的 `src: [...]` 改为 `subject: [...]`，支持 `user:` / `group:` / `nsgw:` / `cidr:` 多形态身份；`src_ip` 不再是 WSS 路径的身份维度
+  - **WsFrame `Open` 追加 TLV 扩展**携带 `{gateway_id, machine_id, user_id?}`；NSN 接收后组装 `Subject::User` 喂给 ACL，并记入审计日志（见 [03 · tunnel-ws · §2.4](../03-data-plane/tunnel-ws.md#24-open-帧的-source-identity-扩展)）
+  - 缺失 source TLV 的 Open 一律 **fail-closed**，防止旧版 NSGW 或伪造帧旁路
+  - ACL 规则语义、group 展开、跨路径维度分离详见 [05 · ACL · §4](../05-proxy-acl/acl.md#4-主体匹配-subject)
 - **Cost vs Benefit**：~2 人日；为多租户场景必需
-- **Migration risk**：低 — frame 格式向后兼容（Optional 字段）
+- **Migration risk**：中——NSGW 必须先于 NSN 升级（NSGW 不发 TLV → NSN 一律拒绝）；迁移窗口期可用 per-realm 灰度
 
 ---
 

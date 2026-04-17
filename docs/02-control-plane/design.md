@@ -181,11 +181,11 @@ Content-Type: application/json
 |------|------|------|----------|
 | `WgConfig` | 多源 peers **并集**，按 `public_key` 去重；保留首条配置的 `ip_address` / `listen_port` | `merge.rs:27` `merge_wg_configs` | 站点能同时与所有 NSD 给出的所有对端通信；同 key 不同 endpoint 时**先到先得** |
 | `ProxyConfig` | rules **并集**，按 `resource_id` 去重；保留首条配置的 `chain_id` | `merge.rs:56` `merge_proxy_configs` | 任何 NSD 提到的资源都可以被代理 |
-| `AclConfig` | hosts / acls / tests **并集**，按等价键去重；每条保留带来源 NSD 标注 | `merge.rs:85` `merge_acl_configs` | **与 wg/proxy 同向**：接入 NSD 只扩不删规则；安全由本地 `services.toml` ACL 作为最终保底裁决（见 [multi-realm.md §4.5](../08-nsd-control/multi-realm.md#45-本地-acl-作为保底)） |
+| `AclConfig` | hosts / groups / acls / tests **并集**，按等价键去重；每条保留带来源 NSD 标注 | `merge.rs:85` `merge_acl_configs` | **与 wg/proxy 同向**：接入 NSD 只扩不删规则；安全由本地 `services.toml` ACL 作为最终保底裁决（见 [multi-realm.md §4.5](../08-nsd-control/multi-realm.md#45-本地-acl-作为保底)） |
 
-`AclRule` 的等价键：`"accept\0{src 排序}\0{dst 排序}\0{proto or *}"`（`merge.rs:128`），这样 `src`/`dst` 列表顺序不影响等价判定。
+`AclRule` 的等价键：`"accept\0{subject 排序}\0{dst 排序}\0{proto or *}"`（`merge.rs:128`），这样 `subject`/`dst` 列表顺序不影响等价判定。`groups` 按组名 merge：同名组的成员列表取并集（两个 NSD 都维护 `group:eng` 时成员相加、去重）。
 
-> 示例：NSD-A 独有 `accept 10.0.0.1 → 192.168.1.1:80`、NSD-B 独有 `accept 10.0.0.2 → 192.168.1.1:22` → 合并后两条规则**全部保留**，分别标记来源 NSD-A / NSD-B；
+> 示例：NSD-A 独有 `accept user:ab3xk9mnpq → db:5432`、NSD-B 独有 `accept group:eng → db:5432` → 合并后两条规则**全部保留**，分别标记来源 NSD-A / NSD-B。Group `eng` 如果两边都定义，成员取并集。
 > **运行时放行**还要通过本地 `services.toml` ACL 再校验一次，站点主人对最终边界保留否决权。
 
 ### 4.3 示例
@@ -197,18 +197,19 @@ NSD-1 wg:    peers = [P1, P2]
 NSD-2 wg:    peers = [P2, P3]
 NSD-1 proxy: chain_id = "c1", rules = [r1, r2]
 NSD-2 proxy: chain_id = "c2", rules = [r2', r3]   // r2' 与 r2 同 resource_id
-NSD-1 acl:   { accept A→B, accept C→D }
-NSD-2 acl:   { accept A→B, accept E→F }
+NSD-1 acl:   groups={eng:[u1,u2]}  rules={ accept group:eng→B, accept user:u3→D }
+NSD-2 acl:   groups={eng:[u2,u4]}  rules={ accept group:eng→B, accept user:u5→F }
 ```
 
 合并结果：
 
 ```text
-wg:    peers = [P1, P2, P3]                       // 并集去重
-proxy: chain_id = "c1", rules = [r1, r2, r3]     // r2 来自 NSD-1（先到）
-acl:   { accept A→B [sources=NSD-1,NSD-2],
-         accept C→D [sources=NSD-1],
-         accept E→F [sources=NSD-2] }             // 并集，每条带 sources 元数据
+wg:    peers = [P1, P2, P3]                                    // 并集去重
+proxy: chain_id = "c1", rules = [r1, r2, r3]                   // r2 来自 NSD-1（先到）
+acl:   groups = { eng: [u1, u2, u4] }                          // 同名组成员并集
+       rules  = { accept group:eng→B [sources=NSD-1,NSD-2],    // 等价键相同 → 合并 sources
+                  accept user:u3→D    [sources=NSD-1],
+                  accept user:u5→F    [sources=NSD-2] }         // 并集，每条带 sources
 // 最终放行 = merged_acl ∩ services.toml 本地 ACL
 ```
 

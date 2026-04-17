@@ -44,8 +44,8 @@
 
 | Cmd | 值 | 方向 | Payload | 含义 |
 |---|---|---|---|---|
-| `CMD_OPEN_V4` | `0x01` | 服务端→NSN | `4B ip · 2B port · 1B proto` | 打开 IPv4 流（proto: 0=TCP, 1=UDP） |
-| `CMD_OPEN_V6` | `0x02` | 服务端→NSN | `16B ip · 2B port · 1B proto` | 打开 IPv6 流 |
+| `CMD_OPEN_V4` | `0x01` | 服务端→NSN | `4B ip · 2B port · 1B proto [· TLV source]` | 打开 IPv4 流（proto: 0=TCP, 1=UDP）；可选尾部 TLV 携带 **source identity**（见 §2.4） |
+| `CMD_OPEN_V6` | `0x02` | 服务端→NSN | `16B ip · 2B port · 1B proto [· TLV source]` | 打开 IPv6 流；可选 source TLV 同上 |
 | `CMD_DATA` | `0x10` | 双向 | `raw bytes ...` | 数据分段（TCP 连续字节 / UDP 单个 datagram） |
 | `CMD_CLOSE` | `0x20` | 双向 | `（空）` | 主动关闭，需对端 `CloseAck` |
 | `CMD_CLOSE_ACK` | `0x21` | 双向 | `（空）` | 关闭确认，接收后从 registry 删除 |
@@ -100,6 +100,36 @@
 - `WsFrame::encode()`（`lib.rs:140`）：`Vec::with_capacity(64)` 预分配，按 cmd 分支追加字段。
 - `WsFrame::decode()`（`lib.rs:183`）：校验 `len >= 5` → 取 `stream_id` → 按 cmd 分支解析，未知 cmd 返回 `Error::FrameDecode("unknown command byte: 0x??")`。
 - 未实现校验和 / MAC：信任外层 `wss://` 的 TLS AEAD。
+
+### 2.4 Open 帧的 Source Identity 扩展
+
+为让 NSN 的 ACL 能识别"发起端到底是哪个 NSC"，`OPEN_V4` / `OPEN_V6` 的必填段之后允许追加一段 **TLV**（Type-Length-Value）可选扩展，专门承载 **source identity**。这是 NSGW → NSN 方向使用的单向扩展；NSN 不会回发 Open，因此协议上不对称。
+
+**为什么不依赖包头 src_ip？** WSS 中继路径完全脱离 IP 层：Open 帧只带**目的**，而 NSN 从帧层看不到真正的"发起者 IP"——最近的 hop 永远是 NSGW 自己。把身份放在应用层 TLV 里, 由 NSGW 基于它已验过的 NSC JWT (Bearer token) 直接断言, 这是让 ACL 的"subject"维度能在 WSS 路径生效的唯一出路（见 [05 · ACL · §4 主体匹配](../05-proxy-acl/acl.md#4-主体匹配-subject)）。
+
+**TLV 布局（追加在 Open 尾部）**：
+
+```
+┌──────┬──────┬────────────────────────┐
+│ type │ len  │        value           │
+│ (u8) │ (u16 BE) │    (len 字节)        │
+└──────┴──────┴────────────────────────┘
+```
+
+| type | 名称 | value 编码 | 必填 |
+|------|------|------------|------|
+| `0x01` | `GATEWAY_ID` | UTF-8 字符串 (≤64B)，即 NSGW 自身的 `gateway_id` | 是 |
+| `0x02` | `MACHINE_ID` | UTF-8 字符串 (≤64B)，即发起 NSC 的 `machine_id` | 是 |
+| `0x03` | `USER_ID` | UTF-8 字符串 (≤64B)，生产 NSD 的 RBAC 用户标识 | 否（mock 省略） |
+
+**解码规则**：
+- 读完 OPEN 的必填段后, 若仍有字节, 按 TLV 循环解析; 每段 `len` 上限 64, 总扩展 ≤ 256B（防止巨帧）。
+- 缺失 `GATEWAY_ID` + `MACHINE_ID` 任一项 → 帧合法但 ACL 侧看到的 subject 不完整, 直接 **fail-closed**（回 `Close`, 不建流）。
+- 未知 type 字节 → 跳过该条 TLV（向前兼容新增字段），但触发 `warn!("unknown open TLV type: 0x??")` 一次。
+
+**信任模型**：NSN 不对 TLV 做签名校验——WSS 连接本身已在 TLS/Noise 层 pin 到 NSGW 的身份（`wss_endpoint` 来自 NSD 下发的 `gateway_config`），等于"这条 wss 连接上发来的所有 Open 的 source 都由该 NSGW 背书"。因此安全前提是：**NSGW 必须在 /client 侧已验证 NSC 的 JWT 并拒绝冒名**。NSGW 的 `connectorStreamToClient` 反查表（`tests/docker/nsgw-mock/src/wss-relay.ts`）是这个断言的来源。
+
+**向后兼容性**：老 NSGW 发出的无 TLV 的 Open 帧仍能解码，但 NSN 侧 ACL 无法组装 `Subject::User`；这种请求在 `check_target_allowed` 里走 fail-closed 分支（即"没有 source → 一律拒绝"），等同于把老 NSGW 从 WSS 路径下线。这是**刻意**的 breakage-on-upgrade：否则 ACL 的 user/group 规则可以被一个未升级的 NSGW 旁路。运维层面上，要求 NSGW 先于 NSN 升级。
 
 ---
 
@@ -181,14 +211,15 @@ B → A: CloseAck s=X     (对端确认)
 
 ## 4. 策略拦截：`check_target_allowed`
 
-每个 `Open` 帧在接受前都要过两道关（`lib.rs:434`）：
+每个 `Open` 帧在接受前都要过**三道关**（`lib.rs:434`）：
 
 | 检查 | 源 | 说明 |
 |---|---|---|
+| **Source identity 完整性** | `OPEN` 帧 §2.4 的 TLV 扩展 | 必须同时带 `GATEWAY_ID` + `MACHINE_ID`；缺失任一即 fail-closed（回 `Close`，不建流），防止未升级 NSGW 或伪造帧旁路 ACL |
 | **Services 白名单** | `ServicesConfig` | 严格模式下要求 target IP:port:proto 在 services.toml 登记；hostname 条目经 DNS 解析后与 `Open` 携带的 IP 比对 |
 | **ACL 引擎** | `Arc<RwLock<Option<Arc<AclEngine>>>>` | `None` 即 "尚未从控制面接收到策略" —— **默认拒绝** |
 
-ACL 评估的 `AccessRequest` 源 IP 固定为 `0.0.0.0`（`lib.rs:454`），因为 `Open` 帧只带目的；通配 `*` 源规则即可匹配。锁上下文关键约束：
+ACL 评估的 `AccessRequest` 采用 `Subject::User { gateway_id, machine_id }` 维度（来自 TLV 扩展），而不是五元组里的 `src_ip`。策略作者写 `subject: ["user:ab3xk9mnpq"]` 或 `subject: ["group:eng"]` 就能直接命中发起 NSC；详见 [05 · ACL · §4.1 主体形式](../05-proxy-acl/acl.md#41-主体形式)。锁上下文关键约束：
 
 ```rust
 // lib.rs:450 —— 只在"services 异步检查之后"拿读锁，且锁持有期间不跨 await

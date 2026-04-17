@@ -108,7 +108,7 @@ flowchart LR
 | B.3 | auth 改为 challenge-response;签名嵌入 `nsd_url` + server nonce | `control/src/auth.rs:235-272`,NSD 端 `/api/v1/machine/auth/challenge` | SEC-003 |
 | B.4 | 私钥写入前 AEAD 包裹(chacha20poly1305);密钥来自 `NSN_KEY_ENC_KEY` 或 OS keyring;提供 fallback "兼容旧明文文件并升级"路径 | `common/src/state.rs:401-433` | SEC-004 |
 | B.5 | 用 `secrecy::SecretString` 包裹 `self.token`;tracing field 强制脱敏(只输出前 6 字符) | `control/src/sse.rs:95-96, 109, 134, 281-282, 304, 342` | SEC-009 |
-| B.6 | WSS Open frame 增加 `source: Option<SourceIdentity>`(machine_id/vip);ACL 评估和审计日志透传 | `tunnel-ws/src/lib.rs:480-498`,NSGW 端 | SEC-013 |
+| B.6 | **已决议**（2026-04-17，见 [SEC-013](./security-concerns.md#sec-013)）：ACL 从 `src: [...]` 重构为 `subject: [...]`（`user:/group:/nsgw:/cidr:`）；WSS Open 追加 TLV 扩展携带 `{gateway_id, machine_id}`；缺 TLV fail-closed。规范见 [03 · tunnel-ws §2.4](../03-data-plane/tunnel-ws.md#24-open-帧的-source-identity-扩展) 与 [05 · ACL §4](../05-proxy-acl/acl.md#4-主体匹配-subject) | `tunnel-ws/src/lib.rs:480-498`, `acl/src/{policy,matcher,engine}.rs`, NSGW 端填 TLV | SEC-013 |
 | B.7 | 引入 `SecurityEvent` enum + 独立 syslog/file sink | 新建 `crates/audit/`,接入 nsn/main.rs | SEC-015 |
 
 **总成本**：~10 人日（B.1 当下做完;B.2 是大改造,可能需协议版本协商）  

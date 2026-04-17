@@ -96,10 +96,11 @@ graph TB
 
 ## 4. 核心原则
 
-1. **Proxy-as-NAT**: UserSpace/WSS 路径不做 IP 包改写, 由 `ServiceRouter` 把流量解析成 `(src_ip, dst_port, proto)`, 然后 `proxy.connect(target)` 建立一条新的后端连接来中继 (参见 [proxy.md](./proxy.md))。
+1. **Proxy-as-NAT**: UserSpace/WSS 路径不做 IP 包改写, 由 `ServiceRouter` 把流量解析成 `(subject, dst_ip, dst_port, proto)`, 然后 `proxy.connect(target)` 建立一条新的后端连接来中继 (参见 [proxy.md](./proxy.md))。
 2. **Accept-only ACL**: 策略语言里没有 `deny` 规则, 未命中任何 `accept` 规则就是默认拒绝 (`crates/acl/src/engine.rs:141`)。好处是审计简单 — 任何"允许"都必须在策略里显式写出。
-3. **L7 peek 只读, 不改写**: `parse_http_host` / `parse_tls_sni` 只读解析首个数据块, 解析完**完整原样**转发给后端 (`crates/nsn/src/main.rs:1225`, `:1297`), 避免协议状态被污染。
-4. **单一决策点**: `ServiceRouter::resolve*` 是 ACL 校验的唯一入口, 没有散落在数据面各处的 "绕过" 路径, 便于在 `/api/acl` 与 `validate_tests()` 里回放。
+3. **主体（subject）而非源 IP**: ACL 的"谁"维度是多形态的身份标识 `*` / `user:` / `group:` / `nsgw:` / `cidr:`, 由调用方按路径显式组装; 解决了 WSS 中继路径里 `src_ip` 永远是 NSGW 的身份识别死角（参见 [acl.md §4](./acl.md#4-主体匹配-subject)）。
+4. **L7 peek 只读, 不改写**: `parse_http_host` / `parse_tls_sni` 只读解析首个数据块, 解析完**完整原样**转发给后端 (`crates/nsn/src/main.rs:1225`, `:1297`), 避免协议状态被污染。
+5. **单一决策点**: `ServiceRouter::resolve*` 与 `tunnel-ws::check_target_allowed` 是 ACL 校验的两个也是仅有的入口, 没有散落在数据面各处的 "绕过" 路径, 便于在 `/api/acl` 与 `validate_tests()` 里回放。
 
 ## 5. 命名与端口约定
 

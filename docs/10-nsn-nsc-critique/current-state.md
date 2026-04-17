@@ -69,20 +69,22 @@ flowchart LR
     subgraph WSS["WSS Open frame"]
         WS_OPEN["dispatch_frame<br/>tunnel-ws/lib.rs:486"] --> WS_CHECK["check_target_allowed<br/>tunnel-ws/lib.rs:434"]
         WS_CHECK -->|"acl=None → fail-CLOSED<br/>(line 461-463)"| DENY1((Deny))
-        WS_CHECK -->|"acl=Some && allowed"| ALLOW1((Allow))
+        WS_CHECK -->|"subject = User{gw_id, machine_id}<br/>from Open TLV"| ALLOW1((Allow))
     end
 
     subgraph LOCAL["本地服务路由"]
         LOC_RES["ServiceRouter::resolve<br/>nat/router.rs:71"] --> LOC_CHECK["acl_engine.read()<br/>nat/router.rs:88"]
         LOC_CHECK -->|"acl=None → fail-OPEN<br/>(if let Some skipped)"| ALLOW2((Allow))
-        LOC_CHECK -->|"acl=Some && allowed"| ALLOW3((Allow))
+        LOC_CHECK -->|"subject = Cidr(src_ip)<br/>from decrypted packet"| ALLOW3((Allow))
     end
 
     style DENY1 fill:#fdd
     style ALLOW2 fill:#fdd
 ```
 
-两条链路对"ACL 引擎尚未加载"采取**相反语义**。这是 [SEC-001](./security-concerns.md) 的核心。
+两条链路的分歧体现在两个维度：
+1. **ACL 未加载时行为**：WSS fail-closed, 本地 fail-open——是 [SEC-001](./security-concerns.md) 的核心。
+2. **subject 来源不同**：WSS 用 NSGW 在 Open TLV 里断言的 `user:/nsgw:/group:` 身份（见 [SEC-013 已决议](./security-concerns.md#sec-013)），本地路径用解密后的真实 `src_ip` 组成 `cidr:` 主体。两条路径的规则**不跨维度命中**——详见 [05 · ACL · §4](../05-proxy-acl/acl.md#4-主体匹配-subject)。
 
 ACL 引擎本身有两份独立 Arc：
 - `nat::ServiceRouter::acl_engine` (`nat/router.rs:40`)
