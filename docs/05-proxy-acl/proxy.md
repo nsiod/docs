@@ -6,12 +6,7 @@
 
 ## 1. 模块位置
 
-```mermaid
-graph LR
-    IN["解密后流量<br/>smoltcp / WsFrame"] --> SR["ServiceRouter<br/>(nat crate)"]
-    SR -- "resolve ACL OK" --> P["proxy::tcp / proxy::udp"]
-    P --> SVC["本地或远程<br/>真实服务"]
-```
+[proxy 模块位置](./diagrams/proxy-position.d2)
 
 proxy 在依赖图中的位置 (见 `docs/architecture.md:278`):
 
@@ -21,7 +16,7 @@ proxy → {common, telemetry}        # 叶子, 无上游业务依赖
 
 proxy 不感知 WireGuard / smoltcp, 也不读取 `AclPolicy`; 它只是一层"拿到目标 `SocketAddr` 就去连后端"的中继工具函数。
 
-完整端到端架构参见 [diagrams/proxy-arch.mmd](./diagrams/proxy-arch.mmd)。
+完整端到端架构参见 [代理层端到端数据通路](./diagrams/proxy-arch.d2)。
 
 ## 2. 公共 API
 

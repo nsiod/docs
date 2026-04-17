@@ -1,0 +1,29 @@
+direction: down
+
+classes: {
+  deny: { style.fill: "#fdd"; style.stroke: "#c33" }
+  allow: { style.fill: "#dfd"; style.stroke: "#3c3" }
+}
+
+NSC: "NSC\n发起 Open(target=db:5432)"
+
+NSGW_BOX: "NSGW (预过滤 · defense-in-depth)" {
+  NSGW: "1. 从 JWT 解 machine_id\n2. is_allowed(User{self.gw_id, machine_id}, target)\n   ↓ 查本地 ACL projection（从 NSD 订阅）"
+}
+
+EARLY: "Close + 结构化 reason\n（NSC 立即拿到 403）" { class: deny }
+WSN: "在 Open 帧填 TLV\n转发给 NSN"
+
+NSN_BOX: "NSN (终决 · authoritative)" {
+  NSN: "3. check_target_allowed(TLV 中的 subject, target)\n   ↓ 查 merged_acl ∩ services.toml 本地 floor"
+}
+
+LATE: "Close\n（最后一道防线）" { class: deny }
+SVC: "proxy → local service" { class: allow }
+
+NSC -> NSGW_BOX.NSGW: "/client WSS"
+NSGW_BOX.NSGW -> EARLY: "命中 deny"
+NSGW_BOX.NSGW -> WSN: "命中 allow / 未命中 projection"
+WSN -> NSN_BOX.NSN
+NSN_BOX.NSN -> LATE: "deny"
+NSN_BOX.NSN -> SVC: "allow"

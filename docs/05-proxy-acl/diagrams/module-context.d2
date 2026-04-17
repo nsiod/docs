@@ -1,0 +1,27 @@
+direction: down
+
+CP: "Control Plane\n(02-control-plane)\nNSD → SSE → AclConfig / ServicesConfig"
+DP: "Data Plane\n(03-data-plane, 04-network-stack)\ntunnel-wg / tunnel-ws → smoltcp / WsFrame"
+
+PA: "05-proxy-acl (本模块)" {
+  SR: "ServiceRouter (nat crate)\nresolve / resolve_by_host / resolve_by_sni"
+  ACL: "AclEngine\naccept-only, default deny"
+  TCP: "proxy::tcp"
+  UDP: "proxy::udp"
+  HPEEK: "proxy::http_peek"
+  SPEEK: "proxy::sni_peek"
+}
+
+SVC: "本地 / 远程真实服务"
+
+CP -> PA.SR: "load_acl / services 更新"
+DP -> PA.SR: "五元组 / WsFrame"
+DP -> PA.HPEEK: "首 chunk 字节"
+DP -> PA.SPEEK: "首 chunk 字节"
+PA.HPEEK -> PA.SR
+PA.SPEEK -> PA.SR
+PA.SR -> PA.ACL
+PA.SR -> PA.TCP
+PA.SR -> PA.UDP
+PA.TCP -> SVC
+PA.UDP -> SVC

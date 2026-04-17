@@ -205,24 +205,7 @@ let subject = match peer_map.lookup(src_ip) {
 
 即便 NSN 已经持有完整的 ACL, 让每个 Open 都"打到 NSN 才被拒"仍浪费资源（一次 TLS 建链 + 一次 wss 帧 + 一次 ACL 查询 + 一次 Close 回帧）。NSGW 既然知道 `{gateway_id, machine_id}`（它必须知道, 才能填 TLV）, 就可以**在 /client ingress 先自己查一遍**。
 
-```mermaid
-flowchart TD
-    NSC["NSC<br/>发起 Open(target=db:5432)"] -->|/client WSS| NSGW
-    subgraph NSGW_BOX["NSGW (预过滤 · defense-in-depth)"]
-        NSGW["1. 从 JWT 解 machine_id<br/>2. is_allowed(User{self.gw_id, machine_id}, target)<br/>   ↓ 查本地 ACL projection（从 NSD 订阅）"]
-    end
-    NSGW -->|"命中 deny"| EARLY["Close + 结构化 reason<br/>（NSC 立即拿到 403）"]:::deny
-    NSGW -->|"命中 allow / 未命中 projection"| WSN["在 Open 帧填 TLV<br/>转发给 NSN"]
-    WSN --> NSN
-    subgraph NSN_BOX["NSN (终决 · authoritative)"]
-        NSN["3. check_target_allowed(TLV 中的 subject, target)<br/>   ↓ 查 merged_acl ∩ services.toml 本地 floor"]
-    end
-    NSN -->|"deny"| LATE["Close<br/>（最后一道防线）"]:::deny
-    NSN -->|"allow"| SVC["proxy → local service"]:::allow
-
-    classDef deny fill:#fdd,stroke:#c33
-    classDef allow fill:#dfd,stroke:#3c3
-```
+[NSGW 预拒 + NSN 终决两级信任](./diagrams/nsgw-nsn-two-stage.d2)
 
 **职责分工**：
 
@@ -301,36 +284,7 @@ NSD 在生成 projection 时做一次预过滤：
 
 ## 6. ServiceRouter 集成
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Up as Data Plane<br/>(smoltcp / WsFrame / L7 peek)
-    participant SR as ServiceRouter
-    participant SVC as ServicesConfig
-    participant ACL as AclEngine
-    participant DNS as resolve_host
-    participant Proxy as proxy::tcp / udp
-
-    Up->>SR: resolve(...) / resolve_by_host / resolve_by_sni
-    SR->>SVC: find_named_by_port / _by_domain / _by_sni
-    alt 无匹配服务
-        SVC-->>SR: None
-        SR-->>Up: None (静默丢弃)
-    else 命中
-        SVC-->>SR: ServiceDef { host, port, ... }
-        SR->>ACL: is_allowed(AccessRequest)
-        alt 默认拒绝
-            ACL-->>SR: allowed=false
-            SR-->>Up: None (ACL denied)
-        else 命中某条 accept 规则
-            ACL-->>SR: allowed=true, matched_rule_index=i
-            SR->>DNS: resolve_host(svc.host, svc.port)
-            DNS-->>SR: SocketAddr
-            SR-->>Up: ResolvedService{target}
-            Up->>Proxy: connect + relay
-        end
-    end
-```
+[ServiceRouter 集成时序](./diagrams/service-router-sequence.d2)
 
 三个 resolve 函数都走同一个模式 (`crates/nat/src/router.rs:71`, `:117`, `:162`):
 

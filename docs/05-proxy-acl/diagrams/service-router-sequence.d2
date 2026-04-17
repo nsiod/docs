@@ -1,0 +1,30 @@
+shape: sequence_diagram
+
+Up: "Data Plane\n(smoltcp / WsFrame / L7 peek)"
+SR: "ServiceRouter"
+SVC: "ServicesConfig"
+ACL: "AclEngine"
+DNS: "resolve_host"
+Proxy: "proxy::tcp / udp"
+
+Up -> SR: "resolve(...) / resolve_by_host / resolve_by_sni"
+SR -> SVC: "find_named_by_port / _by_domain / _by_sni"
+no_match: "无匹配服务" {
+  SVC -> SR: "None"
+  SR -> Up: "None (静默丢弃)"
+}
+match: "命中" {
+  SVC -> SR: "ServiceDef { host, port, ... }"
+  SR -> ACL: "is_allowed(AccessRequest)"
+  deny: "默认拒绝" {
+    ACL -> SR: "allowed=false"
+    SR -> Up: "None (ACL denied)"
+  }
+  allow: "命中某条 accept 规则" {
+    ACL -> SR: "allowed=true, matched_rule_index=i"
+    SR -> DNS: "resolve_host(svc.host, svc.port)"
+    DNS -> SR: "SocketAddr"
+    SR -> Up: "ResolvedService{target}"
+    Up -> Proxy: "connect + relay"
+  }
+}

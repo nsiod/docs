@@ -1,0 +1,10 @@
+direction: right
+
+IN: "解密后流量\nsmoltcp / WsFrame"
+SR: "ServiceRouter\n(nat crate)"
+P: "proxy::tcp / proxy::udp"
+SVC: "本地或远程\n真实服务" { shape: cylinder }
+
+IN -> SR
+SR -> P: "resolve ACL OK"
+P -> SVC

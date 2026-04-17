@@ -21,41 +21,16 @@
 | [sni-routing.md](./sni-routing.md) | `:443` 端口按 TLS ClientHello SNI 路由, ClientHello 字节布局, `relay_https_connection` 链路 |
 | [acl.md](./acl.md) | ACL 引擎: accept-only / default deny 语义, host alias 展开, policy test 能力, `ServiceRouter` 集成点 |
 
-Mermaid 源文件位于 [`diagrams/`](./diagrams/):
+d2 源文件位于 [`diagrams/`](./diagrams/):
 
-- `proxy-arch.mmd` — `ServiceRouter → ACL → resolve → proxy → local service` 端到端架构
-- `sni-peek.mmd` — TLS ClientHello 解析时序
-- `http-peek.mmd` — HTTP/1.1 Host 解析时序
-- `acl-matcher.mmd` — ACL 匹配流程
+- `proxy-arch.d2` — `ServiceRouter → ACL → resolve → proxy → local service` 端到端架构
+- `sni-peek.d2` — TLS ClientHello 解析时序
+- `http-peek.d2` — HTTP/1.1 Host 解析时序
+- `acl-matcher.d2` — ACL 匹配流程
 
 ## 3. 与其他模块的关系
 
-```mermaid
-graph TB
-    CP["Control Plane<br/>(02-control-plane)<br/>NSD → SSE → AclConfig / ServicesConfig"]
-    DP["Data Plane<br/>(03-data-plane, 04-network-stack)<br/>tunnel-wg / tunnel-ws → smoltcp / WsFrame"]
-    subgraph PA["05-proxy-acl (本模块)"]
-        SR["ServiceRouter (nat crate)<br/>resolve / resolve_by_host / resolve_by_sni"]
-        ACL["AclEngine<br/>accept-only, default deny"]
-        TCP["proxy::tcp"]
-        UDP["proxy::udp"]
-        HPEEK["proxy::http_peek"]
-        SPEEK["proxy::sni_peek"]
-    end
-    SVC["本地 / 远程真实服务"]
-
-    CP -->|load_acl / services 更新| SR
-    DP -->|五元组 / WsFrame| SR
-    DP -->|首 chunk 字节| HPEEK
-    DP -->|首 chunk 字节| SPEEK
-    HPEEK --> SR
-    SPEEK --> SR
-    SR --> ACL
-    SR --> TCP
-    SR --> UDP
-    TCP --> SVC
-    UDP --> SVC
-```
+[05 模块与其他模块的关系](./diagrams/module-context.d2)
 
 纯文本视图:
 

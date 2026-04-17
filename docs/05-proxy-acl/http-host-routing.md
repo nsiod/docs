@@ -6,20 +6,9 @@ NSN 在 `:80` 端口按 HTTP/1.x 请求里的 `Host:` 头选择后端服务, 使
 
 ## 1. 链路总览
 
-```mermaid
-graph LR
-    C[Remote Client] -->|TCP :80| SM[smoltcp]
-    SM -->|NewTcpConnection| R[relay_http_connection]
-    R -->|first chunk| H[parse_http_host]
-    H -->|host str| RT[ServiceRouter.resolve_by_host]
-    RT -->|ServicesConfig.find_named_by_domain| S[ServiceDef]
-    RT -->|AccessRequest 80/Tcp| A[AclEngine.is_allowed]
-    RT -->|resolve_host| T((backend SocketAddr))
-    R -->|write_all first| B[Backend :80]
-    R <-->|relay| B
-```
+[HTTP Host 路由链路总览](./diagrams/http-routing-overview.d2)
 
-完整时序见 [diagrams/http-peek.mmd](./diagrams/http-peek.mmd)。
+完整时序见 [HTTP Host 解析时序](./diagrams/http-peek.d2)。
 
 ## 2. `parse_http_host` 协议解析
 

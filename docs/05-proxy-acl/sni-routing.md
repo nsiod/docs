@@ -6,20 +6,9 @@ NSN 在 `:443` 端口上**不**做 TLS 终止 — 证书始终在后端服务那
 
 ## 1. 链路总览
 
-```mermaid
-graph LR
-    C[Remote Client] -->|TCP :443| SM[smoltcp]
-    SM -->|NewTcpConnection| R[relay_https_connection]
-    R -->|first chunk| S[parse_tls_sni]
-    S -->|sni str| RT[ServiceRouter.resolve_by_sni]
-    RT -->|find_named_by_sni| SVC[ServiceDef]
-    RT -->|AccessRequest 443/Tcp| A[AclEngine.is_allowed]
-    RT -->|resolve_host| T((backend SocketAddr))
-    R -->|write_all first ClientHello| B[Backend :443]
-    R <-->|relay TLS records| B
-```
+[SNI 路由链路总览](./diagrams/sni-routing-overview.d2)
 
-完整时序见 [diagrams/sni-peek.mmd](./diagrams/sni-peek.mmd)。
+完整时序见 [SNI 解析时序](./diagrams/sni-peek.d2)。
 
 ## 2. TLS ClientHello 字节布局
 

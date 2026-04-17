@@ -1,0 +1,27 @@
+direction: down
+
+Start: "AccessRequest\nsrc_ip, dst_ip, dst_port, proto" { shape: oval }
+Iter: "遍历编译后的 CompiledRule" { shape: diamond }
+SrcCheck: "src 匹配?\nCIDR/alias/'*'" { shape: diamond }
+NextRule: "下一条规则"
+DstCheck: "dst.host 匹配?\nCIDR/alias/'*'" { shape: diamond }
+PortCheck: "dst.port 匹配?\nAny/Single/Range/List" { shape: diamond }
+ProtoCheck: "proto 匹配?\nNone → 任意\nTcp/Udp → 精确" { shape: diamond }
+Accept: "AclDecision\nallowed=true\nmatched_rule_index=i"
+Deny: "AclDecision\nallowed=false\nreason=denied: no matching accept rule"
+End: "return" { shape: oval }
+
+Start -> Iter
+Iter -> SrcCheck: "rule i"
+SrcCheck -> NextRule: "No"
+SrcCheck -> DstCheck: "Yes"
+DstCheck -> NextRule: "No"
+DstCheck -> PortCheck: "Yes"
+PortCheck -> NextRule: "No"
+PortCheck -> ProtoCheck: "Yes"
+ProtoCheck -> NextRule: "No"
+ProtoCheck -> Accept: "Yes"
+NextRule -> Iter
+Iter -> Deny: "规则列表用尽"
+Accept -> End
+Deny -> End

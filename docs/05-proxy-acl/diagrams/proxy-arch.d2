@@ -1,0 +1,41 @@
+direction: right
+
+Ingress: "Ingress (解密后数据)" {
+  SM: "smoltcp\nTCP/UDP 五元组\ncrates/netstack"
+  WS: "tunnel-ws\nWsFrame.Open{port,proto}"
+}
+
+Router: "ServiceRouter (nat crate)" {
+  LOOKUP: "服务查找\nfind_named_by_port / _by_domain / _by_sni"
+  ACL: "ACL.is_allowed\n(AccessRequest 五元组)"
+  DNS: "resolve_host\n(IP 或 tokio lookup_host)"
+}
+
+L7: "L7 Peek (仅 :80 / :443)" {
+  HPEEK: "http_peek::parse_http_host"
+  SPEEK: "sni_peek::parse_tls_sni"
+}
+
+Relay: "Proxy Relay (proxy crate)" {
+  TCP: "handle_tcp_connection\ncopy_bidirectional"
+  UDP: "handle_udp\n单流往返"
+}
+
+SVC: "Local / Remote\nService" { shape: cylinder }
+X: "drop 连接" { shape: cylinder }
+
+Ingress.SM -> Router.LOOKUP: "五元组"
+Ingress.WS -> Router.LOOKUP: "Open 帧"
+
+Ingress.SM -> L7.HPEEK: "dst_port=80"
+Ingress.SM -> L7.SPEEK: "dst_port=443"
+L7.HPEEK -> Router.LOOKUP
+L7.SPEEK -> Router.LOOKUP
+
+Router.LOOKUP -> Router.ACL
+Router.ACL -> Router.DNS: "allowed"
+Router.ACL -> X: "deny: 默认拒绝" { style.stroke-dash: 3 }
+Router.DNS -> Relay.TCP
+Router.DNS -> Relay.UDP
+Relay.TCP -> SVC
+Relay.UDP -> SVC

@@ -1,0 +1,21 @@
+direction: right
+
+C: "Remote Client"
+SM: "smoltcp"
+R: "relay_http_connection"
+H: "parse_http_host"
+RT: "ServiceRouter.resolve_by_host"
+S: "ServiceDef"
+A: "AclEngine.is_allowed"
+T: "backend SocketAddr" { shape: oval }
+B: "Backend :80"
+
+C -> SM: "TCP :80"
+SM -> R: "NewTcpConnection"
+R -> H: "first chunk"
+H -> RT: "host str"
+RT -> S: "ServicesConfig.find_named_by_domain"
+RT -> A: "AccessRequest 80/Tcp"
+RT -> T: "resolve_host"
+R -> B: "write_all first"
+R <-> B: "relay"
