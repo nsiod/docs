@@ -176,7 +176,7 @@ curl http://example.com             # 未命中 → 直连
 
 | 场景 | VIP 直连（`127.11.0.1:22`） | HTTP 代理（`127.0.0.1:8080`） |
 |---|---|---|
-| 是否需要改客户端配置 | 改 DNS(默认 `127.0.0.54`,或 `--dns-listen` 覆盖值) 或 `/etc/hosts` | 改 `http_proxy` / `https_proxy` 环境变量或系统代理 |
+| 是否需要改客户端配置 | 改 DNS(默认 `127.53.53.53`,或 `--dns-listen` 覆盖值) 或 `/etc/hosts` | 改 `http_proxy` / `https_proxy` 环境变量或系统代理 |
 | 浏览器可用性 | 可能被 secure DNS 绕过 | 100% 生效 |
 | 非 HTTP 协议（SSH/DB/Redis） | 直接可用 | 可用（通过 `CONNECT`） |
 | 运维复杂度 | 需修改系统 resolver | 零系统改动 |

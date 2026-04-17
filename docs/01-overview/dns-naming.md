@@ -154,7 +154,7 @@ flowchart TD
 
 ### 如何让系统 resolver 找到 NSC DNS
 
-- **systemd-resolved (Linux)**: NSC DNS 默认监听 `127.0.0.54:53`(避让 systemd-resolved 占用的 `127.0.0.53:53`)。让系统把 `*.n.ns` 导向 NSC 有两条路:(1) 把 `127.0.0.54` 放到 `/etc/resolv.conf` 首行;(2) `resolvectl domain <iface> '~n.ns'` + `resolvectl dns <iface> 127.0.0.54`,让 systemd-resolved 按域转发。NSC 本身不动系统配置。
+- **systemd-resolved (Linux)**: NSC DNS 默认监听 `127.53.53.53:53`(四个 53 的助记地址,避开 systemd-resolved 占用的 `127.0.0.53:53`)。让系统把 `*.n.ns` 导向 NSC 有两条路:(1) 把 `127.53.53.53` 放到 `/etc/resolv.conf` 首行;(2) `resolvectl domain <iface> '~n.ns'` + `resolvectl dns <iface> 127.53.53.53`,让 systemd-resolved 按域转发。NSC 本身不动系统配置。
 - **macOS**: `/etc/resolver/ns` 文件指向 NSC。
 - **Windows**: NRPT(Name Resolution Policy Table)规则把 `.ns` 后缀导向 NSC。
 
@@ -254,7 +254,7 @@ psql -h db.ab3xk9mnpq.n.ns -p 5432 -U postgres
 curl -v http://web.ab3xk9mnpq.n.ns/
 
 # 查看本地 DNS 是否工作
-dig @127.0.0.54 ssh.ab3xk9mnpq.n.ns A  # NSC 默认监听地址
+dig @127.53.53.53 ssh.ab3xk9mnpq.n.ns A  # NSC 默认监听地址
 # 应返回 127.11.0.1 或类似 VIP
 
 # 公网查询应该失败

@@ -88,7 +88,7 @@ graph TB
 | NSD | 规划 Rust 或 Go 实现;当前仅 Bun/TypeScript mock + 嵌入的 Rust 子 crate `nsd-mock/quic-proxy` 用于 E2E | quinn 0.11(QUIC 终结) / rcgen 0.13(自签证书) / Bun 的 SSE | `:3001`(SSE) `:4001`(Noise) `:4002`(QUIC) `:3002`(HTTPS SSE) |
 | NSGW | mock: traefik v3.6.13 + 内核 WireGuard + Bun WSS 中继;生产形态正在[再审视](../11-nsd-nsgw-vision/nsgw-vision.md#架构再审视--是否需要-traefik) —— 倾向自研轻量 Proxy(WG + WSS + HTTP 转发 + L4 端口映射),保留向 Envoy 演进的路径 | `wg-tools`(内核 WG) + (路线 A)自研 HTTP/L4 转发器 / (路线 B)Envoy | `:443`(HTTPS) `:51820/udp`(WG) `:9443`(WSS) + 动态 L4 端口(如 `:2222/tcp` 用于 SSH) |
 | NSN | Rust 2024 · 12 crates · `nsn` 二进制 | `gotatun`(用户态 WG) · `smoltcp` 0.12 · `tokio` 1.x · `rustls` 0.23 · `quinn` 0.11 · `snow` 0.9 · `tun` 0.8.6 | `127.0.0.1:9090`(监控 HTTP) |
-| NSC | Rust 2024 · `nsc` 二进制 | `gotatun` / `rustls` / (同 NSN 但少 `nat` `netstack` `nsn`) | 本地 DNS `127.0.0.54:53`(默认,避让 systemd-resolved 的 `127.0.0.53`;`--dns-listen` 可覆盖) · VIP `127.11.0.0/16` |
+| NSC | Rust 2024 · `nsc` 二进制 | `gotatun` / `rustls` / (同 NSN 但少 `nat` `netstack` `nsn`) | 本地 DNS `127.53.53.53:53`(默认,四个 53 助记;避开 systemd-resolved 的 `127.0.0.53`;`--dns-listen` 可覆盖) · VIP `127.11.0.0/16` |
 
 引用:
 - 工作空间成员: [`Cargo.toml`](../../../nsio/Cargo.toml) 的 `[workspace] members`
@@ -411,7 +411,7 @@ NSGW: 仅保留 WSS 路径,关闭 WG UDP 入口
 不会。控制面断开后,NSN / NSC / NSGW 都会继续使用最后一次收到的配置。WG / WSS 隧道状态是本地维护的。NSD 只在"配置变更"时才是关键路径。
 
 **Q: NSC 需要 root 权限吗?**
-默认模式(`--data-plane userspace`)不需要 root,但 **DNS 监听端口 53 需要 `CAP_NET_BIND_SERVICE`**(Linux 非特权用户);NSC 只在 `127.11.x.x` 上监听 socket,并在 `127.0.0.54:53` 起本地 DNS(默认,避让 systemd-resolved)。`tun` 模式需要,但这是可选的高级模式。
+默认模式(`--data-plane userspace`)不需要 root,但 **DNS 监听端口 53 需要 `CAP_NET_BIND_SERVICE`**(Linux 非特权用户);NSC 只在 `127.11.x.x` 上监听 socket,并在 `127.53.53.53:53` 起本地 DNS(默认,四个 53 助记,避开 systemd-resolved 的 `127.0.0.53`)。`tun` 模式需要,但这是可选的高级模式。
 
 **Q: `services.toml` 是给谁看的?**
 **给 NSN 本身看的白名单**。严格模式(默认)下,如果 NSD 下发的规则指向一个不在 `services.toml` 中的服务,NSN 会拒绝它并通过 `services_ack` 回报"未匹配"。这是一道**本地保险丝**: 即便 NSD 被接管,也不能未经站点所有者明示就暴露新服务。

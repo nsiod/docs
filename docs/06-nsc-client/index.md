@@ -10,7 +10,7 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 |---|---|---|
 | CLI / 守护进程 | 参数解析、日志、主循环 | `crates/nsc/src/main.rs` |
 | VIP 分配 | 给每个 site 分配 `127.11.x.x`（或 TUN 模式 `100.64.x.x`） | `crates/nsc/src/vip.rs` |
-| 本地 DNS | 监听 `127.0.0.54:53`(默认,避让 systemd-resolved;可 `--dns-listen` 覆盖),解析 `*.n.ns` 和自定义域 | `crates/nsc/src/dns.rs` |
+| 本地 DNS | 监听 `127.53.53.53:53`(默认,助记四个 53;避让 systemd-resolved 的 `127.0.0.53`;可 `--dns-listen` 覆盖),解析 `*.n.ns` 和自定义域 | `crates/nsc/src/dns.rs` |
 | 路由决策 | 维护 site→VIP、(site, port)→gateway 映射 | `crates/nsc/src/router.rs` |
 | 出站代理 | 在每个 `VIP:port` 上监听 TCP，进入 WSS 隧道 | `crates/nsc/src/proxy.rs` |
 | HTTP 代理 (可选) | 本地 HTTP/CONNECT 代理，按域名分流 | `crates/nsc/src/http_proxy.rs` |
@@ -47,7 +47,7 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 ```mermaid
 flowchart LR
   APP["ssh ssh.office.n.ns:22<br/>curl http://web.office.n.ns"] --> OS[OS resolver]
-  OS --> DNS["NSC DNS 127.0.0.54:53<br/>(dns.rs, 默认)"]
+  OS --> DNS["NSC DNS 127.53.53.53:53<br/>(dns.rs, 默认)"]
   DNS --> VIP["返回 127.11.0.1"]
   VIP --> APP
   APP -- "TCP 到 127.11.0.1:22" --> LST["NSC proxy listener<br/>(proxy.rs + router.rs)"]
