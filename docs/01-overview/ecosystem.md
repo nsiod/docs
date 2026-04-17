@@ -246,11 +246,21 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
                                                        NSN → proxy + ACL → 本地服务
 ```
 
-**公网域名由 NSD 分配,与 `*.n.ns` 完全独立**:
+**公网域名由 NSD 统一签发与下发,与 `*.n.ns` 完全独立**:
 
 - `*.n.ns` 是 NSC 内部命名空间 —— 只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN,因此浏览器**永远到不了** `web.<nid>.n.ns`。
-- 当站点管理员勾选"公网发布"时,NSD 给这个服务**额外签发一个真正的公网域名**(例如 `myapp.<tenant>.example.com`,由 NSIO 控制的权威 DNS CNAME 到 NSGW,或让用户把自己的域名 CNAME 过来),并把"公网域名 → NSN peer"的映射下发到 NSGW 的 traefik 路由表。
-- TLS 证书由 NSGW 申请(ACME / Let's Encrypt)或由站点自带。
+- 站点管理员在 NSD 控制台开启"公网发布"后,**NSD 负责分配公网域名** —— 默认情况下从 NSIO 持有的公共 apex(例如 `*.<tenant>.nsio.app`)签发一个子域,其权威 DNS 由 NSD 管控;即使站点选择 BYO 自有域名(通过 CNAME 指向 NSGW),该域名的启用/禁用、路由目标、TLS 策略仍然**统一在 NSD 里登记**,NSGW 不接受"在本地 `services.toml` 或 traefik 文件里私自声明"的公网域名。
+- NSD 把 "公网域名 → NSN peer + 中间件链 + TLS 策略" 整体作为**一条 SSE 配置事件**推送给对应的 NSGW 实例,NSGW 翻译为 traefik 动态配置并热加载。
+- TLS 证书由 NSGW 申请(ACME / Let's Encrypt 走 DNS-01 或 HTTP-01)或由站点自带,证书的申请/续期状态回报给 NSD 做可见。
+
+**为什么集中在 NSD 签发 / 下发** —— 易于控制:
+
+- **一键启停**: 管理员在 NSD 上切换开关,SSE 事件到达 NSGW 后 traefik 立即移除路由,不会出现"站点侧以为已经关、但 NSGW 还在解析 Host"的漂移。
+- **集中吊销**: 跑路、离职、合规要求下架时,NSD 删掉映射即可;不依赖站点方配合。
+- **轮换安全**: 公网域名 / TLS 证书 / 中间件参数(OIDC client secret 等)都由 NSD 统一轮换,站点侧无须感知。
+- **统一审计**: 谁在什么时候发布了什么域名、挂了哪条 ACL、调整了哪个限速阈值 —— 全部落在 NSD 的操作日志里,一个审计面就够了。
+- **防止越权**: 站点方**不能自己捏造公网域名**让 NSGW 放行;必须经过 NSD 授权。租户 A 无法抢注属于租户 B 的域名,也无法绕过平台级 WAF 规则。
+- **全局一致性**: 多 NSGW PoP 的路由表由 NSD 广播同步,新增 PoP 直接从 NSD 拉全量配置;不会出现"A 区 PoP 有这条路由、B 区 PoP 没有"的分裂。
 
 **这一层可以叠加的中间件**(traefik 原生或自研):
 
@@ -265,13 +275,15 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
 
 这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
 
-**中间件 / ACL / 公网域名都在 NSD 侧集中配置,通过已有的 SSE 下发**:
+**下发通道: 与 ACL 同构的 SSE 事件**
 
-- 站点本地的 `services.toml` **只负责**声明"本机上有哪些服务、跑在什么地址端口上" —— 它是 NSN 做 `proxy.connect(target)` 时的查表数据源,**不**描述"这个服务是否对外发布 / 挂哪些中间件"。
-- "是否公网发布、用哪个公网域名、叠加哪些中间件、ACL 允许规则" 全部在 **NSD 控制台 / API** 上由管理员配置,按租户 / realm 组织,与 ACL 下发使用同一套机制:
-  - **ACL** 通过 `AclConfig` SSE 事件推送给 NSN(`crates/control/src/messages.rs` 已定义),由 NSN 的 `acl` crate 在 `ServiceRouter::resolve` 里执行。
-  - **公网域名 + traefik 中间件链** 通过一个类似 `gateway_http_config` 的 SSE 事件推送给 NSGW(规划中事件),NSGW 把它翻译为 traefik 动态配置(router / middleware / service 三元组),热加载无须重启。
-- 这样 "发布 / 鉴权 / 限流 / ACL" 都是**中心化声明、就近执行**: 控制面是单一事实源,数据面只做执行;站点方改完配置立刻生效,不需要 SSH 到每台 NSN/NSGW 改文件。
+站点本地的 `services.toml` **只负责**声明"本机上有哪些服务、跑在什么地址端口上" —— 它是 NSN 做 `proxy.connect(target)` 时的查表数据源,**不**描述"这个服务是否对外发布 / 挂哪些中间件"。"公网域名 + 中间件链 + ACL" 是一整套策略,由 NSD 统一管理、通过 SSE 事件精准下发到受影响的数据面节点:
+
+- **ACL → NSN**: `AclConfig` SSE 事件(`crates/control/src/messages.rs` 已定义),由 NSN 的 `acl` crate 在 `ServiceRouter::resolve` 里执行。
+- **公网域名 + traefik 中间件链 → NSGW**: 规划中的 `gateway_http_config` SSE 事件;NSGW 把它翻译为 traefik 动态配置(router / middleware / service 三元组),热加载无须重启。
+- **事件幂等 + 版本号**: SSE 事件带 `chain_id` / 版本号,断连重连后 NSD 会推当前完整状态,NSGW / NSN 按照"最后一条胜出"应用,不会漂移。
+
+控制面是单一事实源,数据面只做执行;站点方改完配置立刻生效,不需要 SSH 到每台 NSN/NSGW 改文件。
 
 **代价 / 约束**:
 

@@ -59,7 +59,7 @@ graph TB
 
 > 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
 >
-> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 这条路径**不使用 `*.n.ns`**(该命名空间只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN)。NSD 会为需要公网暴露的服务**单独签发一个公网域名**(例如 `myapp.<tenant>.example.com`,CNAME 指向 NSGW),把它登记到 NSGW 的 traefik 路由表里;traefik 按 `Host` / SNI 匹配后桥接到对应 NSN。由于 TLS 在 NSGW 终结,可以在这一层叠加 **OIDC / 基本鉴权 / 限速 / WAF / 请求改写**等 traefik 中间件 —— 这些中间件(以及 ACL)**统一在 NSD 侧集中配置**,通过与 ACL 相同的 SSE 下发机制推给 NSGW;站点本地的 `services.toml` **不承担**这部分配置。这是 `*.n.ns` 内部路径(NSC→NSGW→NSN)无法做到的(后者是端到端加密的 L4 隧道,NSGW 看不到明文 HTTP)。代价: 公网路径丢失 VIP 隔离、TLS 仅到 NSGW、只承载 HTTP(S);适合 dashboard / webhook / OAuth 回调这类站点主动发布的场景。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。
+> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 这条路径**不使用 `*.n.ns`**(该命名空间只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN)。**公网域名由 NSD 统一签发并下发** —— 默认从平台自有 apex(如 `*.<tenant>.nsio.app`) 签子域,权威 DNS 由 NSD 管控;BYO 自有域名也要先在 NSD 登记才能生效,NSGW 不接受站点方本地私自声明的域名。由于 TLS 在 NSGW 终结,可以在这一层叠加 **OIDC / 基本鉴权 / 限速 / WAF / 请求改写**等 traefik 中间件;域名、中间件链、ACL 都通过与现有 `AclConfig` 同构的 SSE 事件从 NSD 下发,`services.toml` **不承担**这部分声明。集中管控带来一键启停、集中吊销、证书/密钥统一轮换、审计单一面、防越权、多 PoP 一致性等收益。代价: 公网路径丢失 VIP 隔离、TLS 仅到 NSGW、只承载 HTTP(S);适合 dashboard / webhook / OAuth 回调这类站点主动发布的场景。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。
 
 | 组件 | 中文名 | 定位 | 语言/技术栈 | 部署位置 |
 |------|--------|------|-------------|---------|
