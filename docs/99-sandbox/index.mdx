@@ -1,0 +1,37 @@
+---
+pageType: doc
+---
+
+import { ExcalidrawView } from '../../theme/ExcalidrawView';
+import demoData from './diagrams/demo.excalidraw.json';
+
+# 99 · Excalidraw 演示（沙盒）
+
+本节演示如何把 `.excalidraw` 场景以 **客户端 React 组件** 方式接入 rspress —— 100% 官方保真渲染，支持 pan / zoom / 主题切换。
+
+## 做法
+
+1. 在 [excalidraw.com](https://excalidraw.com) 绘制并导出，文件命名为 `*.excalidraw.json`（扩展名加 `.json` 让 rspack 直接当数据 import）
+2. 提交到 `docs/<section>/diagrams/*.excalidraw.json`
+3. 在 mdx 里 `import` 该 JSON，作为 `data` 传给 `<ExcalidrawView />`（组件在 `theme/ExcalidrawView.tsx`）
+4. 组件在客户端懒加载 `@excalidraw/excalidraw`（~2MB），首次加载后浏览器缓存，跨页面切换无重复开销
+
+## 示例
+
+```mdx
+import { ExcalidrawView } from '../../theme/ExcalidrawView';
+import demoData from './diagrams/demo.excalidraw.json';
+
+<ExcalidrawView data={demoData} />
+```
+
+<ExcalidrawView data={demoData} />
+
+## 权衡
+
+- **优点**：官方渲染器 100% 保真（hachure 填充、roughjs 手绘风、主题、交互全保留）；CI 无额外构建步骤；常读者只下一次包
+- **代价**：首访页面需懒加载 ~2MB；SSG 阶段显示 loader 占位（不影响 SEO 指标如 LCP，但图内容爬虫不可见）；离线/打印场景图不可见
+
+## 何时退回静态 SVG
+
+如果这张图需要 **被搜索引擎索引其语义**、**出现在打印版/邮件摘要里**，则仍建议走 d2 静态管线。Excalidraw 客户端渲染更适合：手绘风、演示型、读者会停留把玩的图。
