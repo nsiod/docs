@@ -6,6 +6,16 @@
   max-width: 100%;
 }
 
+/* D2-generated SVGs: injected as <img> by remark-d2-include; keep them from
+   overflowing the prose column on narrow viewports while preserving crispness
+   at native size on wider screens. */
+.rspress-doc img[src$=".svg"] {
+  display: block;
+  margin: 1.25rem auto;
+  max-width: 100%;
+  height: auto;
+}
+
 /* Prevent momentum over-scroll past document boundary on trackpads / touch
    (was visually jumping page past footer / before header).
    Applied only to <body>; setting it on <html> as well, or combining with

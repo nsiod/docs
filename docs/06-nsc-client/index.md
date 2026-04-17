@@ -31,7 +31,7 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 
 - [`diagrams/nsc-arch.mmd`](./diagrams/nsc-arch.mmd) — NSC 整体架构
 - [`diagrams/vip-lifecycle.mmd`](./diagrams/vip-lifecycle.mmd) — VIP 分配与刷新
-- [`diagrams/dns-resolve.mmd`](./diagrams/dns-resolve.mmd) — `*.n.ns` 解析时序
+- [`diagrams/dns-resolve.d2`](./diagrams/dns-resolve.d2) — `*.n.ns` 解析时序
 - [`diagrams/router-decision.mmd`](./diagrams/router-decision.mmd) — 分流决策
 
 ## 与其他模块的关系

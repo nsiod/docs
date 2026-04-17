@@ -1,0 +1,37 @@
+shape: sequence_diagram
+
+app: App (ssh / curl)
+libc: libc / getaddrinfo
+rc: /etc/resolv.conf
+nscd: "NSC DNS\n127.53.53.53:53 (UDP, 默认)"
+map: "DnsRecords\nArc<RwLock<HashMap>>"
+up: "Upstream\n1.1.1.1:53"
+
+app -> libc: "getaddrinfo(\"ssh.office.n.ns\")"
+libc -> rc: read nameserver
+rc -> libc: nameserver 127.53.53.53
+libc -> nscd: "DNS query (ID=0xABCD, QTYPE=A)\nQNAME = ssh.office.n.ns"
+
+nscd -> nscd: "parse_question\ndomain qtype=1"
+nscd -> map: "read().get(\"ssh.office.n.ns\")"
+
+hit: 命中 {
+  map -> nscd: 127.11.0.1
+  nscd -> nscd: "build_a_response\nflags=0x8400 | RD\nTTL=60 RDATA=127.11.0.1"
+  nscd -> libc: "DNS response (A 127.11.0.1)"
+}
+
+miss: "miss (qtype≠A 或未登记)" {
+  map -> nscd: None
+  nscd -> up: "转发 query\n(UdpSocket::bind 0.0.0.0:0)"
+  up -> nscd: upstream 响应
+  ok: 2s 内返回 {
+    nscd -> libc: 透传上游响应
+  }
+  timeout: 超时 {
+    nscd -> libc: drop (debug log)
+  }
+}
+
+libc -> app: 127.11.0.1
+app -> app: "TCP connect 127.11.0.1:22\n→ NSC VIP listener (proxy.rs)"

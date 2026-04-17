@@ -4,6 +4,7 @@ import { pluginShiki } from '@rspress/plugin-shiki';
 import mermaid from 'rspress-plugin-mermaid';
 import remarkLangAliases from './scripts/remark-lang-aliases.mjs';
 import remarkMmdInclude from './scripts/remark-mmd-include.mjs';
+import remarkD2Include from './scripts/remark-d2-include.mjs';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -15,7 +16,7 @@ export default defineConfig({
   markdown: {
     // mdxRs must be disabled so JS-side remark plugins are honored.
     mdxRs: false,
-    remarkPlugins: [remarkLangAliases, remarkMmdInclude],
+    remarkPlugins: [remarkLangAliases, remarkMmdInclude, remarkD2Include],
   },
   plugins: [
     mermaid(),

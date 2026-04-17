@@ -4,29 +4,7 @@
 
 ## 解析链
 
-```mermaid
-sequenceDiagram
-  autonumber
-  actor User as 应用进程<br/>(ssh / curl / psql)
-  participant LIBC as libc / OS resolver<br/>(/etc/resolv.conf)
-  participant NSC_DNS as NSC DNS<br/>127.53.53.53:53 (默认)
-  participant STORE as DnsRecords<br/>(Arc<RwLock<HashMap>>)
-  participant UPSTREAM as 1.1.1.1:53
-
-  User->>LIBC: getaddrinfo("ssh.office.n.ns")
-  LIBC->>NSC_DNS: UDP A query
-  NSC_DNS->>STORE: read().get("ssh.office.n.ns")
-  alt 命中
-    STORE-->>NSC_DNS: 127.11.0.1
-    NSC_DNS-->>LIBC: A 127.11.0.1 (TTL 60)
-  else miss
-    NSC_DNS->>UPSTREAM: 转发原始 query
-    UPSTREAM-->>NSC_DNS: 上游响应
-    NSC_DNS-->>LIBC: 原样透传
-  end
-  LIBC-->>User: 127.11.0.1
-  User->>User: TCP connect 127.11.0.1:22 → 进入 proxy 听
-```
+[解析链路时序](./diagrams/dns-resolve.d2)
 
 关键事实：
 
