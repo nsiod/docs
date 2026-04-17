@@ -39,6 +39,7 @@ graph TB
     subgraph User["用户侧"]
         NSC["NSC<br/>VIP 127.11.x.x<br/>DNS *.n.ns"]
         APP["User App"]
+        BROWSER["Browser / curl<br/>(无 NSC)"]
     end
 
     NSD1 -. "SSE config push" .-> NSN
@@ -52,14 +53,17 @@ graph TB
     GW1 ==>|"WG / WSS"| NSN
     GW2 ==>|"WG / WSS"| NSN
     NSC -. "WG direct peer (规划中)" .-> NSN
+    BROWSER ==>|"公网 HTTPS :443<br/>Host / SNI = *.n.ns"| GW1
     NSN --> LOCAL
 ```
 
 > 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
+>
+> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 只要 `*.n.ns` 的权威 DNS(或用户自建 resolver)把域名解析到 NSGW 的公网 IP,普通浏览器或 `curl` 可以直接以 `https://web.ab3xk9mnpq.n.ns/` 访问 —— traefik 读 `Host` 头 / TLS `SNI` 后按路由表把请求桥接到对应 NSN,再由 NSN 的 proxy+ACL 决定是否放行到本地服务。代价是失去了 NSC 的 VIP 隔离与端到端加密的那一段 —— 只适合站点明确希望"对公网暴露 HTTP(S)"的场景。详见 [dns-naming.md 的入站面说明](./dns-naming.md)。
 
 | 组件 | 中文名 | 定位 | 语言/技术栈 | 部署位置 |
 |------|--------|------|-------------|---------|
-| **NSD** | 控制中心 | 注册中心 + 策略引擎 + 配置分发(SSE) | Bun/TS mock + Rust QUIC 子进程 | Cloud / Self-Hosted |
+| **NSD** | 控制中心 | 注册中心 + 策略引擎 + 配置分发(SSE) | 规划 Rust 或 Go 实现;当前 Bun/TS mock + Rust QUIC 子进程用于 E2E | Cloud / Self-Hosted |
 | **NSGW** | 网关 | 数据面桥接 + 协议转换 + Host/SNI 路由 | traefik v3.6.13 + 内核 WG + Bun WSS 中继 | 多地区 PoP |
 | **NSN** | 站点节点 | 用户态 WireGuard 客户端 + TCP/UDP 代理 + ACL 执行点 | Rust (12 crates, edition 2024) | 站点侧(机房 / 办公室 / 家庭服务器) |
 | **NSC** | 客户端 | 虚拟 IP + 本地 DNS + 按服务路由 | Rust (依赖 8 个内部 crate) | 用户终端(笔记本 / CI runner) |

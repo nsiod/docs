@@ -85,7 +85,7 @@ graph TB
 
 | 组件 | 主要实现语言 / 运行时 | 关键第三方依赖 | 外部观察接口 |
 |------|----------------------|----------------|-------------|
-| NSD | Bun/TypeScript (mock) + 一个嵌入的 Rust 子 crate `nsd-mock/quic-proxy` | quinn 0.11(QUIC 终结) / rcgen 0.13(自签证书) / Bun 的 SSE | `:3001`(SSE) `:4001`(Noise) `:4002`(QUIC) `:3002`(HTTPS SSE) |
+| NSD | 规划 Rust 或 Go 实现;当前仅 Bun/TypeScript mock + 嵌入的 Rust 子 crate `nsd-mock/quic-proxy` 用于 E2E | quinn 0.11(QUIC 终结) / rcgen 0.13(自签证书) / Bun 的 SSE | `:3001`(SSE) `:4001`(Noise) `:4002`(QUIC) `:3002`(HTTPS SSE) |
 | NSGW | traefik v3.6.13 + 内核 WireGuard + Bun WSS 中继进程 | `wg-tools`(内核 WG) / traefik 内建 Host/SNI 路由器 | `:443`(HTTPS) `:51820/udp`(WG) `:9443`(WSS) |
 | NSN | Rust 2024 · 12 crates · `nsn` 二进制 | `gotatun`(用户态 WG) · `smoltcp` 0.12 · `tokio` 1.x · `rustls` 0.23 · `quinn` 0.11 · `snow` 0.9 · `tun` 0.8.6 | `127.0.0.1:9090`(监控 HTTP) |
 | NSC | Rust 2024 · `nsc` 二进制 | `gotatun` / `rustls` / (同 NSN 但少 `nat` `netstack` `nsn`) | 本地 DNS `127.0.0.53:53` · VIP `127.11.0.0/16` |
@@ -227,8 +227,32 @@ NSC     control    tunnel  (via GW · 直连规划中)  ──
 | NSC ↔ NSD | SSE | 认证、映射配置、网关发现 | `crates/control/src/sse.rs` |
 | NSC ↔ NSGW | WG / WSS | 用户流量隧道 | (同 NSN) |
 | NSD ↔ NSGW | 内部 API | 网关注册、健康检查、指标 | NSD 侧(不在本仓库)|
+| Browser / curl ↔ NSGW | 公网 HTTPS :443 | **无 NSC 入站**: `Host` / SNI 路由到目标 NSN,仅支持 HTTP(S) | traefik 路由配置(见下文) |
 
 > **直连路径的现状**: `tunnel-wg` 的 `PeerConfig` (`pubkey + endpoint + allowed_ips`) 不区分 NSGW 与 NSN,WireGuard 机制层面支持 NSC 与 NSN 直接对等。当前**缺少**的是控制面的 `direct_peers` 事件 —— NSD 还没有向 NSC 下发"把 NSN 当作直接 peer"的配置,也没有打洞信令流程。`transport-design.md` 的 [直连与 P2P](./transport-design.md#直连与-p2p-未来设计) 描述了这个规划中的补全方向。
+
+### 无 NSC 入站 (Browser → NSGW → NSN)
+
+当站点希望把某个 HTTP(S) 服务暴露给**没有安装 NSC 的最终用户**(例如浏览器、`curl`、移动端 webview) 时,NSIO 通过 NSGW 的 HTTPS 入口提供了一条"不走客户端"的路径:
+
+```
+Browser / curl  ──  https://web.<nid>.n.ns/  ──→  NSGW :443
+                                                  ↓ traefik 读 Host 头 / TLS SNI
+                                                  ↓ 按 *.n.ns 路由表查出目标 peer
+                                                  ↓ WG / WSS 桥接
+                                                 NSN  →  proxy + ACL  →  本地服务
+```
+
+前提:
+- `*.n.ns` 的公网权威 DNS(或用户自建 resolver)要把域名解析到 NSGW 的公网 IP;这与 NSC 本地把 `*.n.ns` 解析到 `127.11.x.x` 是独立的两张表。
+- 站点管理员在 `services.toml` 里显式把该服务声明为"对外 HTTPS 可访问"(等价于把它加进 NSGW 的路由与 NSN 的 ACL 白名单)。
+
+这条路径的代价:
+- **失去 NSC 侧的 VIP 隔离**。目标服务的真实主机名对浏览器可见,而不是本地 `127.11.x.x` 的匿名 VIP。
+- **失去端到端加密的那一段**。TLS 只到 NSGW 终结;NSGW → NSN 这一跳靠 WG 或 WSS 加密,但 NSGW 在中间能看到明文 HTTP。
+- **只能承载 HTTP(S)**。非 HTTP 协议(SSH / psql / 任意 TCP)仍必须走 NSC。
+
+这条路径存在的原因: 许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调 —— 强制所有访问者装 NSC 是过度设计。`Host` / `SNI` 路由让 NSGW 对这类 HTTP 入口天然友好。
 
 ## 部署拓扑模板
 
