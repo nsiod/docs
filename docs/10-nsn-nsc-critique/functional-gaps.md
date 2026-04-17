@@ -35,15 +35,15 @@ flowchart LR
 ## FUNC-001 · NSC TUN 数据面只换前缀，未建 TUN 设备 ⚠ 影响安全
 - **Severity**: P1（接口承诺与实现不符；用户启用 `--data-plane tun` 期望 root + 内核路由，实际什么都没多做）
 - **Location**: `crates/nsc/src/main.rs:90-95, 199-202`；`crates/nsc/src/vip.rs:18-26`
-- **Current**: `DataPlane::Tun` 仅触发 `VipAllocator::new_tun()`（前缀 `10.100.0.0/16` 替代 `127.11.0.0/16`），**无 TUN 设备创建、无 ip route 注入、无 root 检查**。`10.100.x.x` 是普通子网地址，没有任何路由把它送到 NSC 的代理监听器上 — 实际上**根本不可达**。
+- **Current**: `DataPlane::Tun` 仅触发 `VipAllocator::new_tun()`（前缀 `100.64.0.0/16` 替代 `127.11.0.0/16`），**无 TUN 设备创建、无 ip route 注入、无 root 检查**。`100.64.x.x` 是普通子网地址，没有任何路由把它送到 NSC 的代理监听器上 — 实际上**根本不可达**。
 - **Why a defect**: 三件事同时发生：
   1. CLI 帮助文本（`main.rs:39`）声称 "tun — routes traffic via a TUN interface, requires root"，与实现矛盾。
-  2. 用户启用 TUN 模式后，浏览器/curl 访问 `10.100.0.x` 会失败但 NSC 仍然 println 出 "ready" — **静默欺骗**。
-  3. 一些用户会以为 `10.100/16` 在远端站点是可路由的（因为不是回环），可能把内部流量发到错误的地方。
+  2. 用户启用 TUN 模式后，浏览器/curl 访问 `100.64.0.x` 会失败但 NSC 仍然 println 出 "ready" — **静默欺骗**。
+  3. 一些用户会以为 `100.64/16` 在远端站点是可路由的（因为不是回环），可能把内部流量发到错误的地方。
 - **Impact**: 误用风险高；TUN 模式是 sales/docs 中的卖点，实际不可用。
 - **Fix**: 二选一：
   - **A 删除**：把 `DataPlane::Tun` 从 enum 移除，文档/帮助也去掉；保留 `Userspace`+`Wss`。
-  - **B 实现**：使用 `tun-rs` 或 `gotatun::tun::TunDevice` 创建真实接口，在启动时检测 root 权限（`is_privileged()` 已经在 `nsn/src/main.rs:1521` 实现，移到 `common`）；注入 `ip route add 10.100.0.0/16 dev nsc0`；引入 packet-level routing 把入向 `10.100.x.x` 五元组转给 `proxy::ProxyManager`。
+  - **B 实现**：使用 `tun-rs` 或 `gotatun::tun::TunDevice` 创建真实接口，在启动时检测 root 权限（`is_privileged()` 已经在 `nsn/src/main.rs:1521` 实现，移到 `common`）；注入 `ip route add 100.64.0.0/16 dev nsc0`；引入 packet-level routing 把入向 `100.64.x.x` 五元组转给 `proxy::ProxyManager`。
 - **Cost**: A 方案 ~30 行；B 方案 ~600~800 行 + 一套独立 e2e 测试。
 - **Benefit**: 接口与实现一致；用户的部署期望不被静默打破。
 - **Risk**: B 方案引入特权代码路径，需要 capability dropping / setuid 安全审计。

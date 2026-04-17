@@ -9,7 +9,7 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 | 层 | 组件 | 实现位置 |
 |---|---|---|
 | CLI / 守护进程 | 参数解析、日志、主循环 | `crates/nsc/src/main.rs` |
-| VIP 分配 | 给每个 site 分配 `127.11.x.x`（或 TUN 模式 `10.100.x.x`） | `crates/nsc/src/vip.rs` |
+| VIP 分配 | 给每个 site 分配 `127.11.x.x`（或 TUN 模式 `100.64.x.x`） | `crates/nsc/src/vip.rs` |
 | 本地 DNS | 监听 `127.0.0.53:53`，解析 `*.n.ns` 和自定义域 | `crates/nsc/src/dns.rs` |
 | 路由决策 | 维护 site→VIP、(site, port)→gateway 映射 | `crates/nsc/src/router.rs` |
 | 出站代理 | 在每个 `VIP:port` 上监听 TCP，进入 WSS 隧道 | `crates/nsc/src/proxy.rs` |
@@ -22,7 +22,7 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 | 文档 | 关注点 |
 |---|---|
 | [design.md](./design.md) | NSC 的整体架构、与 NSN/NSD 的关系、三种数据面模式、工作原理 |
-| [vip.md](./vip.md) | `127.11.0.0/16` 段的分配策略、与 TUN 模式 `10.100.0.0/16` 的差异、生命周期 |
+| [vip.md](./vip.md) | `127.11.0.0/16` 段的分配策略、与 TUN 模式 `100.64.0.0/16` 的差异、生命周期 |
 | [dns.md](./dns.md) | `*.n.ns` 解析链路、OS resolver → NSC DNS → VIP 的全流程 |
 | [router.md](./router.md) | `NscRouter` 的数据结构与分流决策（客户端 NAT 一侧） |
 | [http-proxy.md](./http-proxy.md) | 可选的本地 HTTP/CONNECT 代理，按 NSC DNS 命中与否分流 |

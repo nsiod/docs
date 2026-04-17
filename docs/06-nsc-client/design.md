@@ -87,7 +87,7 @@ CLI 参数 `--data-plane {tun|userspace|wss}`，默认 `userspace`。
 | | TUN | UserSpace | WSS |
 |---|---|---|---|
 | 需要 root | 是（要 TUN 设备） | 否 | 否 |
-| VIP 段 | `10.100.0.0/16` | `127.11.0.0/16` | `127.11.0.0/16` |
+| VIP 段 | `100.64.0.0/16` | `127.11.0.0/16` | `127.11.0.0/16` |
 | 捕获方式 | 内核路由到 TUN | 在 VIP:port 上 `bind()` | 同 userspace |
 | WG 隧道 | 计划用 `tunnel-wg` | 否（WSS） | 否 |
 | 当前实现 | **仅改了 VIP 段前缀** | **完整可用** | **与 userspace 行为一致** |
@@ -133,8 +133,8 @@ let mut allocator = match cli.data_plane {
 
 设计上：
 
-1. 创建 TUN 设备 `tun0`，地址 `10.100.0.2/16`；
-2. 内核路由 `10.100.0.0/16 dev tun0`；
+1. 创建 TUN 设备 `tun0`，地址 `100.64.0.2/16`；
+2. 内核路由 `100.64.0.0/16 dev tun0`；
 3. 进入 NSC 的数据面读 TUN → ACL → `gotatun` WG 加密 → UDP 发送到 NSGW；
 4. WG 回包 → smoltcp 解析 → 写回 TUN。
 

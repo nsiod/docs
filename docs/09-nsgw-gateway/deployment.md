@@ -18,7 +18,7 @@ NSIO 仓库里同时存在两套 NSGW 实现,用途不同:
 ```mermaid
 graph TB
     subgraph Container["nsgw-mock container"]
-        EP["entrypoint.sh<br/>① wg genkey<br/>② ip link add wg0 + 10.100.0.1/16<br/>③ ip_forward=1<br/>④ openssl + tls.yml"]
+        EP["entrypoint.sh<br/>① wg genkey<br/>② ip link add wg0 + 100.64.0.1/16<br/>③ ip_forward=1<br/>④ openssl + tls.yml"]
         TRA["traefik v3.6.13<br/>(background)"]
         BUN["bun run src/index.ts<br/>(foreground)"]
     end
@@ -66,7 +66,7 @@ tests/docker/nsgw-mock/
 ② wg pubkey < priv > pub
 ③ ip link add wg0 type wireguard       # 需要 NET_ADMIN
 ④ wg set wg0 private-key ... listen-port $WG_PORT
-⑤ ip addr add 10.100.0.1/16 dev wg0
+⑤ ip addr add 100.64.0.1/16 dev wg0
 ⑥ ip link set wg0 up
 ⑦ echo 1 > /proc/sys/net/ipv4/ip_forward
 ⑧ openssl req -x509 → 自签证书
@@ -140,7 +140,7 @@ sequenceDiagram
     participant NSN as NSN (已在运行)
 
     EP->>EP: wg genkey
-    EP->>EP: ip link add wg0 + 10.100.0.1/16
+    EP->>EP: ip link add wg0 + 100.64.0.1/16
     EP->>EP: openssl self-signed cert
     EP->>EP: tls.yml → /etc/traefik/dynamic/
     EP->>TR: traefik --configFile=/etc/traefik/traefik.yml

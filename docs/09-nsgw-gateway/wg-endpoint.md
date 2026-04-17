@@ -40,7 +40,7 @@ graph LR
 
     NSCuser ==>|"UDP :51820<br/>WG handshake + data"| WG0
     WG0 -->|"解密后投入<br/>netns"| IPRT
-    IPRT -->|"match allowed-ips<br/>10.100.x.x/24"| WG0
+    IPRT -->|"match allowed-ips<br/>100.64.x.x/24"| WG0
     WG0 ==>|"UDP<br/>WG encrypt"| NSNuser
 ```
 
@@ -58,7 +58,7 @@ wg pubkey < /tmp/wg-private.key > /tmp/wg-public.key
 # 2. 创建内核接口
 ip link add wg0 type wireguard
 wg set wg0 private-key /tmp/wg-private.key listen-port "${WG_PORT}"
-ip addr add 10.100.0.1/16 dev wg0
+ip addr add 100.64.0.1/16 dev wg0
 ip link set wg0 up
 
 # 3. 打开 IP 转发
@@ -68,7 +68,7 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 几个不易察觉的点:
 
 1. **keypair 每次启动都重新生成**——NSGW 不保留私钥状态,因为启动后会主动 POST `gateway_report` 把新公钥上报给 NSD;NSD 再把它分发给所有 NSN 的 `wg_config`。运维上意味着"重启 NSGW → NSN 自动拿到新 peer,几秒内恢复"。
-2. **`10.100.0.1/16` 是 NSGW 自身在 WG 子网的地址**——traefik 反代到 NSN 时,源 IP 就是这个地址(NSN 侧 iptables 可据此识别流量来自哪个 NSGW)。
+2. **`100.64.0.1/16` 是 NSGW 自身在 WG 子网的地址**——traefik 反代到 NSN 时,源 IP 就是这个地址(NSN 侧 iptables 可据此识别流量来自哪个 NSGW)。
 3. **`ip_forward=1`**——因为 traefik 的 loadBalancer URL `http://<nsn_wg_ip>:<virtual_port>` 需要 NSGW 内核转发这些 IP 包出 `wg0`。
 
 ## Peer 的动态同步
@@ -138,9 +138,9 @@ WG CLI 用 base64,NSD 事件里用 hex(for JSON friendliness),所以:
 |------|-------------|-------------------|------|
 | NSN-1 | 注册时由 NSD 的 `services_report` 带上 | `10.0.1.2/32`(NSN 的虚 IP) | traefik 访问 `http://10.0.1.2:10000` 会进 NSN-1 的加密通道 |
 | NSN-2 | 同上 | `10.0.2.5/32` | 同上 |
-| NSC-1(可选) | NSC 自报 | `10.100.1.0/24` | NSC 若走 WG 模式,它的 VIP 段必须在此 |
+| NSC-1(可选) | NSC 自报 | `100.64.1.0/24` | NSC 若走 WG 模式,它的 VIP 段必须在此 |
 
-NSGW mock 在 pre-add 时默认给 connector 一个 `"10.100.1.0/24"`(`index.ts:50`)——这是测试场景下 NSN 连接器的虚 IP 段。
+NSGW mock 在 pre-add 时默认给 connector 一个 `"100.64.1.0/24"`(`index.ts:50`)——这是测试场景下 NSN 连接器的虚 IP 段。
 
 ## 与 NSN 侧 gotatun 的握手兼容性
 

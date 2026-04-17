@@ -44,7 +44,7 @@ graph TB
 **输出**: 解密后的 IP 包经 `wg0` 接口转发到 NSN 的虚拟 IP(由 `allowed-ips` 决定路由)。
 
 **核心代码**:
-- `tests/docker/nsgw-mock/entrypoint.sh:13-17` 在启动前用 `ip link add wg0 type wireguard` + `wg set wg0 private-key ... listen-port ...` 创建内核接口,并赋 `10.100.0.1/16`。
+- `tests/docker/nsgw-mock/entrypoint.sh:13-17` 在启动前用 `ip link add wg0 type wireguard` + `wg set wg0 private-key ... listen-port ...` 创建内核接口,并赋 `100.64.0.1/16`。
 - `tests/docker/nsgw-mock/src/wg-setup.ts:24` 的 `addPeer()` 用 `wg set wg0 peer <pubkey> allowed-ips <cidr>` 动态增删 peer。
 - `tests/docker/nsgw-mock/src/index.ts:248-278` SSE 消费 `wg_config` 事件后 diff-apply peer 集合。
 

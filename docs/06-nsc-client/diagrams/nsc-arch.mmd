@@ -19,7 +19,7 @@ flowchart TB
     subgraph STATE["Shared state (Arc + RwLock)"]
       ROUTER["NscRouter<br/>sites_by_name / sites_by_vip<br/>routes / gateways"]
       DNSMAP["DnsRecords<br/>domain → VIP"]
-      VIPALLOC["VipAllocator<br/>127.11.x.x or 10.100.x.x"]
+      VIPALLOC["VipAllocator<br/>127.11.x.x or 100.64.x.x"]
     end
 
     subgraph LOCAL["Local access layer"]

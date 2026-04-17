@@ -160,14 +160,14 @@ flowchart TD
 
 上述由 NSC 二进制在启动时自动配置(可选,需要对应权限)。否则用户需要手动设置 `/etc/resolv.conf` 等效项。
 
-## Virtual IP: `127.11.x.x` (UserSpace/WSS) · `10.100.x.x` (TUN)
+## Virtual IP: `127.11.x.x` (UserSpace/WSS) · `100.64.x.x` (TUN)
 
 NSC 把每个 **site(node_id)** 映射到**一个 VIP**,同一 site 下的多个服务**共享 VIP**,用**端口**区分 —— 分配粒度是 **site,不是 FQID**。
 
 | 模式 | 前缀 | 源码 |
 |------|------|-----|
 | `userspace` / `wss`(默认) | `127.11.0.0/16` | `VipAllocator::new_userspace`(`crates/nsc/src/vip.rs:19`) |
-| `tun` | `10.100.0.0/16` | `VipAllocator::new_tun`(`crates/nsc/src/vip.rs:24`) |
+| `tun` | `100.64.0.0/16` | `VipAllocator::new_tun`(`crates/nsc/src/vip.rs:24`) |
 
 示例(UserSpace,假设 `office` 是先被发现的 site):
 
@@ -186,7 +186,7 @@ NSC 把每个 **site(node_id)** 映射到**一个 VIP**,同一 site 下的多个
 - **足够大**: 提供 65534 个 VIP,一个客户端同时连几万个 site 都够。
 - **避免 `127.0.0.1`**: 保留给传统本机服务,避免误冲突。
 
-TUN 模式之所以用 `10.100.0.0/16` 而不是 `127.11.0.0/16`,是因为内核路由表不接受把 `127/8` 当作非本地目的地;`10.100/16` 是 RFC 1918 私网段的一个未分配 `/16`。
+TUN 模式之所以用 `100.64.0.0/16` 而不是 `127.11.0.0/16`,是因为内核路由表不接受把 `127/8` 当作非本地目的地;选 `100.64/16` 是因为 `100.64.0.0/10` 是 [RFC 6598](https://datatracker.ietf.org/doc/html/rfc6598) 保留的 **CGNAT 共享地址段**,不应出现在任何企业或家庭 LAN,与用户本机既有 RFC 1918 网段(`10/8` · `172.16/12` · `192.168/16`)的冲突概率远低 —— Tailscale、NetBird 等覆盖网方案也采用同一段。
 
 ### VIP 的分配时机
 

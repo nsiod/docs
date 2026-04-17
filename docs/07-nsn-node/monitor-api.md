@@ -137,7 +137,7 @@
     "gateway_id": "gw-1",
     "peer_public_key": "hex(32B)",
     "endpoint": "nsgw-1:51820",
-    "virtual_ip": "10.100.1.1",
+    "virtual_ip": "100.64.1.1",
     "handshakes": 120,
     "last_handshake": "2026-04-16T10:22:00Z",
     "bytes_tx": 1048576,

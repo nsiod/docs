@@ -49,7 +49,7 @@ flowchart TB
 | **WG / TUN** | NSN：root + 内核 TUN 可用 | 用 gotatun + 真 TUN，本地服务走内核协议栈 |
 | **WG / UserSpace** | NSN：默认；非 root 或 TUN 不可用 | 用 gotatun + smoltcp，每连接 2 个 TCP 状态机 |
 | **WSS** | NSN：UDP 探测 3 次失败 → 自动 fallback；强制：`TRANSPORT_MODE=wss` | tunnel-ws 连接 NSGW 的 `/relay` |
-| **NSC TUN** | `nsc --data-plane tun` | **未实际建 TUN**，仅把 VIP 前缀从 `127.11/16` 换成 `10.100/16`（见 [functional-gaps.md FUNC-001](./functional-gaps.md)） |
+| **NSC TUN** | `nsc --data-plane tun` | **未实际建 TUN**，仅把 VIP 前缀从 `127.11/16` 换成 `100.64/16`（见 [functional-gaps.md FUNC-001](./functional-gaps.md)） |
 | **NSC UserSpace / WSS** | 默认 / `--data-plane wss` | 监听 `127.11.x.x` 端口做本地代理 |
 
 ## 3. 控制面三传输
