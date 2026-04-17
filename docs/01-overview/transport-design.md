@@ -304,7 +304,8 @@ UDP / TCP:443        UDP / TCP:443          UDP / TCP:443
 - **WG 和 WSS 不共享会话状态**: 每个网关每个协议独立维护,防止状态污染。
 - **`services.toml` 的 `tunnel=wg` 在 `wss` 模式下是 hard fail**: 不做隐式降级,让用户知道配置与运行模式不匹配。
 - **不要在控制面里放业务数据**: SSE 事件只承载配置,不要夹带流量。
-- **`MultiControlPlane` 聚合多个 NSD 时,ACL 取交集是安全不变量**: 任何并集或"最后一个赢"策略都是 bug。
+- **`MultiControlPlane` 聚合多个 NSD 时,ACL 取并集并标注来源 NSD**;**运行时放行再与本地 `services.toml` ACL 取交集**。安全不变量在本地 ACL 层,而不是"多 NSD 都同意才放行"——self-host + cloud 共存场景下后者会让规则凭空消失,是反运维直觉的 bug。
+- **所有 NSD → NSN / NSC 的配置事件必须带 Ed25519 签名**,验签用注册响应里的 `server_signing_key_pub`。即使 SSE/Noise/QUIC 任一传输被中间人降级(企业 TLS 反代 / CA 注入 / pin 配置遗漏),篡改事件也无法通过签名校验——两层都被攻破才能影响配置。
 
 ## 参考文件
 

@@ -154,7 +154,7 @@ flowchart TB
 
 ---
 
-## FAIL-006 · `MultiControlPlane` ACL 交集合并 + 单 NSD 空配置 = 全局策略清空
+## FAIL-006 · `MultiControlPlane` ACL 交集合并 + 单 NSD 空配置 = 全局策略清空  `[RESOLVED — 合并改并集 + 本地 ACL 保底，见 ARCH-002]`
 - **Severity**: P0（与 [ARCH-002](./architecture-issues.md#arch-002--acl-多-nsd-合并使用交集制造空配置攻击面) 同源；列在这里因为它的"故障传播路径"特别短）
 - **Location**: `crates/control/src/merge.rs:85-126`；`crates/control/src/multi.rs:131` 主循环
 - **Current**: 任一 NSD 推 `AclConfig { acls: [], hosts: {}, tests: [] }`，merge 结果是空 `AclPolicy`。NSN 的 `load_acl_config_for_runtime` 加载空策略，所有规则消失。

@@ -1,6 +1,6 @@
 # 多 Realm 与多 NSD 并发
 
-> NSIO 的控制面被刻意设计成"单节点可接入多个独立的 NSD"：一台 NSN 可以同时注册到云端的 cloud realm 和企业自托管的 self-hosted realm，双方的 ACL、WG peer、路由在 NSN 内部**智能合并**——union 扩大连通性、intersection 收紧安全边界。本章讲清楚三件事：realm 的定义、多 NSD 的合并语义、部署模式。
+> NSIO 的控制面被刻意设计成"单节点可接入多个独立的 NSD"：一台 NSN 可以同时注册到云端的 cloud realm 和企业自托管的 self-hosted realm，双方的 ACL、WG peer、路由在 NSN 内部**智能合并**——所有维度统一取 union，扩大连通性 / 规则面；**最终放行与否由本地 `services.toml` 的 ACL 作为保底审核**，防止任一 NSD 单独收紧或放宽全局结果。本章讲清楚三件事：realm 的定义、多 NSD 的合并语义、部署模式。
 
 ## 1. Realm 是什么
 
@@ -139,18 +139,26 @@ pub fn merge_proxy_configs(configs: &[ProxyConfig]) -> Option<ProxyConfig> {
 
 **影响**：命名空间扩大。任一 NSD 新增一个服务 rule，NSN 就有能力代理它；两个 NSD 声明同一 FQID 时取"先到先得"，所以**多 NSD 环境下命名要避免冲突**。
 
-### 4.3 AclConfig：policy intersection
+### 4.3 AclConfig：policy union（附标注来源）
 
 ```rust
-// merge.rs:75-82（继续）
-/// Keeps only host aliases, ACL rules, and policy tests that appear
-/// identically in every NSD config. When NSDs disagree, the merged policy
-/// denies rather than widening access.
+// merge.rs:75-82（重构后契约）
+/// Merges host aliases, ACL rules, and policy tests from all NSDs via union.
+/// Each merged entry carries a `sources: Vec<NsdId>` annotation so operators
+/// can trace which realm contributed which rule. The runtime ACL decision
+/// additionally consults the local services.toml ACL as a baseline floor —
+/// a rule pushed by any NSD can only take effect if the local ACL also
+/// permits the action.
 ```
 
-**语义**：ACL 规则交集。一条规则必须在**所有** NSD 的 `AclConfig` 中以**完全相同**的形态出现，才会保留。
+**语义**：ACL 规则并集。任一 NSD `AclConfig` 里的 host alias / acl rule / policy test 都进入合并结果；`(key, shape)` 完全一致的重复条目只保留一份，并在元数据里标注所有贡献来源 NSD。
 
-**影响**：授权收紧。任何一个 NSD "不同意"某条规则，该规则就被丢弃——默认拒绝，防止 NSD 之间的策略漂移扩大攻击面。
+**影响**：
+
+- **规则面对齐控制面**：与 WG peer / Proxy rule 同向；"加 NSD 扩大能力"，与运维直觉一致。
+- **消除空配置攻击面**：单个 NSD 推空 ACL 不会清空其他 NSD 的规则（此前 intersection 设计下，任一 NSD 返回 `acls = []` 即全局清空，见 [ARCH-002](../10-nsn-nsc-critique/architecture-issues.md#arch-002)）。
+- **Self-hosted + Cloud 共存可管**：self-hosted NSD 单独加一条 `allow ssh from engineering` 会立即在本机生效，不用等 cloud NSD 同时下发相同规则；cloud NSD 独立下发的协作资源规则同理。每条规则在日志里能明确追溯到具体 realm，管理不再"规则凭空消失"。
+- **安全由本地 ACL 兜底**：参见 §4.5。
 
 ### 4.4 合并语义对比
 
@@ -168,10 +176,15 @@ graph TB
         B3[ACL: allow SSH, deny RDP]
     end
 
+    subgraph LocalACL["本地 services.toml ACL（保底）"]
+        L["allow SSH<br/>allow RDP from ops-net"]
+    end
+
     subgraph Merged["NSN 合并结果"]
         M1["WG peer: P1, P2, P3 ← union"]
         M2["Proxy rule: web, db, cache ← union"]
-        M3["ACL: allow SSH ← intersection"]
+        M3["ACL: allow SSH, deny RDP ← union (每条标注来源)"]
+        M4["runtime decide = merged ACL ∩ local ACL"]
     end
 
     A1 --> M1
@@ -180,17 +193,34 @@ graph TB
     B2 --> M2
     A3 --> M3
     B3 --> M3
+    M3 --> M4
+    L --> M4
 ```
 
-## 5. 设计权衡：为什么用这三种语义
+### 4.5 本地 ACL 作为保底
+
+运行时每条请求的放行判定按两段式：
+
+1. **合并 ACL 命中**（来自任一 NSD 的 union）：决定"这条规则在控制面**曾被声明过**"。
+2. **本地 `services.toml` ACL 命中**：决定"站点自己**愿意**接受这条规则"。
+
+两个条件都满足才放行。等价表述：`effective = union(nsd_acl_1, nsd_acl_2, ...) ∩ local_acl`。
+
+这条"合并放宽 + 本地收紧"的结构让每一层职责清晰：
+
+- NSD 端是协作资源的**目录 + 推荐策略**，不能单方面越过站点主人的意愿去打开端口。
+- 本地 `services.toml` 是站点主人**最终否决权**的所在：即使所有 NSD 都推了 `allow all`，只要本地没列，就不会通。
+- 运维增加一个 NSD（例如接入 cloud 之后又接入 self-hosted）只会**增加可用规则**，不会突然清空已有规则——消除了 intersection 模型下"接入新 NSD 反而丢失规则"的反直觉。
+
+## 5. 设计权衡：为什么都是 union + 本地保底
 
 | 对象 | 合并方向 | 原因 |
 |------|---------|------|
 | WG peer | union | 连通失败的代价可以恢复（换一条路），拒绝连接的代价是真正的中断 |
-| Proxy rule | union（带去重） | 新增服务是常态，两个 NSD 都承认同一个 FQID 意味着资源是合法公共的 |
-| ACL policy | intersection | 策略分歧意味着未对齐的授权，默认拒绝比默认允许安全 |
+| Proxy rule | union（按 resource_id 去重） | 新增服务是常态，两个 NSD 都承认同一个 FQID 意味着资源是合法公共的 |
+| ACL policy | union（带来源标注） + 本地 ACL 保底 | 接入新 NSD 不应删规则；安全性靠本地 `services.toml` 最终裁决，NSD 只能**建议**不能**强制放行** |
 
-单向的选择让"多 NSD 并发"不是灾难——而是一种**容错机制**：一个 NSD 挂了，它的规则会从合并结果中消失（下次 re-merge），但只要另一个 NSD 还在运行，数据面继续工作。
+三条维度**方向一致**让"多 NSD 并发"不是灾难——而是一种**容错机制**：一个 NSD 挂了，它贡献的规则（来源标记里只有它一个的那些）从合并结果里消失，但其他 NSD 的规则继续生效，数据面继续工作。同时本地 ACL 作为最后一道闸，保证任何单一 NSD 被入侵也无法超越站点管理员明示的边界。
 
 ## 6. 多 NSD 的部署模式
 
@@ -207,7 +237,7 @@ NSN 配置:
 
 - Cloud 负责跨公司 / 跨个人的协作资源。
 - Self-hosted 负责公司内部私有服务（严格 ACL）。
-- ACL intersection 确保 cloud 不能"放宽"self-hosted 的规则。
+- 两边 ACL 取 union 扩大可用规则，**最终放行仍需本地 `services.toml` ACL 命中**——cloud 无法"放宽"本机未列出的端口，self-hosted 也无法单方"收紧"cloud 侧已列入的协作资源。安全边界由站点主人在本地 `services.toml` 锁定。
 
 ### 6.2 主备 NSD（HA）
 

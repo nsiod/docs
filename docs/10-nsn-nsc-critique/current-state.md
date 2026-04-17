@@ -95,8 +95,8 @@ ACL 引擎本身有两份独立 Arc：
 | 维度 | NSD（控制面） | NSGW（数据面） |
 |------|--------------|---------------|
 | 实现 | `MultiControlPlane` (`control/multi.rs:131`) | `MultiGatewayManager` (`connector/multi.rs:152`) |
-| 合并语义 | wg = 并集；proxy = 并集；**acl = 交集**；hosts = 交集 | 选路 = lowest_latency / round_robin / priority |
-| 异常 NSD 影响 | **任何 NSD 返回空 ACL 即清空全局 ACL**（合集→交集） | 异常 NSGW 标 Failed，不影响其他 |
+| 合并语义 | wg = 并集；proxy = 并集；**acl = 交集**（规划改并集 + 本地 ACL 保底，见 [ARCH-002](./architecture-issues.md#arch-002)） | 选路 = lowest_latency / round_robin / priority |
+| 异常 NSD 影响 | **任何 NSD 返回空 ACL 即清空全局 ACL**（合集→交集）—— 已决议反转为并集合并 | 异常 NSGW 标 Failed，不影响其他 |
 | 健康检查 | `MultiControlPlane::run` 由 SSE 流自然探活 | `MultiGatewayManager::health_interval` 字段标 `#[allow(dead_code)]`，**未真正定时探活**（`connector/multi.rs:156-157`） |
 
 ## 6. 关键 mpsc 缓冲区与 backpressure

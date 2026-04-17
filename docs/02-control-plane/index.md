@@ -16,7 +16,8 @@
 | SSE 配置分发 | `crates/control/src/sse.rs` (`SseControl` / `NoiseControl`) | `GET /api/v1/config/stream` 长连接，单向推送 |
 | 服务清单上报 | `crates/control/src/sse.rs:104` `post_services_report()` | 连接前 POST 本地 `services.toml` 摘要 |
 | 多 NSD 并发管理 | `crates/control/src/multi.rs` | 同时连接多个控制中心，分别认证、合并配置 |
-| 配置合并 | `crates/control/src/merge.rs` | peers 并集 / proxy_rules 并集 / ACL 交集 |
+| 配置合并 | `crates/control/src/merge.rs` | peers / proxy_rules / ACL 全部并集（带来源标注），最终放行由本地 `services.toml` ACL 保底 |
+| 事件签名验证 | `crates/control/src/sse.rs`（规划中 `verify_event_sig`）| 每条 NSD 配置事件带 Ed25519 签名，用注册响应里的 `server_signing_key_pub` 验签，失败即丢弃 |
 | 心跳上报 | `crates/control/src/auth.rs:58` `HeartbeatClient` | `POST /api/v1/machine/heartbeat` 周期上报 uptime / 本机 IP |
 | 可插拔传输 | `crates/control/src/transport/` (`sse` / `noise` / `quic`) | 内层 SSE 协议恒定，外层加密通道可换 |
 | 共享应用状态 | `crates/common/src/lib.rs`（`ConnectorConfig` 等）| 所有 crate 共用的配置 / 类型 |

@@ -255,7 +255,7 @@ sequenceDiagram
 |---------|--------|-----------|
 | `wg_config` | `tunnel-wg` | 通过 gotatun UAPI 动态增删 peer,无需重启 |
 | `proxy_config` | `nat::router` | 刷新 `ServiceRouter` 规则表 |
-| `acl_policy` | `acl::engine` | 合并后(交集)热加载 ACL |
+| `acl_policy` | `acl::engine` | 合并后(多 NSD 并集 ∩ 本地 `services.toml` ACL)热加载 ACL |
 | `gateway_config` | `connector::multi` | 更新 `MultiGatewayManager` 的网关清单 |
 | `routing_config` | `nsc::router` | 更新 FQID → (site, service) 映射 |
 | `dns_config` | `nsc::dns` | 刷新本地 DNS 表 |

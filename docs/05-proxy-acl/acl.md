@@ -189,7 +189,7 @@ let target = resolve_host(&svc.host, svc.port).await?;
 - **`acl_engine` 是 `Option`**: 未下发策略时 `acl_engine = None`, resolve 不做 ACL 检查 (**只**发生在启动早期, NSD SSE 尚未推送)。生产部署应确保至少有一条初始策略随 `services_ack` 一起到达, 否则早期连接相当于放行。
 - **ACL 决策不依赖域名 / SNI**: 对 L7 路由, ACL 用的是虚拟端口 80/443, 和 [http-host-routing.md §5](./http-host-routing.md#5-acl-在-http-路由中的语义) 一致。
 - **拒绝静默丢弃**: 拒绝后不回 TCP RST / ICMP, 客户端看到的是"连接挂起直到超时", 这是"不泄露网络拓扑"的刻意设计。
-- **多 NSD 合并**: 多个 NSD 推送的策略在 `control` 层取交集 (最严格胜出, 见 `docs/architecture.md:259`), 合并后的单一 `AclPolicy` 才送到 `AclEngine::load`。
+- **多 NSD 合并 + 本地保底**: 多个 NSD 推送的策略在 `control` 层取**并集**并标注来源 NSD;**运行时放行由本地 `services.toml` ACL 作为最终保底**——即使某个 NSD 下发 `allow all`,本地未列出的 FQID/端口也不会放行。详见 [multi-realm.md §4.5](../08-nsd-control/multi-realm.md#45-本地-acl-作为保底)。合并后的单一 `AclPolicy` 才送到 `AclEngine::load`。
 
 ## 7. Policy test — 不跑流量就验证策略
 

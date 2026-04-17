@@ -67,7 +67,7 @@ flowchart TB
 2. **真正的问题是架构层语义不一致 + 安全失守**，不是单点 bug：
    - **ACL 引擎**有两份独立 Arc，对"未加载"采取**相反**的 fail 语义（WSS fail-CLOSED；本地路由 fail-OPEN）— 见 [SEC-001](./security-concerns.md#sec-001) / [ARCH-001](./architecture-issues.md#arch-001)
    - **`to_http_base()`** 把 `noise://` / `quic://` 静默改写为 `http://`（不是 https）— 凭据明文 — 见 [SEC-002](./security-concerns.md#sec-002)
-   - **多 NSD 合并用交集**，任一 NSD 推空 ACL 即清空全局策略 — 见 [SEC-005](./security-concerns.md#sec-005) / [FAIL-006](./failure-modes.md#fail-006)
+   - **多 NSD 合并用交集**，任一 NSD 推空 ACL 即清空全局策略 `[RESOLVED — 决议改并集 + 本地 ACL 保底]` — 见 [ARCH-002](./architecture-issues.md#arch-002) / [SEC-005](./security-concerns.md#sec-005) / [FAIL-006](./failure-modes.md#fail-006)
    - **ConntrackTable 无 GC/TTL/cap** — P0 OOM 风险 — 见 [FUNC-005](./functional-gaps.md#func-005)
    - **NSC 完全无 outbound ACL**、`--data-plane tun` 是假 TUN（仅改 VIP 前缀）、token 刷新通道被丢弃 — 见 [FUNC-001](./functional-gaps.md#func-001) / [FUNC-004](./functional-gaps.md#func-004) / [SEC-006](./security-concerns.md#sec-006)
 3. **可观测性严重缺位**：注册了 OTel pipeline 但**没有任何 instrument**；`/api/metrics` 由 7 行 `format!()` 拼接产生；无 histogram、无 span、无 trace_id、spawn task panic 不可见 — 见 [observability-gaps.md](./observability-gaps.md)
@@ -83,7 +83,7 @@ flowchart TB
 |----|--------|----------|
 | [SEC-001](./security-concerns.md#sec-001) | ACL 引擎双 Arc + fail 语义不对称（WSS 闭、本地开） | 启动窗口/重连窗口直接绕过策略 |
 | [SEC-002](./security-concerns.md#sec-002) | `to_http_base` 把 noise:// / quic:// 改写为 **http://**（非 https） | register/auth/heartbeat 凭据明文 |
-| [SEC-005](./security-concerns.md#sec-005) | 任一 NSD 推空 ACL → 交集合并清空全局策略 | 单点导致全局 ACL 失效 |
+| [SEC-005](./security-concerns.md#sec-005) `[RESOLVED]` | 任一 NSD 推空 ACL → 交集合并清空全局策略 | 单点导致全局 ACL 失效 — 已决议改并集 + 本地 ACL 保底 |
 | [SEC-008](./security-concerns.md#sec-008) | ACL 加载 10s 超时后继续启动（fail-open 启动窗口） | 每次重启的安全空窗 |
 | [FUNC-005](./functional-gaps.md#func-005) | `ConntrackTable` 无 GC/TTL/cap | 长跑 OOM；攻击放大 |
 

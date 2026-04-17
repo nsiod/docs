@@ -2,8 +2,9 @@
 %% 用途: 展示 NSN 如何订阅多个 NSD、三种传输外壳如何复用同一 SSE 事件解析器
 graph LR
     subgraph NSN["NSN Control Stack (crate: control)"]
-        MCP["MultiControlPlane<br/>并发订阅多个 NSD<br/>配置合并 (wg 并集 / acl 交集)"]
-        Merge["merge.rs<br/>按 chain_id 去重"]
+        MCP["MultiControlPlane<br/>并发订阅多个 NSD<br/>配置合并 (wg/proxy/acl 全部并集)<br/>最终 ACL 与本地 services.toml 交集"]
+        Merge["merge.rs<br/>按 chain_id 去重 + 来源标注"]
+        SigV["EventSigVerifier<br/>(规划中)<br/>Ed25519 配置事件签名校验"]
         SSE_Client["SSE Event Parser<br/>(sse.rs)"]
     end
 
@@ -22,6 +23,8 @@ graph LR
     end
 
     MCP --> SSE_Client
+    SSE_Client --> SigV
+    SigV --> Merge
     MCP --> Merge
     SSE_Client --> T_SSE
     SSE_Client --> T_NOISE

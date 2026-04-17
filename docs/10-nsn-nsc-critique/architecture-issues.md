@@ -44,7 +44,7 @@ flowchart TB
 
 ---
 
-## ARCH-002 · ACL 多 NSD 合并使用交集，制造"空配置攻击面"
+## ARCH-002 · ACL 多 NSD 合并使用交集，制造"空配置攻击面"  `[RESOLVED — 决议: 选项 1 并集 + 本地 ACL 保底]`
 - **Severity**: P1
 - **Location**: `crates/control/src/merge.rs:85-126`；策略文档 [../02-control-plane/design.md](../02-control-plane/design.md)
 - **Current**: `merge_acl_configs` 把多个 NSD 推送的 ACL 取**交集** —— 只有"全部 NSD 都包含"的规则才保留。
@@ -52,14 +52,19 @@ flowchart TB
   - 一个 NSD 由于 bug / config drift / 网络问题返回**空 ACL**，**全局 ACL 立即被清空**。
   - 攻击者只要让一个 NSD 推一个空集（或 `acls = []`）就可以**让站点放行所有流量**（结合 [SEC-001](./security-concerns.md) 的 fail-open，效果是"全开"）。
   - 运维不能"只加 NSD 不影响安全"，反向：**加 NSD 永远只会缩小放行集合**。
+  - Self-hosted NSD + cloud NSD 共存时，两边独有的规则互相消失，管理员在 UI 上看不出规则去哪了——排障极为困难。
 - **Impact**: 多 NSD 部署的运维心智模型与代码不一致；空配置 = DoS / 提权（取决于是否合 SEC-001）。
-- **Fix**: 选择以下之一并写进设计契约：
-  1. **改为并集**（与 peers 一致）。代价：放宽一些；需要 NSD 之间约定"谁是权威"。
-  2. **保留交集**但 *拒绝把空集合并入交集*（empty ACL 视为"未表态"），同时引入 `chain_id` 单调性检查（拒绝倒退到旧版）。
-  3. 用**主从模式**：声明一个 primary NSD，其余只能注解（add-only），不能否决。
-- **Cost**: 改 30 行 merge 逻辑 + 1 个新合并策略字段 + 跨 docs 更新。无线协议变更。
-- **Benefit**: 把"多 NSD = 增冗余"做到名副其实；消除 ACL 空集变更的风险。
-- **Risk**: 选 1) 时可能放行过去被交集裁掉的规则（运维需提前 audit）；选 2/3) 需要 NSD 端协同。
+- **决议（2026-04-17）**: 采用 **Fix 选项 1：改为并集并附每条规则的 `sources: Vec<NsdId>` 标注**；额外约束：**运行时放行还必须与本地 `services.toml` ACL 取交集作为保底**。NSD 只能"建议放行"，站点主人在本地始终保留最终否决权。这样：
+  - 接入新 NSD 只扩不删规则，与 peers/proxy 同向，符合运维直觉。
+  - 空 ACL 不再导致全局清空——单个 NSD 故障只让"仅它一家贡献"的规则消失，其他仍然保留。
+  - 单 NSD 被入侵下发 `allow all` 也无法超过本地 `services.toml` 的授权范围——安全性由本地 ACL 托底，而不是"多 NSD 互为裁判"。
+  - 选 1) 原评估风险（"放行过去被交集裁掉的规则"）被本地 ACL 保底兜住，不再成立。
+- **Fix 历史备选（已否）**:
+  2. **保留交集**但 *拒绝把空集合并入交集*（empty ACL 视为"未表态"），同时引入 `chain_id` 单调性检查（拒绝倒退到旧版）—— 仍不解决 self-host + cloud 共存的规则消失心智问题。
+  3. 用**主从模式**：声明一个 primary NSD，其余只能注解（add-only），不能否决 —— 取消多 NSD 的对等性，与 NSIO "多 realm 并存"的定位冲突。
+- **Cost**: 改 30 行 merge 逻辑 + `AclPolicy` 新增 `sources` 字段 + NSN 数据面 hook 本地 `services.toml` ACL 作为最终过滤器（~80 行）+ 跨 docs 更新（已完成）。无线协议变更。
+- **Benefit**: 把"多 NSD = 增冗余"做到名副其实；消除 ACL 空集变更的风险；self-host + cloud 共存可运维。
+- **Risk**: 本地 `services.toml` 成为安全关键路径，需要文档 / CLI 明确提示管理员"忘了列 = 不可达",并在 `nsn status` 里显式展示"合并规则 X / 本地允许 Y / 实际生效 Z"三列。
 
 ---
 

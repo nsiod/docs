@@ -141,7 +141,7 @@ authenticate() ──► token
 |-----|------|
 | `merge_wg_configs(&[WgConfig]) -> Option<WgConfig>` | 空切片 → `None`；以首条为底，peers 按 `public_key` 去重并集；`ip_address`/`listen_port` 取首条 |
 | `merge_proxy_configs(&[ProxyConfig]) -> Option<ProxyConfig>` | 空 → `None`；规则按 `resource_id` 去重并集；`chain_id` 取首条 |
-| `merge_acl_configs(&[AclConfig]) -> Option<AclConfig>` | 空 → `None`；hosts/acls/tests 取交集；ACL 等价键忽略 src/dst 顺序，`proto=None` 视作 `*` |
+| `merge_acl_configs(&[AclConfig]) -> Option<AclConfig>` | 空 → `None`；hosts/acls/tests 取**并集**按等价键去重（ACL 等价键忽略 src/dst 顺序，`proto=None` 视作 `*`），合并结果的每条条目带来源 NSD 标注；**运行时放行还会与本地 `services.toml` ACL 取交集** —— 见 [multi-realm.md §4.5](../08-nsd-control/multi-realm.md#45-本地-acl-作为保底) |
 | `NsdConfigStore` | `wg/proxy/acl: HashMap<nsd_id, Config>` + 三个 `merged_*` 便捷函数 |
 
 合并被 9 个单测覆盖（`merge.rs:247`+），含「重复 key 取首条」「不同 IP 时取 base」「ACL host 别名 web=192.168.1.0/24 在两 NSD 都相同则保留，db 取值不同则丢弃」等关键不变量。

@@ -55,7 +55,7 @@ NSD 支持三条首次注册路径 + 一条续签路径，全部通过 HTTP POST
 NSD 的策略引擎把"人类意图"（管理员在 Web UI 上设定的站点、资源、访问规则）翻译成数据面能直接执行的结构：
 
 - **`ProxyConfig`** —— `chain_id` + 一组 `SubnetRule`，每条规则声明 `source_prefix → dest_prefix` 的 DNAT 和 `port_range`。由 NSN 侧的 Proxy 模块消费（见 `crates/control/src/messages.rs:28-52`）。
-- **`AclConfig`** —— `chain_id` + `AclPolicy`，由 NSN 侧 `ipv4-acl` crate 执行。多 NSD 场景下按**交集**合并（`crates/control/src/merge.rs:77`）——任何一个 NSD 不允许的访问都被拒绝。
+- **`AclConfig`** —— `chain_id` + `AclPolicy`，由 NSN 侧 `ipv4-acl` crate 执行。多 NSD 场景下按**并集**合并（`crates/control/src/merge.rs:77`），每条规则带来源 NSD 标注；**最终放行还要与本地 `services.toml` ACL 取交集** —— NSD 只能建议，站点主人在本地保留最终否决权（详见 [multi-realm.md §4.5](./multi-realm.md#45-本地-acl-作为保底)）。
 - **`RoutingConfig`** —— 每条 `RouteEntry` 声明 `domain`（如 `web.ab3xk9mnpq.n.ns`）→ `(site, service, port)` 的映射，同时 mock 额外下发 `nsn_wg_ip` 和 `virtual_port` 供 NSGW traefik 使用（`tests/docker/nsd-mock/src/registry.ts:188-205`）。
 - **`DnsConfig`** —— 全局 DNS 记录表，NSC 消费后注入本地解析器。
 - **`GatewayConfig`** —— 已注册 NSGW 的 `wg_endpoint` + `wss_endpoint` 列表，供 NSN/NSC 选路。

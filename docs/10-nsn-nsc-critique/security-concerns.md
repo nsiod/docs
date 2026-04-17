@@ -160,7 +160,7 @@ flowchart LR
 
 ---
 
-## SEC-005 · 多 NSD 合并使用**交集**: 任一 NSD 推送空 ACL 即清空全局策略
+## SEC-005 · 多 NSD 合并使用**交集**: 任一 NSD 推送空 ACL 即清空全局策略  `[RESOLVED — 合并改并集 + 本地 ACL 保底，见 ARCH-002]`
 
 - **Severity**: P0（致命 - 可用性 + 安全）
 - **Location**: `crates/control/src/merge.rs:85-145`（合并算法）；触发面：`crates/control/src/multi.rs:131+`
@@ -172,10 +172,9 @@ flowchart LR
 - **Impact**：
   - 单点故障即可导致全局策略瘫痪
   - 不可避免的"配置漂移"会随 NSD 数量递减系统安全
-- **Fix**：见 [ARCH-002](./architecture-issues.md#arch-002) 和 [FAIL-006](./failure-modes.md#fail-006)。安全角度建议：
-  - **必选**：把"空 ACL"识别为异常状态（设 sentinel `AclConfig::Empty` ≠ `AclConfig::DenyAll`），不参与合并
-  - 增加配置项 `multi_nsd.merge_strategy = strict_intersect | majority | first_authoritative`
-  - 推送审计日志，每次 ACL 合并前后写入 hash + 来源 NSD 列表 + 规则数 diff
+- **决议（2026-04-17）**：采用 [ARCH-002](./architecture-issues.md#arch-002) 的选项 1 —— **合并改并集 + 每条规则 `sources` 标注 + 本地 `services.toml` ACL 作为运行时保底**。空 ACL 不再清空其他 NSD 的规则；单 NSD 被攻陷下发 `allow all` 也无法越过本地 ACL 的授权范围。相应保留此处两条建议：
+  - 推送审计日志，每次 ACL 合并前后写入 hash + 来源 NSD 列表 + 规则数 diff（保留，独立于合并语义）。
+  - 本地 `services.toml` ACL 在 NSN 启动时若缺失，`nsn` 应 WARN 并拒绝进入 ready 状态，避免新部署因漏配保底而变成"纯 NSD 建议即放行"。
 - **Cost vs Benefit**：~3 人日；为多 NSD 部署的核心安全前提
 - **Migration risk**：中 — 行为变化需在 release notes 里强调
 

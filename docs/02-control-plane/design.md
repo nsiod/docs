@@ -181,12 +181,12 @@ Content-Type: application/json
 |------|------|------|----------|
 | `WgConfig` | 多源 peers **并集**，按 `public_key` 去重；保留首条配置的 `ip_address` / `listen_port` | `merge.rs:27` `merge_wg_configs` | 站点能同时与所有 NSD 给出的所有对端通信；同 key 不同 endpoint 时**先到先得** |
 | `ProxyConfig` | rules **并集**，按 `resource_id` 去重；保留首条配置的 `chain_id` | `merge.rs:56` `merge_proxy_configs` | 任何 NSD 提到的资源都可以被代理 |
-| `AclConfig` | hosts / acls / tests **交集**——仅当**所有** NSD 都包含完全相同条目时才保留 | `merge.rs:85` `merge_acl_configs` | **保守加固**：NSD 之间不一致就拒绝放行，防止单点 NSD 被攻陷扩大权限 |
+| `AclConfig` | hosts / acls / tests **并集**，按等价键去重；每条保留带来源 NSD 标注 | `merge.rs:85` `merge_acl_configs` | **与 wg/proxy 同向**：接入 NSD 只扩不删规则；安全由本地 `services.toml` ACL 作为最终保底裁决（见 [multi-realm.md §4.5](../08-nsd-control/multi-realm.md#45-本地-acl-作为保底)） |
 
 `AclRule` 的等价键：`"accept\0{src 排序}\0{dst 排序}\0{proto or *}"`（`merge.rs:128`），这样 `src`/`dst` 列表顺序不影响等价判定。
 
-> 示例：3 个 NSD 都包含规则 `accept 10.0.0.1 → 192.168.1.1:80` 且 `proto=tcp` → 合并后保留；
-> 任一 NSD 缺失或写成 `proto=any` → **交集判定失败**，整条规则**从合并结果中剔除**。
+> 示例：NSD-A 独有 `accept 10.0.0.1 → 192.168.1.1:80`、NSD-B 独有 `accept 10.0.0.2 → 192.168.1.1:22` → 合并后两条规则**全部保留**，分别标记来源 NSD-A / NSD-B；
+> **运行时放行**还要通过本地 `services.toml` ACL 再校验一次，站点主人对最终边界保留否决权。
 
 ### 4.3 示例
 
@@ -206,7 +206,10 @@ NSD-2 acl:   { accept A→B, accept E→F }
 ```text
 wg:    peers = [P1, P2, P3]                       // 并集去重
 proxy: chain_id = "c1", rules = [r1, r2, r3]     // r2 来自 NSD-1（先到）
-acl:   { accept A→B }                             // 仅 A→B 在两个 NSD 都存在
+acl:   { accept A→B [sources=NSD-1,NSD-2],
+         accept C→D [sources=NSD-1],
+         accept E→F [sources=NSD-2] }             // 并集，每条带 sources 元数据
+// 最终放行 = merged_acl ∩ services.toml 本地 ACL
 ```
 
 > 全套数据流见 [diagrams/multi-nsd-merge.mmd](./diagrams/multi-nsd-merge.mmd)。
@@ -264,9 +267,74 @@ pub trait ControlTransport: Send + Sync {
 | 大消息攻击 | SSE `max_message_size`（默认 1 MiB）+ HTTP header 16 KiB 上限 |
 | 流量轰炸 | TokenBucket 每秒上限 100 事件（默认） |
 | MITM | TLS（`sse`）/ Noise IK 静态密钥 / QUIC SHA-256 cert pin 三选一 |
-| ACL 一致性 | 多 NSD 模式下 ACL 取交集，单点 NSD 篡改不会扩大放行范围 |
+| ACL 一致性 | 多 NSD 模式下 ACL 取并集并标注来源；**最终放行由本地 `services.toml` ACL 兜底** —— 单点 NSD 即使下发 `allow all` 也无法越过本地未列出的端口 |
+| 配置推送完整性 | `gateway_config` / `routing_config` / `acl_config` / `wg_config` 等 SSE 事件每条带 NSD 签名（见 §7.1），NSN/NSC 本地用注册响应中的 `server_peer_key_pub` 验签，拒绝未签名或验签失败的事件 |
 
-## 8. 配置入口（ConnectorConfig）
+### 7.1 配置事件签名（防中间人篡改）
+
+控制面所有长连接（`sse` / `noise` / `quic`）都可能落在**不可信的传输层**上：
+
+- `sse` 模式走标准 TLS，但 TLS 只保护 *点到点*；一旦运营者在公司出口放了 TLS 反代（SSL 卸载盒子 / 企业 CA 下发到员工机器），反代节点就具备**在线改写 SSE 事件**的能力，而客户端对此不可见。
+- `noise` / `quic` 模式自己承担加密与对端鉴权，但在"pinning 未配置"或"NSD 部署方把原始证书/静态密钥外包给 CDN"等降级场景下同样可被中间人替换事件。
+
+为此每条 NSD → NSN / NSC 的配置事件（`wg_config` / `proxy_config` / `acl_config` / `gateway_config` / `routing_config` / `dns_config` / `gateway_http_config` / `gateway_l4_map` / `token_refresh`）都带**独立签名**，与传输层加密解耦：
+
+```jsonc
+{
+  "event": "acl_config",
+  "chain_id": "acl-2026-04-17-001",
+  "payload": { /* AclConfig 原内容 */ },
+  "sig": {
+    "alg": "ed25519",
+    "kid": "nsd-primary-2026q2",         // NSD 签名密钥指纹，便于轮换
+    "ts":  1713340800,                    // 签发 unix 秒（防回放）
+    "nonce": "base64(16B)",               // 单次事件不重复
+    "value": "base64(64B Ed25519 sig)"
+  }
+}
+```
+
+**签名对象**：`SHA-512(event || "\0" || chain_id || "\0" || canonical_json(payload) || "\0" || ts || "\0" || nonce || "\0" || realm || "\0" || machine_id)` —— 绑定事件类型、chain_id、canonical 序列化的 payload、时间、nonce、realm 与目标 `machine_id`，确保：
+
+1. **payload 不能被改写**：篡改任何字段都会破坏 SHA-512。
+2. **不能跨 realm 重放**：`realm` 入 digest，不同 realm 的签名互不通用。
+3. **不能跨 machine 重放**：`machine_id` 入 digest，A 机器的事件不能塞给 B。
+4. **不能时间回放**：`ts` 允许时钟偏差 ±5min；`nonce` 在同一 chain_id 内必须唯一；`chain_id` 在同一目标上单调递增（旧版本 chain_id 拒绝）。
+5. **不能裁切**：`canonical_json(payload)` 按 [RFC 8785 JCS](https://datatracker.ietf.org/doc/html/rfc8785) 规范化后再哈希，避免 key 顺序 / 空白 / 数字表示差异导致的签名歧义。
+
+**密钥来源**：NSD 注册响应中 `server_peer_key_pub`（目前用于 Noise/QUIC）**不再复用**于配置签名，另起一个 `server_signing_key_pub` 字段：
+
+```jsonc
+// POST /api/v1/machine/register 响应扩展
+{
+  "machine_id": "ab3xk9mnpq",
+  "server_peer_key_pub":    "<32B hex>",   // X25519 —— Noise/QUIC 传输层
+  "server_signing_key_pub": "<32B hex>",   // Ed25519 —— 配置事件签名（新增）
+  "signing_key_kids": ["nsd-primary-2026q2", "nsd-primary-2026q3"],
+  ...
+}
+```
+
+分离的原因：Noise IK 里的 X25519 静态密钥无法直接做签名（DH ≠ 签名原语），而且两类密钥的轮换周期与安全等级不同——传输密钥可以短周期轮换 + HSM，签名密钥可以长周期 + 离线存储。`signing_key_kids` 允许 NSD 提前宣告"下一把"，为热轮换留出 grace window。
+
+**验签路径**：
+
+- NSN：`crates/control/src/sse.rs` 在分派给 `merge.rs` 之前校验；验签失败 → **丢弃事件 + WARN + metrics++**，绝不应用到数据面。
+- NSC：同 NSN 路径，在 `NscControlPlane::dispatch` 处校验。
+- 多 NSD 场景下每个 NSD 的事件用各自的 `server_signing_key_pub`（每个 realm 一把）；merge 层只接受**已验签**的事件，因此并集结果里每条规则的 `sources` 标注天然等同于"这些 NSD 用其签名密钥为这条规则背书"。
+
+**轮换**：NSD 通过带新 `kid` 的 `signing_key_update` 事件（自身也带旧 kid 签名）宣告新公钥；NSN / NSC 接受过渡期内用旧或新 kid 签名的事件。旧 kid 被 NSD `revoked_kids` 字段列入后立即拒绝。
+
+**与 transport 的关系**：
+
+| 层 | 保证 | 失效时的影响 |
+|-----|------|--------------|
+| TLS / Noise / QUIC（transport）| 对端鉴权 + 抗被动嗅探 | 被反代 / 降级 → 需要签名层兜底 |
+| 配置事件签名（应用层）| 事件完整性 + 来源 + 抗重放 + 抗跨 realm / 跨 machine | 密钥外泄 → 立即 `revoked_kids` 轮换，旧签名全部作废 |
+
+这解决了 transport 被中间人降级、或 SSE 走普通 TLS 经企业反代时事件被改写的问题——两层都被攻破才能影响配置，而不是单层被攻破就放行篡改。
+
+
 
 下列字段直接影响控制面行为（`crates/common/src/lib.rs:71`）：
 
