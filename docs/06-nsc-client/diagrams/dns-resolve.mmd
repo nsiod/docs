@@ -3,13 +3,13 @@ sequenceDiagram
   actor App as App (ssh / curl)
   participant LIBC as libc / getaddrinfo
   participant RC as /etc/resolv.conf
-  participant NSCD as NSC DNS<br/>127.0.0.53:53 (UDP)
+  participant NSCD as NSC DNS<br/>127.0.0.54:53 (UDP, 默认)
   participant MAP as DnsRecords<br/>Arc RwLock HashMap
   participant UP as Upstream<br/>1.1.1.1:53
 
   App->>LIBC: getaddrinfo("ssh.office.n.ns")
   LIBC->>RC: read nameserver
-  RC-->>LIBC: nameserver 127.0.0.53
+  RC-->>LIBC: nameserver 127.0.0.54
   LIBC->>NSCD: DNS query (ID=0xABCD, QTYPE=A)<br/>QNAME = ssh.office.n.ns
 
   NSCD->>NSCD: parse_question<br/>domain = "ssh.office.n.ns" qtype=1

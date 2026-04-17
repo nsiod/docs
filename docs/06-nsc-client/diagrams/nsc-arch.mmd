@@ -1,7 +1,7 @@
 flowchart TB
   subgraph User["User terminal"]
     APP["App: ssh / curl / psql / browser"]
-    OSRES["OS resolver<br/>/etc/resolv.conf<br/>→ 127.0.0.53"]
+    OSRES["OS resolver<br/>/etc/resolv.conf<br/>→ 127.0.0.54 (NSC 默认)"]
   end
 
   subgraph NSC["NSC (Rust binary)"]
@@ -23,7 +23,7 @@ flowchart TB
     end
 
     subgraph LOCAL["Local access layer"]
-      DNSS["dns.rs<br/>UDP :53 on 127.0.0.53"]
+      DNSS["dns.rs<br/>UDP :53 on 127.0.0.54<br/>(--dns-listen 可改)"]
       VIPPROX["proxy.rs<br/>TCP listeners on VIP:port"]
       HTTPP["http_proxy.rs<br/>(optional, --http-proxy)"]
     end
