@@ -265,41 +265,20 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
 
 这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
 
-**中间件由站点方/运营方在配置里声明,NSD 负责翻译下发**:
+**中间件 / ACL / 公网域名都在 NSD 侧集中配置,通过已有的 SSE 下发**:
 
-- 站点方在 `services.toml`(或 NSD 控制台)里针对需要公网发布的服务声明 **`public` 块** —— 包括是否启用公网发布、用哪个公网域名(自带 CNAME 或由 NSD 签发)、启用哪些中间件、中间件的具体参数(IdP 发现地址、限速阈值、WAF 规则集等)。
-- NSD 把声明**翻译成 NSGW 的 traefik 动态配置**(router / middleware / service 三元组),通过已有的 SSE 配置下发通道推给对应 NSGW 实例;NSGW 的 traefik 热加载,无须重启。
-- 同一个服务可以叠加多个中间件,声明顺序即 traefik 的中间件链顺序。
-
-一个概念示例(**当前 `services.toml` schema 未包含 `[services.X.public]` 块,以下是产品设计层面的目标形态,供理解模型用**):
-
-```toml
-[services.dashboard]
-protocol = "http"
-host     = "127.0.0.1"
-port     = 3000
-enabled  = true
-
-[services.dashboard.public]
-enabled  = true
-domain   = "dashboard.acme.example.com"   # 可选; 不填则由 NSD 签发
-tls      = "acme"                          # acme | byo | passthrough
-middlewares = [
-    { type = "oidc", issuer = "https://idp.acme.com", client_id = "...", scopes = ["openid", "email"] },
-    { type = "ratelimit", rps = 20, burst = 40 },
-    { type = "waf", ruleset = "owasp-crs-4" },
-    { type = "header_rewrite", set = { "X-Forwarded-User" = "{{.oidc.sub}}" } },
-]
-```
-
-实际落地时这些字段应纳入 `ServiceDef`(`crates/common/src/services.rs:138`) 并扩展 NSD 的 SSE 事件(追加 `gateway_http_config` 或类似事件),目前两端均未实现。
+- 站点本地的 `services.toml` **只负责**声明"本机上有哪些服务、跑在什么地址端口上" —— 它是 NSN 做 `proxy.connect(target)` 时的查表数据源,**不**描述"这个服务是否对外发布 / 挂哪些中间件"。
+- "是否公网发布、用哪个公网域名、叠加哪些中间件、ACL 允许规则" 全部在 **NSD 控制台 / API** 上由管理员配置,按租户 / realm 组织,与 ACL 下发使用同一套机制:
+  - **ACL** 通过 `AclConfig` SSE 事件推送给 NSN(`crates/control/src/messages.rs` 已定义),由 NSN 的 `acl` crate 在 `ServiceRouter::resolve` 里执行。
+  - **公网域名 + traefik 中间件链** 通过一个类似 `gateway_http_config` 的 SSE 事件推送给 NSGW(规划中事件),NSGW 把它翻译为 traefik 动态配置(router / middleware / service 三元组),热加载无须重启。
+- 这样 "发布 / 鉴权 / 限流 / ACL" 都是**中心化声明、就近执行**: 控制面是单一事实源,数据面只做执行;站点方改完配置立刻生效,不需要 SSH 到每台 NSN/NSGW 改文件。
 
 **代价 / 约束**:
 
 - **失去端到端加密**。NSGW 在中间能读到明文 HTTP —— 这是启用中间件的前提,也是它与内部路径的本质区别。
 - **只承载 HTTP(S)**。非 HTTP 协议(SSH / psql / 任意 TCP)仍必须走 NSC。
-- **需要显式发布**。站点管理员要在 NSD 面板声明"这个服务公网暴露",NSD 才会触发公网域名签发与 NSGW 路由下发;默认仍是 `*.n.ns` 内部可见。
-- **NSN 侧仍走 ACL**。公网域名入站的请求在到达 NSN 后,仍由 `acl` crate 做一次"允许"检查,ACL 未放行的路径即使 traefik 路由命中也会被 NSN 拒绝。
+- **需要显式发布**。管理员要在 NSD 上声明"这个服务公网暴露",NSD 才会触发公网域名签发、NSGW 路由下发、以及对应的 ACL 放行;默认仍是 `*.n.ns` 内部可见。
+- **ACL 仍然生效**。即使 NSGW 侧中间件放行,NSN 的 `acl` 依然会按 NSD 下发的 `AclConfig` 做最后一道检查 —— 这与内部路径共用同一套 ACL,没有"公网路径绕过 ACL"的口子。
 
 为什么这条路径存在:许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调,强制所有访问者装 NSC 是过度设计。把 HTTP(S) 发布和身份认证下沉到 NSGW,站点侧只需要一个普通的 HTTP 服务 —— 不用管 TLS、不用管 SSO、不用管限速。
 
