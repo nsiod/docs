@@ -6,24 +6,13 @@
   max-width: 100%;
 }
 
-/* Scroll containment.
-   Prevent two classes of scroll bugs:
-   1. Scroll chaining: when the inner doc hits top/bottom the browser forwards
-      the remaining delta to <html>, pulling the page past its own boundary.
-   2. Momentum over-scroll on trackpads & touch devices, which visually jumps
-      the page past the footer / before the header. */
-html,
+/* Prevent momentum over-scroll past document boundary on trackpads / touch
+   (was visually jumping page past footer / before header).
+   Applied only to <body>; setting it on <html> as well, or combining with
+   overflow-x:hidden on the scroll root, has been observed to suppress the
+   native scrollbar in some Chromium builds. */
 body {
-  overscroll-behavior: none;
-}
-
-/* Kill hidden horizontal scroll caused by wide mermaid SVGs or long code
-   blocks — horizontal wheel events sometimes get remapped to vertical by
-   the OS, producing phantom vertical jumps. */
-html,
-body,
-.rspress-doc {
-  overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 /* Tame anchor-jump overshoot: when clicking a TOC link the browser computes
