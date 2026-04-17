@@ -33,6 +33,10 @@ graph TB
     GW1 ==>|"WG / WSS 桥接"| NSN
     GW2 ==>|"WG / WSS 桥接"| NSN
 
+    %% 直连路径: WG PeerConfig 机制层面支持任意 endpoint,
+    %% 双方可达时 NSC 与 NSN 可直接对等; 控制面下发 direct_peers 为规划中能力
+    NSC -. "WG direct peer<br/>(规划中: direct_peers)" .-> NSN
+
     NSN --> LOCAL
     NSN --> REMOTE
 

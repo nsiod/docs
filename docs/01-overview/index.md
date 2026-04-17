@@ -51,8 +51,11 @@ graph TB
     NSC ==>|"WG / WSS"| GW2
     GW1 ==>|"WG / WSS"| NSN
     GW2 ==>|"WG / WSS"| NSN
+    NSC -. "WG direct peer (规划中)" .-> NSN
     NSN --> LOCAL
 ```
+
+> 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
 
 | 组件 | 中文名 | 定位 | 语言/技术栈 | 部署位置 |
 |------|--------|------|-------------|---------|

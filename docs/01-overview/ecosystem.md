@@ -216,8 +216,8 @@ NSGW 在中间做协议桥接,对两端透明。这比"全链路统一协议"更
          NSD        NSGW       NSN        NSC
 NSD      ──        manage     manage     manage
 NSGW    report      ──        tunnel     tunnel
-NSN     control    tunnel      ──       (via GW)
-NSC     control    tunnel    (via GW)     ──
+NSN     control    tunnel      ──       (via GW · 直连规划中)
+NSC     control    tunnel  (via GW · 直连规划中)  ──
 ```
 
 | 连接对 | 协议 | 用途 | 源码位置 |
@@ -228,7 +228,7 @@ NSC     control    tunnel    (via GW)     ──
 | NSC ↔ NSGW | WG / WSS | 用户流量隧道 | (同 NSN) |
 | NSD ↔ NSGW | 内部 API | 网关注册、健康检查、指标 | NSD 侧(不在本仓库)|
 
-> "NSC 不直连 NSN"是当前实现状态。`transport-design.md` 中的**直连 / WebRTC P2P** 属于未来设计,控制面事件和代码路径尚未实现。
+> **直连路径的现状**: `tunnel-wg` 的 `PeerConfig` (`pubkey + endpoint + allowed_ips`) 不区分 NSGW 与 NSN,WireGuard 机制层面支持 NSC 与 NSN 直接对等。当前**缺少**的是控制面的 `direct_peers` 事件 —— NSD 还没有向 NSC 下发"把 NSN 当作直接 peer"的配置,也没有打洞信令流程。`transport-design.md` 的 [直连与 P2P](./transport-design.md#直连与-p2p-未来设计) 描述了这个规划中的补全方向。
 
 ## 部署拓扑模板
 
