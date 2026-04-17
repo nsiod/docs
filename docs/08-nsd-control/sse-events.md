@@ -43,7 +43,8 @@ sequenceDiagram
 |------------|------|-------------|---------|-------|---|
 | `wg_config` | NSD → 订阅者 | `WgConfig`（`ip_address`, `listen_port`, `peers[]`） | NSN 上报 services / NSGW 上报 gateway / NSN 订阅建立时 | NSN、NSGW | `crates/control/src/messages.rs:12` · `registry.ts:106` |
 | `proxy_config` | NSD → NSN | `ProxyConfig`（`chain_id`, `rules[]`, `port_mappings[]`） | NSN 上报 services 后立即 push | NSN（`Proxy` / `ServiceRouter`） | `messages.rs:28` · `registry.ts:139` |
-| `acl_config` | NSD → NSN | `AclConfig`（`chain_id`, `policy`） | 管理员变更 ACL 时（生产） | NSN（`ipv4-acl`） | `messages.rs:56` |
+| `acl_config` | NSD → NSN | `AclConfig`（`chain_id`, `policy`, `groups`） | 管理员变更 ACL 时（生产） | NSN（`ipv4-acl`，终决者） | `messages.rs:56` |
+| `acl_projection` | NSD → NSGW | `AclProjection`（`chain_id`, `groups`, `acls[]`，仅 Subject::User/Group/Nsgw 维度） | 同 `acl_config` 触发后同步 push 给 NSGW | NSGW（`/client` ingress 预过滤，见 [../09-nsgw-gateway/responsibilities.md §⑤](../09-nsgw-gateway/responsibilities.md#-client-ingress-的-acl-预过滤两级信任的前一级)） | 生产契约（mock 未实现） |
 | `services_ack` | NSD → NSN | `ServicesAck`（`matched[]`, `unmatched[]`, `rejected[]`） | 每次 `services_report` 之后 | NSN（报日志 / 告警） | `messages.rs:126` · `registry.ts:164` |
 | `gateway_config` | NSD → NSN/NSC | `GatewayConfig`（`gateways[]`） | 新 NSGW `gateway_report` / 订阅建立时 | NSN、NSC（选路/失败回退） | `messages.rs:200` · `registry.ts:170` |
 | `routing_config` | NSD → NSGW | `RoutingConfig`（`routes[]`） | NSN 上报 services / 订阅建立时 | NSGW（traefik provider） | `messages.rs:157` · `registry.ts:187` |
@@ -52,7 +53,7 @@ sequenceDiagram
 | `ping` | NSD → 任意 | `{}` | 空闲心跳（mock 未实现） | 全体（更新 last_seen） | `messages.rs:216` |
 | `pong` | NSD → 任意 | `{}` | 回应客户端 ping（mock 未实现） | 全体 | `messages.rs:217` |
 
-> mock 目前没有主动触发 `ping` / `pong` / `token_refresh` 的代码路径，但 NSN 侧的解码器支持它们（`crates/control/src/messages.rs:216-218`），所以生产 NSD 可以安全下发这些事件。
+> mock 目前没有主动触发 `ping` / `pong` / `token_refresh` / `acl_projection` 的代码路径，但 NSN 侧的解码器支持前三个（`crates/control/src/messages.rs:216-218`），`acl_projection` 是生产新增事件，只对 machine_type=gateway 的订阅者 push，NSN/NSC 不应收到。
 
 ## 3. 核心事件详解
 
@@ -226,6 +227,6 @@ NSD 侧需要：
 
 | 必须 | 可选 |
 |------|------|
-| `wg_config`、`proxy_config`、`gateway_config`、`dns_config`、`routing_config`、`services_ack` | `acl_config`、`token_refresh`、`ping`、`pong` |
+| `wg_config`、`proxy_config`、`gateway_config`、`dns_config`、`routing_config`、`services_ack` | `acl_config`、`acl_projection`、`token_refresh`、`ping`、`pong` |
 
-可选事件的缺失不会让数据面立即不可用，但会显著削弱运行时安全性（无 ACL）和 JWT 的有效运维（无 token_refresh → 必须定期重连重鉴权）。
+可选事件的缺失不会让数据面立即不可用，但会显著削弱运行时安全性（无 ACL / 无 NSGW 预过滤）和 JWT 的有效运维（无 token_refresh → 必须定期重连重鉴权）。注意 `acl_config` 和 `acl_projection` 语义绑定：生产实现应在同一事务里推给 NSN 和 NSGW，避免两侧版本漂移造成的短暂不一致（见 [../05-proxy-acl/acl.md §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)）。

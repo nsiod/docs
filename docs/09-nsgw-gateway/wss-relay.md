@@ -76,13 +76,19 @@ NSN 走 `/relay` 并被认为是"能触达服务的那一端";NSC 走 `/client` 
 
 1. 从 `activeSessions` 挑**第一个 NSN 会话**(mock 用 `entries().next()`;生产若有多 NSN,需按 NSD 的路由规则选);
 2. 生成**单调递增** `connectorStreamId`(初值 `0x10000000`,`wss-relay.ts:228`,与 NSC 侧 `stream_id` 空间区分开,避免冲突);
-3. 双向登记:
+3. **ACL 预检(两级信任的前一级)**:用 JWT 里解出的 `(gateway_id, machine_id)` 和 Open 的 `(target_ip, target_port, protocol)` 跑一次本地 `AclEngine::is_allowed(Subject::User{..}, target)`。这个 AclEngine 由 NSD 推送的 `acl_projection` SSE 事件装载(见 [responsibilities.md §⑤](./responsibilities.md#-client-ingress-的-acl-预过滤两级信任的前一级) 与 [../05-proxy-acl/acl.md §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决));
+   - **命中 `deny`** → 回 `Close{reason: "policy denied by gateway"}` 给 NSC,**不向 NSN 转发任何字节**,流程终止;
+   - **命中 `allow`** 或未匹配(默认 allow——NSGW 偏宽)→ 进入 4;
+   - **projection 未加载 / NSD SSE 断开** → **fail-open**(让 NSN 兜底,避免 NSD 抖动造成全站 DoS);
+4. 双向登记:
    - `client.connectorStreams[frame.streamId] = { connectorStreamId, connectorSessionId }`
    - `connectorStreamToClient[connectorStreamId] = { clientSessionId, clientStreamId: frame.streamId }`
-4. 向 NSN 发 `Open` 帧(用 `connectorStreamId`);
-5. 往后:
+5. 向 NSN 发 `Open` 帧(用 `connectorStreamId`,并在 TLV 里带上 `GATEWAY_ID/MACHINE_ID/USER_ID`,见 [../03-data-plane/tunnel-ws.md §2.4](../03-data-plane/tunnel-ws.md#24-open-帧的-source-identity-扩展));
+6. 往后:
    - NSC 发 `Data/Close` → 转发给 NSN,换成 `connectorStreamId`;
    - NSN 发 `Data/Close/CloseAck` → 反查 `connectorStreamToClient` → 换回 `clientStreamId` → 发给 NSC。
+
+> **为什么 NSGW 偏宽、NSN 偏严**:NSGW 的 projection 只是 NSD 推送的 ACL 子集,*没有* NSN 本机 `services.toml` 的"只允许显式服务"地板。如果 NSGW 过严,可能误拒 NSN 本应该允许的流量;而 NSN 是终决者,它有全量 ACL + 本地白名单,拒了的一定拒。所以 **NSGW 只做早拒(kick 掉 99% 明确违规),NSN 永远做最后一次判定**。
 
 ```mermaid
 sequenceDiagram
@@ -93,9 +99,14 @@ sequenceDiagram
 
     C->>G: Open s_id=42 → 1.2.3.4:80/tcp
     Note right of G: connectorStreamId = 0x10000001
-    G->>G: clientSessions[client-1].connectorStreams[42]<br/>= {0x10000001, relay-1}
-    G->>G: connectorStreamToClient[0x10000001]<br/>= {client-1, 42}
-    G->>N: Open s_id=0x10000001 → 1.2.3.4:80/tcp
+    G->>G: acl_projection.is_allowed(<br/>Subject::User{gw_id, machine_id},<br/>1.2.3.4:80/tcp)
+    alt deny 命中
+        G-->>C: Close s_id=42<br/>reason="policy denied by gateway"
+    else allow / 未匹配 / projection 未加载
+        G->>G: clientSessions[client-1].connectorStreams[42]<br/>= {0x10000001, relay-1}
+        G->>G: connectorStreamToClient[0x10000001]<br/>= {client-1, 42}
+        G->>N: Open s_id=0x10000001 → 1.2.3.4:80/tcp<br/>TLV: gw_id, machine_id, user_id
+    end
     N->>S: TCP connect
     S-->>N: data
     N-->>G: Data s_id=0x10000001, payload

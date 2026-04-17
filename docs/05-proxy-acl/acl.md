@@ -154,7 +154,109 @@ pub struct AclPolicy {
 - Group 不级联：group 的值必须是 machine_id 列表, 不能嵌套另一个 group。
 - NSD 侧 group 成员来自 RBAC 用户表 / 角色表（生产实现 `tmp/control/server/db/pg/schema/schema.ts:376` 的 `roles`）。mock 目前不实现 groups, 规则只能用显式 `user:<id>`。
 
-### 4.4 Destination (`dst`)
+### 4.4 `Subject::User` 的两种身份来源
+
+`Subject::User { gateway_id, machine_id }` 是同一个数据结构, 但 NSN 可以通过**两条独立路径**组装出来, **可信度不同**：
+
+| 路径 | 身份来源 | 信任根 | 失效/滥用模式 |
+|------|----------|--------|---------------|
+| **WSS 中继**（NSC → NSGW → NSN） | NSGW 在 [Open TLV](../03-data-plane/tunnel-ws.md#24-open-帧的-source-identity-扩展) 中断言 `{gateway_id, machine_id}` | NSN 信 NSGW（NSGW↔NSN 的 wss 连接 pin 到 `gateway_config.wss_endpoint` + TLS/Noise） | 恶意 / 被入侵的 NSGW 可**冒名**任意 `machine_id`；防线是 NSGW 本身的密钥安全和 NSD 在 `gateway_config` 里的 endpoint pin |
+| **直连 WG**（NSC → NSN，planned，见 [01 · ecosystem §直连路径](../01-overview/ecosystem.md)） | NSN 从 `wg_config.peers[].allowed_ips` → `machine_id` 反查（见 §4.5） | WG 协议的公钥 pinning（NSC 的 `peer_key_pub` 由 NSD 下发给 NSN） | 冒名需要拿到 NSC 的 WG 私钥——**crypto-grounded**；NSGW 不在信任路径上 |
+
+**零信任 NSGW 场景**：部署方可以禁用 WSS relay 路径（`disable_wss_relay = true`，规划中），只允许直连 WG。这种情况下 `Subject::User` 的来源全部走 §4.5 的反查，不再有 "相信 NSGW 断言" 的语义。
+
+### 4.5 直连 WG 路径：从 `allowed_ips` 反查 `machine_id`
+
+NSD 下发给 NSN 的 `wg_config` 在原有 `{public_key, endpoint, allowed_ips}` 之外, 为每个 peer 追加 **`machine_id: Option<String>`**（规划字段；见 [02 · control-plane 设计 §4.2](../02-control-plane/design.md#42-合并规则)）。NSN 主进程在装配 AppState 时维护一份 `Arc<ArcSwap<PeerIdentityMap>>`：
+
+```rust
+struct PeerIdentityMap {
+    // /32 或 /128 → machine_id
+    // 来源：wg_config.peers 展开 allowed_ips
+    by_ip: BTreeMap<IpAddr, String>,
+}
+
+impl PeerIdentityMap {
+    fn lookup(&self, src_ip: IpAddr) -> Option<&str> {
+        // 精确匹配 /32 或 /128；不做 longest-prefix，避免"多用户共享一段"
+        self.by_ip.get(&src_ip).map(String::as_str)
+    }
+}
+```
+
+`ServiceRouter::resolve*` 构造 `Subject` 时的完整规则：
+
+```rust
+let subject = match peer_map.lookup(src_ip) {
+    Some(machine_id) => Subject::User {
+        gateway_id: "direct".into(),       // 占位；规则里写 nsgw:direct 才能匹配
+        machine_id: machine_id.into(),
+    },
+    None => Subject::Cidr(src_ip),         // 非 WG peer（如站点内本地服务）
+};
+```
+
+**含义**：
+- WG peer 发来的流量会**自动升级**为 `Subject::User`, 于是 NSD 下发的 `user:` / `group:` 规则直接生效, 不依赖 NSGW 填 TLV。
+- 如果某 `/32` 出现在多个 peer 的 `allowed_ips` 里（配置错误），NSD 合并层必须在下发前拒绝；NSN 侧假设 1:1 映射。
+- `nsgw:direct` 是约定保留字，用于规则作者区分"只对直连路径生效的策略"（例如：`subject: ["nsgw:direct/user:ab3xk9mnpq"]` 只接受该用户的直连流量，任何经 NSGW 的同 machine_id 断言都不会命中）。
+
+### 4.6 两级信任：NSGW 预拒 + NSN 终决
+
+即便 NSN 已经持有完整的 ACL, 让每个 Open 都"打到 NSN 才被拒"仍浪费资源（一次 TLS 建链 + 一次 wss 帧 + 一次 ACL 查询 + 一次 Close 回帧）。NSGW 既然知道 `{gateway_id, machine_id}`（它必须知道, 才能填 TLV）, 就可以**在 /client ingress 先自己查一遍**。
+
+```mermaid
+flowchart TD
+    NSC["NSC<br/>发起 Open(target=db:5432)"] -->|/client WSS| NSGW
+    subgraph NSGW_BOX["NSGW (预过滤 · defense-in-depth)"]
+        NSGW["1. 从 JWT 解 machine_id<br/>2. is_allowed(User{self.gw_id, machine_id}, target)<br/>   ↓ 查本地 ACL projection（从 NSD 订阅）"]
+    end
+    NSGW -->|"命中 deny"| EARLY["Close + 结构化 reason<br/>（NSC 立即拿到 403）"]:::deny
+    NSGW -->|"命中 allow / 未命中 projection"| WSN["在 Open 帧填 TLV<br/>转发给 NSN"]
+    WSN --> NSN
+    subgraph NSN_BOX["NSN (终决 · authoritative)"]
+        NSN["3. check_target_allowed(TLV 中的 subject, target)<br/>   ↓ 查 merged_acl ∩ services.toml 本地 floor"]
+    end
+    NSN -->|"deny"| LATE["Close<br/>（最后一道防线）"]:::deny
+    NSN -->|"allow"| SVC["proxy → local service"]:::allow
+
+    classDef deny fill:#fdd,stroke:#c33
+    classDef allow fill:#dfd,stroke:#3c3
+```
+
+**职责分工**：
+
+| 层 | 输入 | 规则来源 | 权威性 | 失败模式 |
+|----|------|----------|--------|---------|
+| **NSGW 预拒** | JWT 解出的 machine_id + Open.target | NSD 推送的 `acl_config`（**投影版**：只含 acls / groups，不含 `hosts` 或 tests 以外的站点私有元数据） | 可能偏**宽松**——没有 services.toml 本地 floor, 可能放过 NSN 最终会拒的包 | 早拒（99% 的越权请求在此被截住, 不进入 NSN 数据面） |
+| **NSN 终决** | Open TLV 的 Subject + merged ACL + 本地 services.toml | 与今天 [§6 ServiceRouter 集成](#6-servicerouter-集成) 一致 | **权威** | 最后一道防线；即使 NSGW 没更新规则 / 被入侵篡改 projection, NSN 依然独立判决 |
+
+**关键不变式**：
+1. **两层都 deny → deny**，两层都 allow → allow，**冲突时以 NSN 为准**（NSN 更严格就以 NSN 为准，NSN 更宽松也不"回填"给 NSGW——NSGW 的 projection 可以比真 ACL 保守）。
+2. NSGW 的 projection **不替代** NSN 的 ACL——两边独立加载；若 NSGW 的 SSE 断连, 降级为"全部放行 + 让 NSN 兜底"而不是"全部拒绝"（见 [SEC-001](../10-nsn-nsc-critique/security-concerns.md#sec-001) 的 fail-open/closed 权衡）。
+3. NSGW 预拒的结构化错误**立即**通过 `Close` 帧的 payload 告知 NSC（新增 `CMD_CLOSE_WITH_REASON`, 规划中）, 让 NSC UI 显示 "无权访问目标 X"，而不是"连接超时"——今天的静默丢弃（见 [§6 几个重要事实](#6-servicerouter-集成)）在 NSGW 侧改为**显式拒绝**，在 NSN 侧仍保持静默（不泄露拓扑）。
+
+**NSGW 订阅的 ACL projection**（新增 SSE 事件 `acl_projection`）：
+
+```jsonc
+{
+  "event": "acl_projection",
+  "chain_id": "acl-2026-04-17-001",
+  "gateway_id": "nsgw-primary",
+  "payload": {
+    "groups": { "eng": ["ab3xk9mnpq", "cd4yl0nrqs"] },
+    "acls":   [ /* 仅含 subject 维度能被 NSGW 判定的规则 —— user:/group:/nsgw: */ ]
+  },
+  "sig": { /* 与其他 SSE 事件同样的 Ed25519 签名，见 02 · design · §7.2 */ }
+}
+```
+
+NSD 在生成 projection 时做一次预过滤：
+- `subject` 含 `cidr:` / alias 的规则**不下发给 NSGW**（NSGW 看不到五元组 src_ip，下发了也没用）；
+- `subject` 为 `user:` / `group:` / `nsgw:` / `*` 的规则按常规下发；
+- `dst` 里 host alias 展开为 CIDR（NSGW 不持有 `hosts` 表）。
+
+### 4.7 Destination (`dst`)
 
 格式固定为 `host:ports`, `rfind(':')` 拆分 (`crates/acl/src/matcher.rs:98`)。
 
@@ -167,7 +269,7 @@ pub struct AclPolicy {
 | `alias:8000-8999` | alias + 端口范围 (`PortMatcher::Range`, `matcher.rs:145`; 反序范围会报错 `matcher.rs:152`) |
 | `alias:*` | alias + 任意端口 |
 
-### 4.5 Protocol
+### 4.8 Protocol
 
 - 省略 `proto` (JSON 里不写字段) → 匹配 TCP 和 UDP;
 - `"tcp"` / `"udp"` → 精确匹配 (`crates/acl/src/matcher.rs:165`)。

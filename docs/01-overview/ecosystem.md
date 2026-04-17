@@ -64,7 +64,7 @@ graph TB
 | 持有 ACL 策略源文件 | ✓ | | | |
 | 推送配置 (SSE) | ✓ | | | |
 | 承载业务流量 | ✗ | ✓ 中继 | ✓ 终结点 | ✓ 发起点 |
-| 执行 ACL(入站) | | 可选(按部署) | ✓ 强制执行 | ✗ |
+| 执行 ACL(入站) | | ✓ 预过滤(projection,偏宽,非权威) | ✓ 终决(权威,带本地 `services.toml` 保底) | ✗ |
 | 持有 `services.toml` 真源 | | | ✓ 唯一来源 | |
 | DNS `*.n.ns` 解析 | | ✓(入站 Host/SNI 路由) | | ✓(本地 DNS) |
 | 分配虚拟 IP `127.11.x.x` | | | | ✓ |
@@ -78,7 +78,7 @@ graph TB
 
 - **NSD 永远不接触业务字节流**。即使是 "经 NSGW 中继" 的配置,它也只下发端点信息,让 NSN/NSC 自己建立 WG/WSS 隧道。这让 NSD 的多实例 HA 可以做得很简单 —— 只需要合并广播。
 - **NSGW 对业务完全不可知**。它只认识 `FQID` / `Host` / `SNI` 这三种标识符,按路由表把帧转给目标 peer。它不知道里面是 SSH 还是 HTTP。
-- **NSN 是唯一执行 ACL 的地方**(默认部署下)。把 ACL 下沉到 NSGW 是可选优化,不是必需。`ServiceRouter::resolve` 把 "ACL 检查 + 服务查找 + DNS 解析" 合并成一个原子操作,使得审计边界单一。
+- **ACL 是两级信任的级联**:NSGW 用 NSD 推送的 `acl_projection` 做 `/client` ingress 的预拒(早拒 99% 明确违规,偏宽,fail-open);NSN 永远是最终判定者(`ServiceRouter::resolve` 一次性做 "ACL 检查 + 服务查找 + DNS 解析",带本地 `services.toml` 白名单保底,fail-closed)。NSGW 偏宽 + NSN 偏严的不对称布局让 NSGW 抖动永远不会误拒合法流量,详见 [../05-proxy-acl/acl.md §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)。
 - **NSC 故意保持"薄"**。它不维护状态、不持久化 ACL、不知道自己在跟哪个 NSGW 讲话 —— 这些都由控制面和 NscRouter 在运行时决定。
 
 ## 技术栈对照
@@ -401,11 +401,11 @@ NSGW: 仅保留 WSS 路径,关闭 WG UDP 入口
 **Q: NSN 是不是必须装在服务所在机器上?**
 不一定。NSN 只需要能**通过 TCP/UDP 访问到目标服务**即可。`services.toml` 可以指向 `192.168.1.10:5432`(同网段数据库)或 `db.internal.company:5432`(内网 DNS 名)。只要 NSN 走内核网络栈能连上,代理就能工作。
 
-**Q: 为什么 ACL 放在 NSN 而不是 NSGW?**
-- NSGW 是**区域共享**资源,把 ACL 下放会让不同站点互相影响。
-- NSN 是**站点所有者自己部署**的,他们才有权决定自己的服务如何暴露。
-- 把 ACL 集中在 `ServiceRouter::resolve`(单一判定点)也便于审计与策略测试。
-- 把 ACL 在 NSGW 再做一层是可选优化(策略下发经由 `acl_policy` 事件也发给 NSGW),不是必需。
+**Q: 为什么 ACL 终决在 NSN 而不是 NSGW?**
+- NSGW 是**区域共享**资源,把最终判定权下放会让不同站点互相影响。
+- NSN 是**站点所有者自己部署**的,他们才有权决定自己的服务如何暴露;本地 `services.toml` 提供"只允许显式服务"的地板,NSD 下发的 ACL 无法绕过它。
+- 把终决集中在 `ServiceRouter::resolve`(单一权威判定点)便于审计与策略测试。
+- NSGW 侧做的是**非权威的预过滤**:用 NSD 推送的 `acl_projection`(`Subject::User/Group/Nsgw` 维度)在 `/client` ingress 早拒明确违规,fail-open,避免把违规流量转到 NSN 再浪费 WSS 通道。详见 [../05-proxy-acl/acl.md §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)。
 
 **Q: NSD 如果宕机,业务会断吗?**
 不会。控制面断开后,NSN / NSC / NSGW 都会继续使用最后一次收到的配置。WG / WSS 隧道状态是本地维护的。NSD 只在"配置变更"时才是关键路径。

@@ -111,9 +111,10 @@
 
 | `type` 值 | 方向 | 触发时机 | 字段 | 下游消费者 |
 |-----------|------|----------|------|------------|
-| `wg_config` | NSD→NSN | NSN 注册后立即推送，对端列表变更后推送 | `ip_address: Ipv4Addr`、`listen_port: u16`、`peers: [{public_key:[u8;32], endpoint:SocketAddr, allowed_ips:[IpNet], persistent_keepalive:u16}]` | `tunnel-wg`（设备配置） |
+| `wg_config` | NSD→NSN | NSN 注册后立即推送，对端列表变更后推送 | `ip_address: Ipv4Addr`、`listen_port: u16`、`peers: [{public_key:[u8;32], endpoint:SocketAddr, allowed_ips:[IpNet], persistent_keepalive:u16, machine_id:Option<String>}]` | `tunnel-wg`（设备配置 + `PeerIdentityMap` 更新，见 [../03-data-plane/tunnel-wg.md §2.4](../03-data-plane/tunnel-wg.md#24-直连路径的-peer-identity-映射)） |
 | `proxy_config` | NSD→NSN | 服务/规则变更 | `chain_id: String`、`rules: [{resource_id, source_prefix:IpNet, dest_prefix:IpNet, rewrite_to:RewriteTarget, port_range:Option<(u16,u16)>, protocol:Protocol}]` | `nat`（DNAT/SNAT） |
-| `acl_config` | NSD→NSN | ACL 策略变更 | `chain_id: String`、`policy: acl::AclPolicy`（hosts/acls/tests） | `acl` |
+| `acl_config` | NSD→NSN | ACL 策略变更 | `chain_id: String`、`policy: acl::AclPolicy`（subjects/hosts/acls/tests/groups） | `acl`（终决） |
+| `acl_projection` | NSD→NSGW | 同 `acl_config` 事务内 push | `chain_id: String`、`groups: HashMap<String,[Subject]>`、`acls: [AclRule]`（仅 User/Group/Nsgw 维度） | NSGW（`/client` ingress 预过滤，见 [../05-proxy-acl/acl.md §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)） |
 | `gateway_config` | NSD→NSN | NSGW 列表变更 | `gateways: [{id, wg_endpoint:String, wss_endpoint:String}]` | `connector` |
 | `routing_config` | NSD→NSN | NSGW 反代路由表变更 | `routes: [{domain, site, service, port}]` | `nsgw`/`nsc` |
 | `dns_config` | NSD→NSN | 全局 DNS 变更 | `records: [{domain, site, service, port}]` | `nsc`（本地 DNS） |
@@ -278,7 +279,7 @@ pub trait ControlTransport: Send + Sync {
 - `sse` 模式走标准 TLS，但 TLS 只保护 *点到点*；一旦运营者在公司出口放了 TLS 反代（SSL 卸载盒子 / 企业 CA 下发到员工机器），反代节点就具备**在线改写 SSE 事件**的能力，而客户端对此不可见。
 - `noise` / `quic` 模式自己承担加密与对端鉴权，但在"pinning 未配置"或"NSD 部署方把原始证书/静态密钥外包给 CDN"等降级场景下同样可被中间人替换事件。
 
-为此每条 NSD → NSN / NSC 的配置事件（`wg_config` / `proxy_config` / `acl_config` / `gateway_config` / `routing_config` / `dns_config` / `gateway_http_config` / `gateway_l4_map` / `token_refresh`）都带**独立签名**，与传输层加密解耦：
+为此每条 NSD → NSN / NSC / NSGW 的配置事件（`wg_config` / `proxy_config` / `acl_config` / `acl_projection` / `gateway_config` / `routing_config` / `dns_config` / `gateway_http_config` / `gateway_l4_map` / `token_refresh`）都带**独立签名**，与传输层加密解耦：
 
 ```jsonc
 {

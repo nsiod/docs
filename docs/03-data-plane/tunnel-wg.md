@@ -98,6 +98,41 @@ WgConfig arrives
 
 这样做避免了"中间态"（旧 peer 尚未删除、新 peer 尚未握手）带来的报文错路由；代价是会重做一次 handshake（≤ 5s）。在 NSIO 的场景下 `WgConfig` 变化频率低（通常只在网关扩缩容时触发），重建成本可接受。
 
+### 2.4 直连路径的 peer identity 映射
+
+如果 peer 是 NSC（而非 NSGW）——也就是**直连 WG 路径**（见 [../05-proxy-acl/acl.md §4.5](../05-proxy-acl/acl.md#45-直连-wg-路径从-allowed_ips-反查-machine_id)）——NSD 在 `wg_config.peers[]` 里给每条 peer 额外带 `machine_id: Option<String>`：
+
+```jsonc
+{
+  "public_key": [ /* 32 bytes */ ],
+  "endpoint":   "172.18.0.12:51820",
+  "allowed_ips": ["10.0.0.42/32"],
+  "persistent_keepalive": 25,
+  "machine_id": "u-alice-laptop"  // 仅 NSC peer 有
+}
+```
+
+NSN 在 `TunnelManager::rebuild` 构建 gotatun Device 时，同步更新 `PeerIdentityMap`：
+
+```rust
+let mut by_ip = BTreeMap::new();
+for peer in &cfg.peers {
+    if let Some(mid) = &peer.machine_id {
+        for cidr in &peer.allowed_ips {
+            // 直连语义：只接受 /32 或 /128，不做 longest-prefix
+            if cidr.prefix_len() == cidr.max_prefix_len() {
+                by_ip.insert(cidr.addr(), mid.clone());
+            }
+        }
+    }
+}
+app_state.peer_identity_map.store(Arc::new(PeerIdentityMap { by_ip }));
+```
+
+这张表由 `ServiceRouter::resolve` 在组装 `Subject::User{gateway_id:"direct", machine_id}` 时查阅（见 [../05-proxy-acl/acl.md §4.5](../05-proxy-acl/acl.md#45-直连-wg-路径从-allowed_ips-反查-machine_id)）。**NSGW peer 不会带 `machine_id`**——NSGW 走的是 WSS relay + TLV 身份断言路径，不需要这个映射。
+
+> **为什么要求精确 /32 / /128**：这条路径的前提是"每个 NSC 有独占的 overlay IP"。若允许 prefix 范围，多个 NSC 可以共享一个 allowed_ips 段，就失去了"src_ip ↔ 唯一 user"的 1:1 约束——ACL 的 `Subject::User` 匹配会退化成"至少一个用户在该段内"，等于绕过了用户级别的授权。
+
 ---
 
 ## 3. TunnelManager 生命周期

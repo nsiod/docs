@@ -134,14 +134,59 @@ sequenceDiagram
 |------|------|------|-----------|
 | `wg_config` | NSD → NSGW | `{ ip_address, listen_port, peers: [{ public_key, allowed_ips }] }` | diff + `wg set peer / wg set peer ... remove` |
 | `routing_config` | NSD → NSGW | `{ routes: [{ domain, nsn_wg_ip, virtual_port }] }` | 原子写 `routes.yml`,traefik 自动 reload |
+| `acl_projection` | NSD → NSGW | `{ chain_id, groups, acls }`（见 [05 · ACL · §4.6](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)） | 装载到本地 `AclEngine`（projection 版），用于 /client ingress 预拒 |
 | `gateway_config` | NSD → NSN/NSC(非 gateway) | `{ gateways: [...] }` | (NSGW 不消费;这是给 NSN/NSC 用的) |
+
+## ⑤ /client ingress 的 ACL 预过滤（两级信任的前一级）
+
+NSGW 既然在 `/client` 握手阶段已验过 NSC 的 JWT（拿到 `machine_id`），并在 `handleClientFrame()` 中已经持有 `{gateway_id=self, machine_id}`，就可以在 WsFrame `Open` 转发给 NSN **之前**先查一遍本地 ACL projection。这是 [NSN 信任 NSGW，NSGW 信任用户] 两级信任模型的"前一级"——把大部分越权访问**挡在 NSGW 的入口**，不浪费一次跨节点 RTT 把它送到 NSN 再被拒。
+
+```mermaid
+sequenceDiagram
+    participant NSC
+    participant NSGW
+    participant NSN
+
+    NSC->>NSGW: WSS /client + JWT
+    NSGW->>NSGW: 验 JWT → machine_id
+    NSC->>NSGW: WsFrame Open(target=db:5432)
+    NSGW->>NSGW: subject = User{self.gw_id, machine_id}
+    NSGW->>NSGW: local_acl.is_allowed(subject, target) ?
+    alt projection 命中 deny
+        NSGW-->>NSC: Close + reason="acl: denied by projection"
+        Note over NSGW,NSN: 不打扰 NSN
+    else projection allow / 未命中
+        NSGW->>NSN: Open (带 TLV source identity)
+        NSN->>NSN: check_target_allowed(subject, target)
+        alt NSN 终决 deny
+            NSN-->>NSGW: Close
+            NSGW-->>NSC: Close
+        else NSN allow
+            NSN->>NSN: proxy → service
+        end
+    end
+```
+
+**职责分工**：
+
+| 检查点 | 权威性 | 规则来源 | 失败模式 |
+|--------|--------|----------|---------|
+| NSGW `/client` 入口 | **非权威**，允许保守偏宽 | `acl_projection`（user/group/nsgw/* 类规则），**不含** 本地 `services.toml` floor | 早拒：~99% 越权不进入 NSN 数据面 |
+| NSN `check_target_allowed` | **终决权威** | `merged_acl ∩ services.toml` | 最后一道防线；即使 NSGW 版本旧 / projection 未同步 / 被入侵, 也不会放过 |
+
+**关键不变式**：
+1. **NSGW 偏宽 + NSN 偏严 = 安全**：NSGW 可以因 projection 未同步而放过一些 NSN 会拒的；NSN 的 local floor 补齐。反过来不成立——NSGW 不能偏严，否则可能把 NSN 本来允许的也拒了。运维需确保 projection 的延迟 ≤ NSN ACL 延迟。
+2. **NSGW 预拒的错误应该告知 NSC**：`Close` 帧附带结构化 reason（`CMD_CLOSE_WITH_REASON`，规划），让 NSC UI 显示"无权访问 db:5432"，而不是"连接超时"。这与 NSN 侧的"静默丢弃"策略不同——NSGW 是**已知授权的前端**，告诉 NSC 被拒不会泄露拓扑。
+3. **projection SSE 断连时 fail-open**：NSGW 的本地 ACL 缺失或过期时，不阻塞流量——放行给 NSN，由 NSN 兜底。这避免了"NSGW 挂了就全站拒绝"的 DoS 放大。
+
+详见 [05 · ACL · §4.6 两级信任：NSGW 预拒 + NSN 终决](../05-proxy-acl/acl.md#46-两级信任nsgw-预拒--nsn-终决)。
 
 ## 这些职责之间的边界
 
 | 场景 | 责任组件 | 为什么 |
 |------|---------|-------|
 | 用户登录、颁发 JWT | NSD | 所有证书/token 签发都在控制面 |
-| "这个 NSC 能访问 ssh:22 吗?" | NSN 内的 `acl` crate | ACL 在离服务最近处执行 |
+| "这个 NSC 能访问 ssh:22 吗?" | **NSN 终决**；NSGW 做前置过滤 | 权威策略在 NSN（有本地 services.toml floor）；NSGW 做 defense-in-depth 的预拒 |
 | 把 NSC 127.11.1.5 映射到某服务 | NSC 自身 | NSGW 不知道 VIP 的存在 |
 | "北京用户应该走哪个 NSGW?" | NSN 内的 `MultiGatewayManager` | NSGW 自己不做全局选路;详 [multi-region.md](./multi-region.md) |
 | TLS 终结 + Host 路由 | NSGW (traefik) | 唯一拥有公网 IP + 证书的组件 |

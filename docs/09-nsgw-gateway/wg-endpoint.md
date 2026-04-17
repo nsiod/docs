@@ -142,6 +142,15 @@ WG CLI 用 base64,NSD 事件里用 hex(for JSON friendliness),所以:
 
 NSGW mock 在 pre-add 时默认给 connector 一个 `"100.64.1.0/24"`(`index.ts:50`)——这是测试场景下 NSN 连接器的虚 IP 段。
 
+### 直连路径:NSC peer 的 `/32` 约束
+
+当 NSC 走**直连 WG 路径**(不经 NSGW relay,直接和 NSN 握手,见 [../05-proxy-acl/acl.md §4.5](../05-proxy-acl/acl.md#45-直连-wg-路径从-allowed_ips-反查-machine_id))时,NSD 给对应的 peer 单独下发:
+
+- `allowed_ips`:**必须是 `/32`(v4)或 `/128`(v6)**——NSN 需要这个精确映射把 `src_ip → machine_id` 做 1:1 反查。
+- `machine_id: Option<String>`:NSC peer 带这个字段;NSGW peer 不带(NSGW 走 TLV 身份断言)。
+
+这个约束是**NSN 侧**的 `PeerIdentityMap` 解析器强制的(`TunnelManager::rebuild` 在构建时跳过 `prefix_len != 32` 的条目,见 [../03-data-plane/tunnel-wg.md §2.4](../03-data-plane/tunnel-wg.md#24-直连路径的-peer-identity-映射));NSGW 侧 kernel WG 接口的 `allowed-ips` 不做此检查——NSGW 在直连路径上不参与数据面,仅作为 UDP rendezvous/发现点。
+
 ## 与 NSN 侧 gotatun 的握手兼容性
 
 WG 协议是对称的,NSGW(kernel) ↔ NSN(gotatun) 之间完全互通。但有几个实践上要注意的地方:
