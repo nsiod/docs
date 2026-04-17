@@ -45,8 +45,9 @@ graph TB
     BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(L7: OIDC / 鉴权 / 限速 / WAF)"| GW1
 
     %% 无 NSC 入站 L4: SSH / psql 直连 NSGW 端口, NSGW 透明转发 (不解 TLS)
-    %% 端口由 NSD 在 gateway_l4_map 事件中分配与下发
-    SSHCLI ==>|"公网 TCP :map_port<br/>(L4: 端口映射 · 透明转发)"| GW1
+    %% 端口与连接级中间件 (IP 白名单 / 限速 / 配额 / 审计) 由 NSD 通过
+    %% gateway_l4_map 事件统一下发并在 listener 层执行
+    SSHCLI ==>|"公网 TCP :map_port<br/>(L4: IP 白名单 / 限速 /<br/>并发上限 / 审计)"| GW1
 
     NSN --> LOCAL
     NSN --> REMOTE

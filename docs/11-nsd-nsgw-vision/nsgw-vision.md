@@ -182,11 +182,21 @@ Browser / SSH / any TCP ──→ NSGW[ Envoy + WG ]  ──→ NSN
 ### G2.3 SNI / L4 端口映射
 
 - **现状**: ✅ 生产 `tmp/gateway/proxy/proxy.go:43-60` `SNIProxy`,含本地 SNI 白名单 `localSNIs`。
-- **扩展**: 泛化为**任意 L4 端口映射** —— 无 NSC 用户直接连 `nsgw-host:2222` 转发到 `nsn-site:22` 上的 SSH;同理支持 psql / redis / 任意 TCP/UDP。NSD 通过新的 `gateway_l4_map` SSE 事件下发 `{listen_port, proto, target_nsn, target_port, acl_ref}`。
+- **扩展**: 泛化为**任意 L4 端口映射** —— 无 NSC 用户直接连 `nsgw-host:2222` 转发到 `nsn-site:22` 上的 SSH;同理支持 psql / redis / 任意 TCP/UDP。
+- **L4 连接级中间件**(必备,与端口映射同通道下发): L4 路径不解 TLS,因此做不了 L7 的 OIDC / WAF,但必须具备**连接级治理**:
+  - IP allow/deny CIDR 列表(握手前过滤)
+  - GeoIP 规则(按国家/区域放行)
+  - 每源 IP 的新建连接速率限制(抗 SSH 暴力破解)
+  - 并发连接数上限(per IP / per map)
+  - fail2ban 式自动封禁(握手失败率阈值触发)
+  - 连接配额(每租户每日连接数上限)
+  - 审计日志(源 IP / 时长 / 字节数 / 关闭原因)
+  - PROXY Protocol v2(把真实客户端身份透传给后端 NSN 上的服务)
+- **SSE 事件**: NSD 通过新的 `gateway_l4_map` SSE 事件下发 `{listen_port, proto, target_nsn, target_port, acl_ref, allow_cidr, deny_cidr, geo_rules, conn_limits, audit_sink}`;一张事件包含"映射 + 中间件"完整策略,NSGW 在 listener 层原子应用。
 - **落地形态**:
-  - **路线 A**: 自研 L4 转发器(`SO_REUSEPORT` + per-port goroutine / tokio task),SNI 嗅探直接用 `smoltcp` 或手写解析器。
-  - **路线 B**: Envoy TCP listener + `tcp_proxy` filter + SNI filter,xDS LDS 推送 listener 配置。
-- **落地级别**: MVP (SNI + 基础 L4),GA (SSH / 任意 TCP)。
+  - **路线 A**: 自研 L4 转发器(`SO_REUSEPORT` + per-port goroutine / tokio task),SNI 嗅探直接用 `smoltcp` 或手写解析器;中间件用 Go/Rust 内置的 CIDR trie + 令牌桶即可。
+  - **路线 B**: Envoy TCP listener + `tcp_proxy` filter + SNI filter + `network.filters.rbac` + `network.filters.local_rate_limit`,xDS LDS 推送 listener 配置。
+- **落地级别**: MVP (SNI + 基础 L4 + IP 白名单 + 连接限速),GA (完整中间件链 + PROXY v2 + GeoIP)。
 
 ### G2.4 Anycast IP
 
