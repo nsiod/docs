@@ -27,8 +27,8 @@ graph TB
     end
 
     subgraph Bridge["桥接层"]
-        GW1["NSGW-1<br/>traefik + WG + WSS"]
-        GW2["NSGW-2<br/>traefik + WG + WSS"]
+        GW1["NSGW-1<br/>WG + WSS + HTTP 转发<br/>+ L4 端口映射"]
+        GW2["NSGW-2<br/>WG + WSS + HTTP 转发<br/>+ L4 端口映射"]
     end
 
     subgraph Site["站点侧"]
@@ -39,7 +39,8 @@ graph TB
     subgraph User["用户侧"]
         NSC["NSC<br/>VIP 127.11.x.x<br/>DNS *.n.ns"]
         APP["User App"]
-        BROWSER["Browser / curl<br/>(无 NSC)"]
+        BROWSER["Browser / curl<br/>(无 NSC · L7)"]
+        SSHCLI["SSH / psql / 任意 TCP<br/>(无 NSC · L4)"]
     end
 
     NSD1 -. "SSE config push" .-> NSN
@@ -53,18 +54,19 @@ graph TB
     GW1 ==>|"WG / WSS"| NSN
     GW2 ==>|"WG / WSS"| NSN
     NSC -. "WG direct peer (规划中)" .-> NSN
-    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(可叠加 OIDC / 鉴权 / 限速)"| GW1
+    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(L7: OIDC / 鉴权 / 限速 / WAF)"| GW1
+    SSHCLI ==>|"公网 TCP :map_port<br/>(L4: 端口映射 · 透明转发)"| GW1
     NSN --> LOCAL
 ```
 
 > 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
 >
-> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 这条路径**不使用 `*.n.ns`**(该命名空间只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN)。**公网域名由 NSD 统一签发并下发** —— 默认从平台自有 apex(如 `*.<tenant>.nsio.app`) 签子域,权威 DNS 由 NSD 管控;BYO 自有域名也要先在 NSD 登记才能生效,NSGW 不接受站点方本地私自声明的域名。由于 TLS 在 NSGW 终结,可以在这一层叠加 **OIDC / 基本鉴权 / 限速 / WAF / 请求改写**等 traefik 中间件;域名、中间件链、ACL 都通过与现有 `AclConfig` 同构的 SSE 事件从 NSD 下发,`services.toml` **不承担**这部分声明。集中管控带来一键启停、集中吊销、证书/密钥统一轮换、审计单一面、防越权、多 PoP 一致性等收益。代价: 公网路径丢失 VIP 隔离、TLS 仅到 NSGW、只承载 HTTP(S);适合 dashboard / webhook / OAuth 回调这类站点主动发布的场景。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。
+> 图中 Browser / SSH → NSGW 实线是**不装 NSC 的入站路径**,分 L7 与 L4 两条子路径: 这两条路径**都不使用 `*.n.ns`**(该命名空间只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN)。**公网域名与 L4 端口都由 NSD 统一签发 / 分配并下发** —— L7 默认从平台自有 apex(如 `*.<tenant>.nsio.app`)签子域,BYO 自有域名也要先在 NSD 登记;L4 端口在租户间协调分配,站点不能私自抢占。由于 L7 TLS 在 NSGW 终结,可以叠加 **OIDC / 基本鉴权 / 限速 / WAF / 请求改写**等中间件;L4 则保持透明转发,只做连接级治理(限速 / 封禁 / 配额),协议自身加密(如 SSH)端到端不受影响。域名、中间件链、L4 映射、ACL 都通过与现有 `AclConfig` 同构的 SSE 事件从 NSD 下发,`services.toml` **不承担**这部分声明。集中管控带来一键启停、集中吊销、证书/密钥统一轮换、审计单一面、防越权、多 PoP 一致性等收益。代价: 公网路径丢失 VIP 隔离、TLS 仅到 NSGW(L7 场景)、需要显式发布;适合 dashboard / webhook / OAuth 回调 / SSH 跳板这类站点主动发布的场景。NSGW 本体形态(自研轻 Proxy vs Envoy)仍在评估,详见 [nsgw-vision 的"架构再审视"](../11-nsd-nsgw-vision/nsgw-vision.md#架构再审视--是否需要-traefik)与 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--ssh-client--nsgw--nsn)。
 
 | 组件 | 中文名 | 定位 | 语言/技术栈 | 部署位置 |
 |------|--------|------|-------------|---------|
 | **NSD** | 控制中心 | 注册中心 + 策略引擎 + 配置分发(SSE) | 规划 Rust 或 Go 实现;当前 Bun/TS mock + Rust QUIC 子进程用于 E2E | Cloud / Self-Hosted |
-| **NSGW** | 网关 | 数据面桥接 + 协议转换 + Host/SNI 路由 | traefik v3.6.13 + 内核 WG + Bun WSS 中继 | 多地区 PoP |
+| **NSGW** | 网关 | 数据面桥接 + 协议转换 + Host/SNI 路由 + L4 端口映射 | 内核 WG + WSS 中继 + HTTP 转发 + L4 端口映射(形态待定,见 [nsgw-vision](../11-nsd-nsgw-vision/nsgw-vision.md#架构再审视--是否需要-traefik)) | 多地区 PoP |
 | **NSN** | 站点节点 | 用户态 WireGuard 客户端 + TCP/UDP 代理 + ACL 执行点 | Rust (12 crates, edition 2024) | 站点侧(机房 / 办公室 / 家庭服务器) |
 | **NSC** | 客户端 | 虚拟 IP + 本地 DNS + 按服务路由 | Rust (依赖 8 个内部 crate) | 用户终端(笔记本 / CI runner) |
 

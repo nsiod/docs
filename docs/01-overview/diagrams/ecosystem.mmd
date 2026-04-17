@@ -7,8 +7,8 @@ graph TB
     end
 
     subgraph Bridge["桥接层 (Region-Scoped)"]
-        GW1["NSGW-1<br/>traefik v3.6.13<br/>kernel WG + WSS Relay"]
-        GW2["NSGW-2<br/>traefik v3.6.13<br/>kernel WG + WSS Relay"]
+        GW1["NSGW-1<br/>WG + WSS Relay<br/>+ HTTP 转发 + L4 端口映射<br/>(形态待定: 轻 Proxy / Envoy)"]
+        GW2["NSGW-2<br/>WG + WSS Relay<br/>+ HTTP 转发 + L4 端口映射"]
     end
 
     subgraph Site["站点侧 (服务提供方)"]
@@ -20,7 +20,8 @@ graph TB
     subgraph User["用户侧 (访问方)"]
         NSC["NSC<br/>Client Binary<br/>Virtual IP 127.11.x.x<br/>Local DNS *.n.ns<br/>NscRouter"]
         APP["User App<br/>ssh / curl / psql"]
-        BROWSER["Browser / curl<br/>无 NSC 入站<br/>公网域名由 NSD 分配<br/>(非 *.n.ns)"]
+        BROWSER["Browser / curl<br/>无 NSC 入站 · L7<br/>公网域名由 NSD 分配<br/>(非 *.n.ns)"]
+        SSHCLI["SSH / psql / 任意 TCP<br/>无 NSC 入站 · L4<br/>NSGW 端口由 NSD 分配"]
     end
 
     NSD1 -. "SSE config push<br/>(wg/proxy/acl/gateway)" .-> NSN
@@ -38,10 +39,14 @@ graph TB
     %% 双方可达时 NSC 与 NSN 可直接对等; 控制面下发 direct_peers 为规划中能力
     NSC -. "WG direct peer<br/>(规划中: direct_peers)" .-> NSN
 
-    %% 无 NSC 入站: 浏览器/curl 直接打 NSGW :443,
+    %% 无 NSC 入站 L7: 浏览器/curl 直接打 NSGW :443,
     %% 公网域名由 NSD 单独签发(非 *.n.ns — 后者 NSC 专属);
-    %% traefik 按 Host/SNI 路由到目标 NSN, 并可在此层叠加 OIDC / 鉴权 / 限速等中间件
-    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(可叠加 OIDC / 鉴权 / 限速)"| GW1
+    %% NSGW 按 Host/SNI 路由到目标 NSN, 并可在此层叠加 OIDC / 鉴权 / 限速 / WAF 等 L7 中间件
+    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(L7: OIDC / 鉴权 / 限速 / WAF)"| GW1
+
+    %% 无 NSC 入站 L4: SSH / psql 直连 NSGW 端口, NSGW 透明转发 (不解 TLS)
+    %% 端口由 NSD 在 gateway_l4_map 事件中分配与下发
+    SSHCLI ==>|"公网 TCP :map_port<br/>(L4: 端口映射 · 透明转发)"| GW1
 
     NSN --> LOCAL
     NSN --> REMOTE
@@ -53,4 +58,4 @@ graph TB
     class NSD1,NSD2 ctrl
     class GW1,GW2 gw
     class NSN,LOCAL,REMOTE site
-    class NSC,APP,BROWSER user
+    class NSC,APP,BROWSER,SSHCLI user

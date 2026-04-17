@@ -8,6 +8,82 @@
 
 ---
 
+## 架构再审视 · 是否需要 traefik?
+
+当前 mock (`tests/docker/nsgw-mock/`) 和早期生产参考 (`tmp/gateway/`) 都把 **traefik v3** 作为 NSGW 的 L7 入口 —— 文件 provider watch + 动态路由/中间件/证书管理一整套。这套方案在"公网 HTTPS 发布"这个使用场景下够用,但随着 NSGW 的职责扩展到 **L4 端口映射**(无 NSC 用户直接 `ssh nsgw:2222` 转发到 NSN)和 **多 PoP 协同策略**,traefik 的定位开始受挑战:
+
+- **定位错位**: traefik 擅长 "一个集群内部的南北向 HTTP 网关",但 NSGW 首要身份是**跨协议数据面中继**(WG/WSS/QUIC → NSN),HTTPS 入站只是其中一条路径。
+- **L4 短板**: traefik 的 TCP / SNI 路由可用但不是主打;SSH / 任意 TCP 端口映射需要更轻的 L4 代理原语。
+- **控制面重复**: traefik 有自己的 providers / middlewares / transports DSL,NSD SSE 事件必须被翻译两次(SSE → traefik 动态配置文件 → traefik 内部状态)。
+- **运维双栈**: NSGW 本体(Go/Rust) + traefik(Go) 两个进程、两套日志、两份升级节奏 —— 对一个 "流量入口单点" 不友好。
+
+因此需要在 GA 前对"NSGW 的形态"做一次决断。下面列两条候选路线,后续 G 系列功能(路由/安全/容灾)的落地以最终选定的路线为准。
+
+### 路线 A · 自研轻量 Proxy + 外部入口层
+
+NSGW **只做数据面**:WG peer 管理 + WSS/QUIC 帧中继 + **基本 HTTP/HTTPS 转发** + **L4 端口映射**;从 NSD 消费 `wg_config` / `routing_config` / `gateway_http_config` / `gateway_l4_map` 四类 SSE 事件即可。全链路策略(OIDC / WAF / 全局限速 / 证书签发)交给**外部入口层** —— 可以是 Cloudflare / AWS ALB / 任意 ingress,也可以是一台前置的 traefik 或 envoy,但**不属于 NSGW 的代码边界**。
+
+```
+Browser ──→ [外部入口:CF / envoy / traefik]  ──→ NSGW ──WG/WSS──→ NSN
+              (OIDC/WAF/全局策略)                  (TLS 终结 +
+                                                  轻量路由 +
+                                                  L4 端口映射)
+SSH client ───────────────────────────────────────→ NSGW :2222
+                                                  (L4 转发到 NSN:22)
+```
+
+- **收益**: NSGW 代码库小、无 traefik 依赖、L4/L7 同一个进程内处理、SSE 事件是唯一控制接口。
+- **代价**: 中间件(OIDC / WAF 等)需要部署方额外引入一层,不能"开箱即用"。
+- **适用**: 自建型用户 / 对延迟敏感 / 希望 NSGW 是无状态简单代理的场景。
+
+### 路线 B · Envoy + WG + 外部控制中心
+
+用 **Envoy** 替代 traefik,整合进 NSGW:Envoy 天然同时支持 **L4 (TCP/UDP/SSH)** 与 **L7 (HTTP/HTTPS/gRPC)**,而且有成熟的 xDS 控制平面接口。NSD 侧新增一个 "NSGW 控制 bridge",把 SSE 事件翻译成 xDS (LDS/RDS/CDS/EDS) 推送给 Envoy;WG peer 同步仍走内核 WG。
+
+```
+Browser / SSH / any TCP ──→ NSGW[ Envoy + WG ]  ──→ NSN
+                            ↑
+                     xDS (LDS/RDS/CDS/EDS)
+                            ↑
+                     NSD 控制 bridge (SSE → xDS)
+```
+
+- **收益**: L4/L7 统一、WAF / ext_authz / 高级中间件生态齐全(Istio / Contour 同源);xDS 是业界标准,多 PoP 同步成熟;未来做 mTLS / SPIFFE 几乎零成本。
+- **代价**: Envoy 体量大、内存占用比轻量代理高一档;NSD 需要实现 xDS 适配层;Envoy 运维经验门槛高于 traefik。
+- **适用**: 多 PoP SaaS / 需要丰富 L7 策略 / 把 NSGW 作为真·流量入口的场景。
+
+### 对比
+
+| 维度 | A · 自研轻 Proxy | B · Envoy + WG |
+|------|------------------|----------------|
+| L4 端口映射(SSH 等) | ✅ 原生 | ✅ 原生(Envoy TCP listener) |
+| L7 中间件(OIDC/WAF) | ❌ 交外部入口层 | ✅ 内建 + ext_authz |
+| 代码体量 | 小(Go/Rust 单进程) | 大(Envoy + 控制 bridge) |
+| 控制接口 | SSE(已有) | xDS(需要 NSD 适配) |
+| 多 PoP 一致性 | SSE 广播足矣 | xDS 增量同步 |
+| 运维门槛 | 低 | 中到高 |
+| 未来 mTLS / SPIFFE | 需要补实现 | 开箱即用 |
+| 可否逐步演进到 B | ✅ 可 | — |
+
+### 本章节功能的归属
+
+- **G1.1 / G1.2 / G1.6 / G1.9 ~ G1.13(WG / WSS / 打洞 / PROXY / mTLS / 多核 / mesh)**:两条路线都需要,归属 NSGW 本体,以下章节按"与路线无关"的方式描述。
+- **G2.2(动态路由) / G2.3(SNI) / G3.4 ~ G3.10(WAF / 策略点)**:
+  - 路线 A:NSGW 内只保留 **基础路由 + L4 map**,WAF/OIDC 等标注为"外部入口层责任"。
+  - 路线 B:以上全部由 **Envoy + 控制 bridge** 提供,xDS 化。
+- 本章后续段落用 "*traefik 是早期选择*" 标记所有与 traefik 强耦合的条目,待路线决策后重写。
+
+### 当前倾向
+
+倾向 **路线 A 先行,保留向路线 B 演进的路径**: NSGW 先做成轻量 Proxy(WG + WSS + 基本 HTTP 转发 + L4 端口映射 + SSE 策略消费),把"全局策略面"明确划在 NSGW 之外;当产品成长到需要把 WAF / OIDC / 多 PoP xDS 这些能力"内化"时,再引入 Envoy。理由:
+
+1. 先落地"让用户能用"比先落地"花哨中间件"优先级更高。
+2. 外部入口层可以复用用户既有的 Cloudflare / ALB 投资,不强加 NSGW 专属栈。
+3. 保持 SSE 作为唯一控制通道,避免过早引入 xDS 的复杂度。
+4. 未来切换到 Envoy 时,NSD 的 `gateway_http_config` / `gateway_l4_map` 事件结构保持不变 —— 只是下游消费者从"NSGW 自研代理"换成"NSGW 控制 bridge → Envoy xDS",站点侧无感。
+
+---
+
 ## ① 连接 · 功能清单
 
 ### G1.1 WireGuard UDP 终结
@@ -72,7 +148,7 @@
 ### G1.11 mTLS 终结
 
 - **价值**: 特定域名强制客户端出示证书。
-- **技术挑战**: traefik v3 支持 `clientCerts`,需要在 NSD 侧下发 CA bundle。
+- **技术挑战**(*traefik 是早期选择*): traefik v3 支持 `clientCerts`,需要在 NSD 侧下发 CA bundle。**路线 A** 下需要自研 TLS 终结器读取 NSD 下发的 CA bundle;**路线 B** 下 Envoy 原生支持 `validation_context`,由 NSD 的 xDS bridge 下发即可。
 - **落地级别**: GA。
 
 ### G1.12 SO_REUSEPORT / 多进程负载
@@ -94,16 +170,23 @@
 - **现状**: ✅ mock `subscribeToNsdSse` + 对比 `sseTrackedPeers` 增删 peer (`tests/docker/nsgw-mock/src/index.ts:201-292`)。
 - **落地级别**: MVP。
 
-### G2.2 traefik 动态路由
+### G2.2 HTTP/HTTPS 动态路由 (*traefik 是早期选择*)
 
 - **现状**: ✅ mock `handleRoutingConfig` 写文件 (`tests/docker/nsgw-mock/src/traefik-config.ts`);traefik 文件 provider watch。
-- **扩展**: 中间件链 (rate-limit, auth, headers, retries)。
+- **扩展**: 路由 + 中间件链(rate-limit, auth, headers, retries)。
+- **落地形态**:
+  - **路线 A**: NSGW 内置轻量 HTTP 反向代理(Go 的 `httputil.ReverseProxy` / Rust 的 `pingora` 级别),中间件链交给外部入口层。
+  - **路线 B**: Envoy HCM (HttpConnectionManager) + RDS 动态路由 + filter chain(OIDC / WAF / rate-limit 通过 Envoy 原生 filter)。
 - **落地级别**: MVP (基础路由),GA (中间件)。
 
-### G2.3 SNI 代理
+### G2.3 SNI / L4 端口映射
 
 - **现状**: ✅ 生产 `tmp/gateway/proxy/proxy.go:43-60` `SNIProxy`,含本地 SNI 白名单 `localSNIs`。
-- **落地级别**: MVP (迁到 NSIO 栈)。
+- **扩展**: 泛化为**任意 L4 端口映射** —— 无 NSC 用户直接连 `nsgw-host:2222` 转发到 `nsn-site:22` 上的 SSH;同理支持 psql / redis / 任意 TCP/UDP。NSD 通过新的 `gateway_l4_map` SSE 事件下发 `{listen_port, proto, target_nsn, target_port, acl_ref}`。
+- **落地形态**:
+  - **路线 A**: 自研 L4 转发器(`SO_REUSEPORT` + per-port goroutine / tokio task),SNI 嗅探直接用 `smoltcp` 或手写解析器。
+  - **路线 B**: Envoy TCP listener + `tcp_proxy` filter + SNI filter,xDS LDS 推送 listener 配置。
+- **落地级别**: MVP (SNI + 基础 L4),GA (SSH / 任意 TCP)。
 
 ### G2.4 Anycast IP
 
@@ -172,7 +255,9 @@
 ### G3.4 WAF (基础)
 
 - **价值**: 识别 SQL 注入 / XSS / 恶意 UA。
-- **技术挑战**: traefik 接 Coraza / ModSecurity。
+- **技术挑战**(*traefik 是早期选择*):
+  - **路线 A**: 不在 NSGW 内置 WAF,由**外部入口层**(Cloudflare / AWS WAF / 前置 Envoy)承担;NSGW 只上报命中事件。
+  - **路线 B**: Envoy + Coraza WASM filter(或 `ext_authz` 到独立 WAF 服务),规则集通过 xDS 下发。
 - **落地级别**: GA。
 
 ### G3.5 WAF (企业规则集)
@@ -380,27 +465,30 @@
 
 ## 生产化 NSGW 架构全景
 
+以下图示以**路线 A**(自研轻 Proxy + 外部入口层)的形态呈现;路线 B 的差异仅是把 `HTTP_FWD` / `L4_MAP` / 中间件节点替换成 **Envoy + xDS**,外围数据面结构一致。
+
 ```mermaid
 graph TB
-    subgraph Edge["边缘层"]
+    subgraph Edge["边缘层 (部署方自选)"]
         AN[Anycast IP]
         GEO[GeoDNS]
+        ING[外部入口层<br/>CF / ALB / 前置 Envoy<br/>OIDC · WAF · 全局策略]
     end
 
-    subgraph NSGW["NSGW 实例"]
+    subgraph NSGW["NSGW 实例 (轻量数据面)"]
         subgraph Ingress["入口"]
             WG[WG :51820/udp]
             WSS[WSS :443/wss]
             QUIC[QUIC :443/udp]
             H3[HTTP/3 :443/udp]
             SNI[SNI Proxy :443/tcp]
-            TRA[traefik :443]
+            L4[L4 端口映射<br/>SSH :2222 等]
+            HTTP_FWD[HTTP 反代<br/>轻量中间件]
         end
         subgraph Mid["中间"]
-            DDoS[DDoS + WAF]
-            RL[Rate Limit]
+            DDoS[DDoS 基础过滤]
+            RL[Rate Limit 基础]
             ACL[ACL 执行点]
-            ZT[零信任检查]
         end
         subgraph Core["核心"]
             ROUTE[路由决策]
@@ -423,19 +511,25 @@ graph TB
         NSD[NSD 控制中心]
     end
 
+    GEO --> AN
+    AN --> ING
+    ING --> HTTP_FWD
     AN --> WG
     AN --> WSS
-    GEO --> AN
+    AN --> QUIC
+    AN --> H3
+    AN --> SNI
+    AN --> L4
     WG --> DDoS
     WSS --> DDoS
     QUIC --> DDoS
     H3 --> DDoS
     SNI --> DDoS
-    TRA --> DDoS
+    L4 --> DDoS
+    HTTP_FWD --> DDoS
     DDoS --> RL
     RL --> ACL
-    ACL --> ZT
-    ZT --> ROUTE
+    ACL --> ROUTE
     ROUTE --> MUX
     MUX --> QOS
     QOS --> PEERS
@@ -445,7 +539,7 @@ graph TB
     ROUTE -.-> PROM
     ROUTE -.-> OTEL
     ROUTE -.-> LOG
-    NSD -. "SSE: wg_config + routing_config" .-> ROUTE
+    NSD -. "SSE: wg_config + routing_config + gateway_http_config + gateway_l4_map" .-> ROUTE
     NSD -. "ACL + billing quota" .-> ACL
 ```
 
@@ -467,7 +561,8 @@ graph TB
 | NSGW 能力 | 需要 NSD 配合什么 |
 |-----------|------------------|
 | WG peer 动态同步 | SSE `wg_config` 事件 (✅ 已有) |
-| traefik 动态路由 | SSE `routing_config` 事件 (✅ 已有) |
+| HTTP/HTTPS 动态路由 | SSE `routing_config` / `gateway_http_config` 事件 (✅ 基础已有 · 扩展字段待设计) |
+| L4 端口映射 (SSH 等) | 新 SSE `gateway_l4_map` 事件 (❌ 待设计) |
 | mTLS 终结 | NSD 下发 CA bundle (❌ 待设计) |
 | 零信任策略点 | NSD 提供 `POST /api/v1/authz` 查询接口 (❌ 待设计) |
 | 每 org 配额 | NSD 下发配额配置 (❌ 待设计) |

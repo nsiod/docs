@@ -68,10 +68,10 @@ graph TB
 | 持有 `services.toml` 真源 | | | ✓ 唯一来源 | |
 | DNS `*.n.ns` 解析 | | ✓(入站 Host/SNI 路由) | | ✓(本地 DNS) |
 | 分配虚拟 IP `127.11.x.x` | | | | ✓ |
-| 终结 TLS | | ✓(traefik :443) | | |
+| 终结 TLS | | ✓(L7 入口 :443 —— 形态见 nsgw-vision) | | |
 | WireGuard peer 对端 | | ✓(内核 WG) | ✓(gotatun 用户态) | ✓(gotatun 用户态) |
 | TCP 状态机 | | 内核(中继时) | smoltcp / 内核 | 内核 |
-| 需要 root / CAP_NET_ADMIN | | 是(内核 WG + traefik :443) | 仅 TUN 模式需要 | 否 |
+| 需要 root / CAP_NET_ADMIN | | 是(内核 WG + 绑定 :443 / 低端口) | 仅 TUN 模式需要 | 否 |
 | 运行环境假设 | 公网可达 | 公网可达 + 静态 IP | 任意 NAT 后 | 任意 NAT 后 |
 
 ### 要点摘录
@@ -86,7 +86,7 @@ graph TB
 | 组件 | 主要实现语言 / 运行时 | 关键第三方依赖 | 外部观察接口 |
 |------|----------------------|----------------|-------------|
 | NSD | 规划 Rust 或 Go 实现;当前仅 Bun/TypeScript mock + 嵌入的 Rust 子 crate `nsd-mock/quic-proxy` 用于 E2E | quinn 0.11(QUIC 终结) / rcgen 0.13(自签证书) / Bun 的 SSE | `:3001`(SSE) `:4001`(Noise) `:4002`(QUIC) `:3002`(HTTPS SSE) |
-| NSGW | traefik v3.6.13 + 内核 WireGuard + Bun WSS 中继进程 | `wg-tools`(内核 WG) / traefik 内建 Host/SNI 路由器 | `:443`(HTTPS) `:51820/udp`(WG) `:9443`(WSS) |
+| NSGW | mock: traefik v3.6.13 + 内核 WireGuard + Bun WSS 中继;生产形态正在[再审视](../11-nsd-nsgw-vision/nsgw-vision.md#架构再审视--是否需要-traefik) —— 倾向自研轻量 Proxy(WG + WSS + HTTP 转发 + L4 端口映射),保留向 Envoy 演进的路径 | `wg-tools`(内核 WG) + (路线 A)自研 HTTP/L4 转发器 / (路线 B)Envoy | `:443`(HTTPS) `:51820/udp`(WG) `:9443`(WSS) + 动态 L4 端口(如 `:2222/tcp` 用于 SSH) |
 | NSN | Rust 2024 · 12 crates · `nsn` 二进制 | `gotatun`(用户态 WG) · `smoltcp` 0.12 · `tokio` 1.x · `rustls` 0.23 · `quinn` 0.11 · `snow` 0.9 · `tun` 0.8.6 | `127.0.0.1:9090`(监控 HTTP) |
 | NSC | Rust 2024 · `nsc` 二进制 | `gotatun` / `rustls` / (同 NSN 但少 `nat` `netstack` `nsn`) | 本地 DNS `127.0.0.53:53` · VIP `127.11.0.0/16` |
 
@@ -260,30 +260,42 @@ NSC     control    tunnel  (via GW · 直连规划中)  ──
 | NSC ↔ NSD | SSE | 认证、映射配置、网关发现 | `crates/control/src/sse.rs` |
 | NSC ↔ NSGW | WG / WSS | 用户流量隧道 | (同 NSN) |
 | NSD ↔ NSGW | 内部 API | 网关注册、健康检查、指标 | NSD 侧(不在本仓库)|
-| Browser / curl ↔ NSGW | 公网 HTTPS :443 | **无 NSC 入站**: `Host` / SNI 路由到目标 NSN,仅支持 HTTP(S) | traefik 路由配置(见下文) |
+| Browser / curl ↔ NSGW | 公网 HTTPS :443 | **无 NSC 入站 (L7)**: NSD 下发的公网域名 + 中间件链,按 `Host` / SNI 路由到 NSN | 见下文"无 NSC 入站" |
+| SSH / psql / 任意 TCP ↔ NSGW | 公网 TCP `:<map_port>` | **无 NSC 入站 (L4)**: NSD 下发端口映射表,`nsgw:2222 → nsn:22` 直透 | 见下文"无 NSC 入站" |
 
 > **直连路径的现状**: `tunnel-wg` 的 `PeerConfig` (`pubkey + endpoint + allowed_ips`) 不区分 NSGW 与 NSN,WireGuard 机制层面支持 NSC 与 NSN 直接对等。当前**缺少**的是控制面的 `direct_peers` 事件 —— NSD 还没有向 NSC 下发"把 NSN 当作直接 peer"的配置,也没有打洞信令流程。`transport-design.md` 的 [直连与 P2P](./transport-design.md#直连与-p2p-未来设计) 描述了这个规划中的补全方向。
 
-### 无 NSC 入站 (Browser → NSGW → NSN)
+### 无 NSC 入站 (Browser / SSH Client → NSGW → NSN)
 
-当站点希望把某个 HTTP(S) 服务暴露给**没有安装 NSC 的最终用户**(浏览器、`curl`、移动端 webview、第三方 webhook 发送方) 时,NSIO 通过 NSGW 的 HTTPS 入口提供了一条"不走客户端"的路径:
+当站点希望把某个服务暴露给**没有安装 NSC 的最终用户**(浏览器、`curl`、移动端 webview、第三方 webhook 发送方、命令行 SSH 用户等) 时,NSIO 通过 NSGW 提供两条"不走客户端"的入站路径:
+
+- **L7 · HTTP(S) 公网域名入口**: 用于 dashboard / webhook / OAuth 回调等 HTTP 服务;TLS 在 NSGW 终结,可叠加中间件。
+- **L4 · 端口映射入口**: 用于 SSH / psql / redis / 任意 TCP(UDP)协议;NSGW 在指定端口上做纯透传,不解 TLS、不看内容。
 
 ```
+# L7 路径
 Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :443
                                                        ↓ TLS 终结 + 中间件链
                                                        ↓   (OIDC / 基本鉴权 /
                                                        ↓    限速 / WAF / 请求改写)
-                                                       ↓ traefik 按 Host / SNI
-                                                       ↓ 查公网域名 → NSN peer
+                                                       ↓ 按 Host / SNI 查公网域名 → NSN peer
                                                        ↓ WG / WSS 桥接
                                                        NSN → proxy + ACL → 本地服务
+
+# L4 路径 (示例: ssh 到站点内部主机)
+ssh user@nsgw-host -p 2222  ──→  NSGW :2222 (TCP listener)
+                                  ↓ 不解密 · 不审内容
+                                  ↓ 按 NSD 下发的 gateway_l4_map 查目标
+                                  ↓ WG / WSS 桥接
+                                  NSN → proxy + ACL → 本地 sshd :22
 ```
 
-**公网域名由 NSD 统一签发与下发,与 `*.n.ns` 完全独立**:
+**L7 公网域名与 L4 端口映射都由 NSD 统一签发 / 下发,与 `*.n.ns` 完全独立**:
 
 - `*.n.ns` 是 NSC 内部命名空间 —— 只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN,因此浏览器**永远到不了** `web.<nid>.n.ns`。
-- 站点管理员在 NSD 控制台开启"公网发布"后,**NSD 负责分配公网域名** —— 默认情况下从 NSIO 持有的公共 apex(例如 `*.<tenant>.nsio.app`)签发一个子域,其权威 DNS 由 NSD 管控;即使站点选择 BYO 自有域名(通过 CNAME 指向 NSGW),该域名的启用/禁用、路由目标、TLS 策略仍然**统一在 NSD 里登记**,NSGW 不接受"在本地 `services.toml` 或 traefik 文件里私自声明"的公网域名。
-- NSD 把 "公网域名 → NSN peer + 中间件链 + TLS 策略" 整体作为**一条 SSE 配置事件**推送给对应的 NSGW 实例,NSGW 翻译为 traefik 动态配置并热加载。
+- **L7(公网域名)**: 站点管理员在 NSD 控制台开启"公网发布 · HTTP"后,**NSD 负责分配公网域名** —— 默认情况下从 NSIO 持有的公共 apex(例如 `*.<tenant>.nsio.app`)签发一个子域,其权威 DNS 由 NSD 管控;即使站点选择 BYO 自有域名(通过 CNAME 指向 NSGW),该域名的启用/禁用、路由目标、TLS 策略仍然**统一在 NSD 里登记**,NSGW 不接受"在本地 `services.toml` 或文件里私自声明"的公网域名。
+- **L4(端口映射)**: 同理,`nsgw-host:<port>` 的映射表(`{listen_port, proto, target_nsn, target_port, acl_ref}`)只存在于 NSD 中;NSD 通过 `gateway_l4_map` SSE 事件把条目推送给被分配到该端口的 NSGW 实例,NSGW 打开 listener 并开始转发。端口冲突、租户抢注、allow-list 校验都在 NSD 侧完成。
+- NSD 把 "公网域名 → NSN peer + 中间件链 + TLS 策略" 整体作为**一条 SSE 配置事件**推送给对应的 NSGW 实例,NSGW 据此打开路由(自研轻 Proxy 或 Envoy,见 [nsgw-vision 架构再审视](../11-nsd-nsgw-vision/nsgw-vision.md#架构再审视--是否需要-traefik))并热加载。
 - TLS 证书由 NSGW 申请(ACME / Let's Encrypt 走 DNS-01 或 HTTP-01)或由站点自带,证书的申请/续期状态回报给 NSD 做可见。
 
 **为什么集中在 NSD 签发 / 下发** —— 易于控制:
@@ -295,7 +307,7 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
 - **防止越权**: 站点方**不能自己捏造公网域名**让 NSGW 放行;必须经过 NSD 授权。租户 A 无法抢注属于租户 B 的域名,也无法绕过平台级 WAF 规则。
 - **全局一致性**: 多 NSGW PoP 的路由表由 NSD 广播同步,新增 PoP 直接从 NSD 拉全量配置;不会出现"A 区 PoP 有这条路由、B 区 PoP 没有"的分裂。
 
-**这一层可以叠加的中间件**(traefik 原生或自研):
+**L7 路径可以叠加的中间件**(根据 NSGW 形态由自研轻 Proxy 或 Envoy 承载):
 
 | 中间件 | 作用 | 典型场景 |
 |--------|------|---------|
@@ -306,26 +318,30 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
 | 请求改写 / 头注入 | 加 `X-Forwarded-User` 等 | 把身份信息透传给后端 |
 | 审计日志 | 谁访问了什么、何时、结果 | 合规 |
 
-这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
+这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。L7 公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
+
+**L4 端口映射与 L7 的差异**: L4 路径在 NSGW 上是**透明转发**,不解 TLS、不读 payload,因此无法做 OIDC / WAF 这类基于内容的中间件 —— 能做的是**连接级治理**:按源 IP / 令牌 (Proxy Protocol v2 TLV) 限流、fail2ban 式封禁、连接配额、审计连接元数据。协议级认证仍必须由后端服务自己完成(SSH 的密钥、psql 的密码等)。适合 SSH 这类**协议本身已经带加密与认证**的场景。
 
 **下发通道: 与 ACL 同构的 SSE 事件**
 
-站点本地的 `services.toml` **只负责**声明"本机上有哪些服务、跑在什么地址端口上" —— 它是 NSN 做 `proxy.connect(target)` 时的查表数据源,**不**描述"这个服务是否对外发布 / 挂哪些中间件"。"公网域名 + 中间件链 + ACL" 是一整套策略,由 NSD 统一管理、通过 SSE 事件精准下发到受影响的数据面节点:
+站点本地的 `services.toml` **只负责**声明"本机上有哪些服务、跑在什么地址端口上" —— 它是 NSN 做 `proxy.connect(target)` 时的查表数据源,**不**描述"这个服务是否对外发布 / 挂哪些中间件 / 占用哪个 NSGW 端口"。"公网域名 + 中间件链 + L4 端口映射 + ACL" 是一整套策略,由 NSD 统一管理、通过 SSE 事件精准下发到受影响的数据面节点:
 
 - **ACL → NSN**: `AclConfig` SSE 事件(`crates/control/src/messages.rs` 已定义),由 NSN 的 `acl` crate 在 `ServiceRouter::resolve` 里执行。
-- **公网域名 + traefik 中间件链 → NSGW**: 规划中的 `gateway_http_config` SSE 事件;NSGW 把它翻译为 traefik 动态配置(router / middleware / service 三元组),热加载无须重启。
+- **L7 公网域名 + 中间件链 → NSGW**: 规划中的 `gateway_http_config` SSE 事件;NSGW 把它翻译为路由/中间件动态配置(自研轻 Proxy 或 Envoy xDS),热加载无须重启。
+- **L4 端口映射 → NSGW**: 规划中的 `gateway_l4_map` SSE 事件,携带 `{listen_port, proto, target_nsn, target_port, acl_ref, conn_limits}`;NSGW 据此开关 listener。
 - **事件幂等 + 版本号**: SSE 事件带 `chain_id` / 版本号,断连重连后 NSD 会推当前完整状态,NSGW / NSN 按照"最后一条胜出"应用,不会漂移。
 
 控制面是单一事实源,数据面只做执行;站点方改完配置立刻生效,不需要 SSH 到每台 NSN/NSGW 改文件。
 
 **代价 / 约束**:
 
-- **失去端到端加密**。NSGW 在中间能读到明文 HTTP —— 这是启用中间件的前提,也是它与内部路径的本质区别。
-- **只承载 HTTP(S)**。非 HTTP 协议(SSH / psql / 任意 TCP)仍必须走 NSC。
-- **需要显式发布**。管理员要在 NSD 上声明"这个服务公网暴露",NSD 才会触发公网域名签发、NSGW 路由下发、以及对应的 ACL 放行;默认仍是 `*.n.ns` 内部可见。
-- **ACL 仍然生效**。即使 NSGW 侧中间件放行,NSN 的 `acl` 依然会按 NSD 下发的 `AclConfig` 做最后一道检查 —— 这与内部路径共用同一套 ACL,没有"公网路径绕过 ACL"的口子。
+- **L7 失去端到端加密**。NSGW 能读到明文 HTTP —— 这是启用中间件的前提,也是它与内部路径的本质区别。L4 路径不解 TLS,协议自身加密(如 SSH)仍保持端到端。
+- **L4 无法做 L7 中间件**。端口映射只做连接级治理(限速 / 封禁 / 配额),应用层认证仍由后端负责。
+- **需要显式发布**。管理员要在 NSD 上声明"这个服务公网暴露"(L7 填域名、L4 填端口),NSD 才会触发公网域名签发 / 端口分配、NSGW 路由下发、以及对应的 ACL 放行;默认仍是 `*.n.ns` 内部可见。
+- **ACL 仍然生效**。即使 NSGW 侧中间件或端口放行,NSN 的 `acl` 依然会按 NSD 下发的 `AclConfig` 做最后一道检查 —— 这与内部路径共用同一套 ACL,没有"公网路径绕过 ACL"的口子。
+- **NSGW 端口是共享资源**。L4 端口由 NSD 在租户间协调分配,避免抢占;部署方预留一段端口区间(如 `20000-29999`)给 NSD 调度。
 
-为什么这条路径存在:许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调,强制所有访问者装 NSC 是过度设计。把 HTTP(S) 发布和身份认证下沉到 NSGW,站点侧只需要一个普通的 HTTP 服务 —— 不用管 TLS、不用管 SSO、不用管限速。
+为什么这条路径存在:许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调,或者给运维开一个 `ssh` 跳板,强制所有访问者装 NSC 是过度设计。把 L7 发布(域名 + 身份认证)与 L4 映射(任意 TCP)下沉到 NSGW,站点侧只需要照常运行服务 —— 不用管 TLS、不用管 SSO、不用管公网端口怎么暴露。
 
 ## 部署拓扑模板
 
