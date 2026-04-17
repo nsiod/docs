@@ -8,14 +8,16 @@ const PUBLIC_ROOT = path.join(DOCS_ROOT, 'public');
 /**
  * remarkD2Include
  *
- * Finds inline links whose URL targets a `.d2` file and injects an `<img>`
- * pointing to the sibling rendered SVG immediately after the paragraph.
+ * Transforms `.d2` links so no 404-producing `<a href=".../foo.d2.html">` ends
+ * up in the rendered HTML. The `.d2` is source, not a page — rspress rewrites
+ * `./foo.d2` → `/<section>/foo.d2.html`, which never resolves.
  *
- * By the time this plugin runs, rspress has already rewritten relative link
- * URLs to site-absolute paths suffixed with `.html`, so e.g.
- *   `./diagrams/foo.d2` → `/<section>/diagrams/foo.d2.html`
- * We reverse that rewrite before checking the file exists, and build an
- * image URL that still resolves relative to the source markdown.
+ * Two cases:
+ *   1. Link is the only content of a paragraph → replace the whole paragraph
+ *      with an `<img>` pointing at the sibling rendered SVG.
+ *   2. Link appears anywhere else (table cell, list item, inline mix) → strip
+ *      the `<a>` wrapper but keep its inner text, so `diagrams/foo.d2` still
+ *      reads as source in tables without being clickable.
  *
  * The `.d2` sources are authored by humans and the sibling `.svg` files are
  * built via `scripts/build-d2.mjs` (hook: `bun run build:d2` / `prebuild`).
@@ -35,6 +37,13 @@ function resolveD2(sourceDir, url) {
   return null;
 }
 
+function svgUrlFor(resolved) {
+  const relFromDocs = path.relative(DOCS_ROOT, resolved.absD2).split(path.sep).join('/');
+  const absSvg = path.join(PUBLIC_ROOT, relFromDocs).replace(/\.d2$/, '.svg');
+  if (!fs.existsSync(absSvg)) return null;
+  return '/' + relFromDocs.replace(/\.d2$/, '.svg');
+}
+
 export default function remarkD2Include() {
   return function transformer(tree, file) {
     const sourcePath = file?.history?.[0] ?? file?.path;
@@ -42,22 +51,17 @@ export default function remarkD2Include() {
     const sourceDir = path.dirname(sourcePath);
 
     /** @type {Array<{ parent: any, index: number, svgUrl: string, alt: string }>} */
-    const insertions = [];
+    const paragraphReplacements = [];
 
+    // Pass 1: paragraphs that are just a link to a `.d2` → replace with <img>.
     visit(tree, 'paragraph', (paragraph, index, parent) => {
       if (!parent || typeof index !== 'number') return;
       for (const child of paragraph.children ?? []) {
         if (child.type !== 'link' || typeof child.url !== 'string') continue;
         const resolved = resolveD2(sourceDir, child.url);
         if (!resolved) continue;
-
-        // SVG is emitted by scripts/build-d2.mjs into `public/<path-from-docs>.svg`.
-        // rspress serves `public/` at the configured base, so a site-absolute URL
-        // (without the base prefix — rspress adds it at render time) hits the asset.
-        const relFromDocs = path.relative(DOCS_ROOT, resolved.absD2).split(path.sep).join('/');
-        const absSvg = path.join(PUBLIC_ROOT, relFromDocs).replace(/\.d2$/, '.svg');
-        if (!fs.existsSync(absSvg)) continue;
-        const svgUrl = '/' + relFromDocs.replace(/\.d2$/, '.svg');
+        const svgUrl = svgUrlFor(resolved);
+        if (!svgUrl) continue;
 
         const alt = paragraph.children
           .filter((c) => c.type === 'text' || c.type === 'inlineCode')
@@ -65,17 +69,27 @@ export default function remarkD2Include() {
           .join(' ')
           .trim() || path.basename(resolved.absD2, '.d2');
 
-        insertions.push({ parent, index, svgUrl, alt });
+        paragraphReplacements.push({ parent, index, svgUrl, alt });
         break;
       }
     });
 
-    insertions.sort((a, b) => b.index - a.index);
-    for (const { parent, index, svgUrl, alt } of insertions) {
-      parent.children.splice(index + 1, 0, {
+    paragraphReplacements.sort((a, b) => b.index - a.index);
+    for (const { parent, index, svgUrl, alt } of paragraphReplacements) {
+      parent.children.splice(index, 1, {
         type: 'paragraph',
         children: [{ type: 'image', url: svgUrl, alt, title: null }],
       });
     }
+
+    // Pass 2: any remaining `<a href="...d2[.html]">` anywhere (tables, lists,
+    // inline runs) → unwrap to its inner text/inlineCode nodes, so the link is
+    // gone but the label survives.
+    visit(tree, 'link', (link, index, parent) => {
+      if (!parent || typeof index !== 'number') return;
+      if (typeof link.url !== 'string') return;
+      if (!resolveD2(sourceDir, link.url)) return;
+      parent.children.splice(index, 1, ...(link.children ?? []));
+    });
   };
 }
