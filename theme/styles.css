@@ -23,9 +23,27 @@ body {
   scroll-margin-top: 5rem;
 }
 
-/* Mermaid diagrams sometimes grow taller after hydration. Reserving
-   min-height prevents the scroll position from snapping when the SVG
-   replaces the source <pre> block. */
+/* Mermaid render flicker mitigation.
+   rspress-plugin-mermaid renders SVG asynchronously via useState(svg) —
+   the initial paint has an empty <div> (height 0), then the SVG pops in.
+   The plugin also re-runs render() on documentElement.class changes,
+   and each render can produce sub-pixel size differences, causing the
+   page to jitter while scrolling.
+
+   contain: layout paint — layout/paint changes inside the diagram do not
+   propagate to the rest of the page, so sub-pixel re-render differences
+   never move content above the viewport.
+
+   min-height — reserves a realistic placeholder so the initial empty
+   render doesn't collapse the container to 0, which would then snap
+   to full height once mermaid finishes rendering. */
 .rspress-doc .mermaid {
-  min-height: 1rem;
+  contain: layout paint;
+  min-height: 240px;
+}
+
+/* Once the SVG has painted, an ancestor ends up with an explicit height,
+   so subsequent re-renders of the same diagram stay within those bounds. */
+.rspress-doc .mermaid svg[aria-roledescription] {
+  display: block;
 }

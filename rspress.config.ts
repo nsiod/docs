@@ -27,7 +27,12 @@ export default defineConfig({
     footer: {
       message: 'NSIO Architecture Docs · MIT License',
     },
-    hideNavbar: 'auto',
+    // Do NOT use 'auto'. rspress toggles classes on <html> while scrolling to
+    // hide/show the navbar, and rspress-plugin-mermaid's MermaidRender registers
+    // a MutationObserver on documentElement.class that re-runs mermaid.render()
+    // on every class change. Sub-pixel height differences between re-renders
+    // cause the page to flicker / jitter near mermaid diagrams while scrolling.
+    hideNavbar: 'never',
     // Content animation intercepts layout during route transitions and, combined
     // with TOC anchor jumps, causes the page to over-scroll past the target. Off.
     enableContentAnimation: false,
