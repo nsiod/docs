@@ -49,6 +49,6 @@ yarn.lock
 # Review artifacts
 .code-review-graph/
 
-# Core dumps
-core
-core.*
+# Core dumps (repo root only — avoid swallowing ./core/ dirs or core.md files)
+/core
+/core.*
