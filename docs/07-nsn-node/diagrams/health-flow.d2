@@ -1,0 +1,81 @@
+# GatewayEvent → AppState → Monitor API 数据流
+# 源: crates/connector/src/multi.rs, crates/nsn/src/main.rs, state.rs, monitor.rs, health.rs
+
+direction: right
+
+classes: {
+  producer: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+  channel: { style: { fill: "#f3e5f5"; stroke: "#7b1fa2" } }
+  state: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+  reader: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+}
+
+Producers: "事件生产者" {
+  MGW: "MultiGatewayManager\nmark_connected / failed / reconnecting\n(connector/src/multi.rs)" { class: producer }
+  TWG: "tunnel-wg\nGatewayStatusUpdate rx loop\n(main.rs:921)" { class: producer }
+  TWS: "tunnel-ws\nWssConnectionEvent::Open/Close\n(main.rs:760)" { class: producer }
+  NATE: "nat engine\nNatStats atomic counters" { class: producer }
+  ACLE: "acl engine\ndenial events" { class: producer }
+}
+
+Channels: "tokio::mpsc" {
+  GE: "GatewayEvent (cap 64)\n(main.rs:629)" { class: channel }
+  WE: "WssConnectionEvent (cap 128)" { class: channel }
+  GS: "GatewayStatusUpdate (cap 16)" { class: channel }
+}
+
+Drains: "drain tasks" {
+  DR_GW: "apply_gateway_event()\n(main.rs:1062-1110)" { class: channel }
+  DR_WS: "WssConnectionEvent loop\n(main.rs:763)" { class: channel }
+  DR_STATUS: "gw_status_rx loop\n(main.rs:921)" { class: channel }
+}
+
+AppState: "AppState (state.rs)" {
+  GST: "gateway_states: DashMap" { class: state }
+  TMET: "tunnel_metrics: DashMap" { class: state }
+  CTRK: "connection_tracker" { class: state }
+  NSTATE: "nat_stats" { class: state }
+  ASTATE: "acl_state" { class: state }
+  TFLAG: "transport flags" { class: state }
+}
+
+Readers: "Monitor API (monitor.rs + health.rs)" {
+  HZ: "/healthz" { class: reader }
+  ST: "/api/status" { class: reader }
+  GW: "/api/gateways" { class: reader }
+  TN: "/api/tunnels" { class: reader }
+  CN: "/api/connections" { class: reader }
+  NT: "/api/nat" { class: reader }
+  ACL_API: "/api/acl" { class: reader }
+  METR: "/api/metrics (Prometheus)" { class: reader }
+}
+
+Producers.MGW -> Channels.GE: "Connected / Disconnected\nReconnecting / LatencyUpdate"
+Producers.TWG -> Channels.GE: "BytesTransferred\nHandshakeCompleted"
+Producers.TWG -> Channels.GS
+Channels.GS -> Drains.DR_STATUS
+Drains.DR_STATUS -> AppState.TMET
+Drains.DR_STATUS -> AppState.GST
+Producers.TWS -> Channels.WE
+Channels.WE -> Drains.DR_WS
+Drains.DR_WS -> AppState.CTRK
+Producers.NATE -> AppState.NSTATE
+Producers.ACLE -> AppState.ASTATE
+Channels.GE -> Drains.DR_GW
+Drains.DR_GW -> AppState.GST
+
+AppState.GST -> Readers.HZ
+AppState.GST -> Readers.ST
+AppState.GST -> Readers.GW
+AppState.TFLAG -> Readers.HZ
+AppState.TFLAG -> Readers.ST
+AppState.TMET -> Readers.TN
+AppState.CTRK -> Readers.CN
+AppState.CTRK -> Readers.ST
+AppState.NSTATE -> Readers.NT
+AppState.NSTATE -> Readers.ST
+AppState.ASTATE -> Readers.ACL_API
+AppState.ASTATE -> Readers.ST
+AppState.NSTATE -> Readers.METR
+AppState.GST -> Readers.METR
+AppState.CTRK -> Readers.METR

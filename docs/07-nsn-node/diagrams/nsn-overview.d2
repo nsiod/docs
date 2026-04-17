@@ -1,0 +1,23 @@
+# NSN 组件概览 (index.md)
+
+direction: right
+
+CLI: "main.rs CLI"
+CFG: "Figment Config"
+REG: "Machine Registration"
+MC: "MultiControlPlane"
+MG: "MultiGatewayManager"
+ST: "AppState" { shape: cylinder }
+API: "Monitor API"
+PROM: "Prometheus"
+TEL: "telemetry::init"
+
+CLI -> CFG
+CFG -> REG
+REG -> MC
+REG -> MG
+MC -> ST
+MG -> ST
+ST -> API
+ST -> PROM
+TEL -> PROM

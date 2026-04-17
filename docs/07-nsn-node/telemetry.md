@@ -11,46 +11,9 @@
 
 ## 1. 架构
 
-```mermaid
-graph LR
-    subgraph Telemetry["telemetry crate"]
-        INIT["init_telemetry()<br/>lib.rs:31"]
-        PROV[SdkMeterProvider]
-        REG[Prometheus Registry]
-        EXP[opentelemetry_prometheus<br/>exporter]
-        M1[ProxyMetrics<br/>metrics.rs:4]
-        M2[TunnelMetrics<br/>metrics.rs:26]
-    end
+[telemetry crate 架构](./diagrams/telemetry-arch.d2)
 
-    subgraph Consumers["其他 crate"]
-        PX[proxy]
-        TW[tunnel-wg]
-    end
-
-    subgraph NSN["nsn binary"]
-        MAIN[main.rs<br/>init_telemetry()]
-        MON[monitor.rs<br/>/api/metrics]
-    end
-
-    MAIN --> INIT
-    INIT --> REG
-    INIT --> EXP
-    INIT --> PROV
-    EXP --> PROV
-    PROV -. global meter provider .-> PX
-    PROV -. global meter provider .-> TW
-    PX -.-> M1
-    TW -.-> M2
-    MAIN -- Arc<Registry> --> MON
-    REG --> MON
-
-    classDef tele fill:#fff3e0,stroke:#f57c00
-    classDef consumer fill:#e3f2fd,stroke:#1976d2
-    class INIT,PROV,REG,EXP,M1,M2 tele
-    class PX,TW consumer
-```
-
-完整 Mermaid 源码：[`diagrams/metrics.mmd`](./diagrams/metrics.mmd)。
+完整 Metrics 采集暴露图：[`diagrams/metrics.d2`](./diagrams/metrics.d2)。
 
 ## 2. `init_telemetry()`
 

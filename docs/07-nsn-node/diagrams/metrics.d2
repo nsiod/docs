@@ -1,0 +1,67 @@
+# Metrics 采集与暴露
+# 源: crates/telemetry/src/lib.rs, metrics.rs, crates/nsn/src/main.rs:260-267, monitor.rs:306-376
+
+direction: right
+
+classes: {
+  init: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+  cons: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+  atomic: { style: { fill: "#f3e5f5"; stroke: "#7b1fa2" } }
+  state: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+  ep: { style: { fill: "#fce4ec"; stroke: "#c2185b" } }
+}
+
+Init: "启动阶段" {
+  MAIN: "main.rs\ninit_telemetry()" { class: init }
+  REG: "Prometheus Registry\n(Arc)" { class: init }
+  EXP: "opentelemetry_prometheus\nexporter" { class: init }
+  PROV: "SdkMeterProvider\n(global)" { class: init }
+}
+
+Consumers: "业务 crate (via global meter)" {
+  PX: "proxy\nbytes_tx / bytes_rx\nactive_connections" { class: cons }
+  TW: "tunnel-wg\nwg_handshakes\nwg_rx_bytes / wg_tx_bytes" { class: cons }
+}
+
+Atomic: "metrics.rs 原子结构" {
+  PM: "ProxyMetrics\nAtomicU64 / AtomicU32" { class: atomic }
+  TMET: "TunnelMetrics\nAtomicU64 / AtomicI64" { class: atomic }
+}
+
+NSNState: "AppState (state.rs)" {
+  NAT: "NatStats atomics\nbytes_tx / bytes_rx / active_entries" { class: state }
+  CT: "ConnectionTracker\nactive / total counters" { class: state }
+  GWS: "gateway_states" { class: state }
+  CPS: "control_plane_states" { class: state }
+}
+
+Endpoint: "/api/metrics (monitor.rs)" {
+  ENC: "TextEncoder.encode_to_string\nOTel + registry.gather()" { class: ep }
+  HAND: "手写 nsn_ 汇总指标" { class: ep }
+  OUT: "text/plain; version=0.0.4" { class: ep }
+}
+
+PROM: "Prometheus scraper" { class: ep }
+
+Init.MAIN -> Init.EXP
+Init.MAIN -> Init.REG
+Init.EXP -> Init.REG: "shares registry" { style.stroke-dash: 3 }
+Init.EXP -> Init.PROV
+Init.MAIN -> Init.PROV: "set global" { style.stroke-dash: 3 }
+
+Init.PROV -> Consumers.PX: "global meter" { style.stroke-dash: 3 }
+Init.PROV -> Consumers.TW: "global meter" { style.stroke-dash: 3 }
+Consumers.PX -> Atomic.PM { style.stroke-dash: 3 }
+Consumers.TW -> Atomic.TMET { style.stroke-dash: 3 }
+Consumers.PX -> Init.REG
+Consumers.TW -> Init.REG
+
+Init.REG -> Endpoint.ENC
+NSNState.NAT -> Endpoint.HAND
+NSNState.CT -> Endpoint.HAND
+NSNState.GWS -> Endpoint.HAND
+NSNState.CPS -> Endpoint.HAND
+Endpoint.ENC -> Endpoint.OUT
+Endpoint.HAND -> Endpoint.OUT
+
+Endpoint.OUT -> PROM: "HTTP 200" { style.stroke-dash: 3 }

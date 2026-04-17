@@ -1,0 +1,18 @@
+# GatewayEvent 订阅链路
+# 源: crates/nsn/src/main.rs:632, apply_gateway_event
+
+shape: sequence_diagram
+
+CM: "ConnectorManager /\nMultiGatewayManager"
+TM: "TunnelManager (WG)"
+TX: "tokio::mpsc tx"
+DRAIN: "drain task\n(main.rs:632)"
+APP: "AppState.gateway_states"
+API: "/api/gateways\n/healthz"
+
+TM -> CM: "GatewayStatusUpdate\n(bytes, handshake_count, ...)"
+CM -> TX: "GatewayEvent::BytesTransferred\nGatewayEvent::HandshakeCompleted"
+CM -> TX: "GatewayEvent::Connected / Disconnected\nReconnecting / LatencyUpdate"
+TX -> DRAIN: "recv()"
+DRAIN -> APP: "apply_gateway_event(app_state, event)"
+API -> APP: "iter() snapshot"

@@ -236,26 +236,11 @@ pub enum GatewayEvent {
 
 ### 3.2 订阅链路
 
-```mermaid
-sequenceDiagram
-    participant CM as ConnectorManager / MultiGatewayManager
-    participant TM as TunnelManager (WG)
-    participant TX as tokio::mpsc tx
-    participant DRAIN as drain task (main.rs:632)
-    participant APP as AppState.gateway_states
-    participant API as /api/gateways /healthz
-
-    TM-->>CM: GatewayStatusUpdate { bytes, handshake_count, ... }
-    CM->>TX: GatewayEvent::BytesTransferred / HandshakeCompleted
-    CM->>TX: GatewayEvent::Connected / Disconnected / Reconnecting / LatencyUpdate
-    TX->>DRAIN: recv()
-    DRAIN->>APP: apply_gateway_event(&app_state, event)
-    API-->>APP: iter() snapshot
-```
+[GatewayEvent 订阅链路](./diagrams/gateway-event-subscribe.d2)
 
 对应 `apply_gateway_event` 实现 [`main.rs:1062-1110`](../../../nsio/crates/nsn/src/main.rs)。
 
-完整 Mermaid 源码：[`diagrams/health-flow.mmd`](./diagrams/health-flow.mmd)。
+完整数据流图：[`diagrams/health-flow.d2`](./diagrams/health-flow.d2)。
 
 ### 3.3 通道容量
 

@@ -36,23 +36,12 @@ NSN (Network Site Node) 是 NSIO 生态中位于 **站点侧** 的运行时进�
 
 ## 图索引
 
-```mermaid
-graph LR
-    CLI[main.rs CLI] --> CFG[Figment Config]
-    CFG --> REG[Machine Registration]
-    REG --> MC[MultiControlPlane]
-    REG --> MG[MultiGatewayManager]
-    MC --> ST[(AppState)]
-    MG --> ST
-    ST --> API[/Monitor API/]
-    ST --> PROM[/Prometheus/]
-    TEL[telemetry::init] --> PROM
-```
+[NSN 组件概览](./diagrams/nsn-overview.d2)
 
-- [diagrams/nsn-startup.mmd](./diagrams/nsn-startup.mmd) — 启动时序图
-- [diagrams/nsn-modules.mmd](./diagrams/nsn-modules.mmd) — 模块装配关系图
-- [diagrams/health-flow.mmd](./diagrams/health-flow.mmd) — `GatewayEvent` → `AppState` → API 数据流
-- [diagrams/metrics.mmd](./diagrams/metrics.mmd) — Metrics 采集与暴露
+- [diagrams/nsn-startup.d2](./diagrams/nsn-startup.d2) — 启动时序图
+- [diagrams/nsn-modules.d2](./diagrams/nsn-modules.d2) — 模块装配关系图
+- [diagrams/health-flow.d2](./diagrams/health-flow.d2) — `GatewayEvent` → `AppState` → API 数据流
+- [diagrams/metrics.d2](./diagrams/metrics.d2) — Metrics 采集与暴露
 
 ## 关键源文件
 

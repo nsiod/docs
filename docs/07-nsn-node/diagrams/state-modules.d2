@@ -1,0 +1,51 @@
+# health / monitor / validator / state 职责边界
+# 源: crates/nsn/src/{state.rs, health.rs, monitor.rs, validator.rs}
+
+direction: right
+
+Sources: "状态来源" {
+  MCP: "MultiControlPlane\nconfig rx"
+  MGW: "MultiGatewayManager\nGatewayEvent"
+  TM: "TunnelManager\nGatewayStatusUpdate"
+  WS: "tunnel-ws\nWssConnectionEvent"
+  NAT: "nat/Proxy\natomic counters"
+  ACL: "ACL Engine\ndenial events"
+}
+
+State: "state.rs: AppState" {
+  TF: "TransportFlags"
+  GS: "gateway_states" { shape: cylinder }
+  CPS: "control_plane_states" { shape: cylinder }
+  TUN: "tunnel_metrics" { shape: cylinder }
+  NS: "NatStats"
+  ALS: "AclState"
+  CTR: "ConnectionTracker"
+  REG: "Prometheus Registry"
+}
+
+Readers: "读侧" {
+  H: "health.rs\n/healthz"
+  M: "monitor.rs\n/api/*"
+  V: "validator.rs\nfind_violations"
+}
+
+Sources.MCP -> State.CPS
+Sources.MCP -> State.ALS
+Sources.MGW -> State.GS
+Sources.TM -> State.TUN
+Sources.TM -> State.GS
+Sources.WS -> State.CTR
+Sources.NAT -> State.NS
+Sources.ACL -> State.ALS
+
+State.TF -> Readers.H
+State.GS -> Readers.H
+State.CPS -> Readers.H
+State.GS -> Readers.M
+State.CPS -> Readers.M
+State.TUN -> Readers.M
+State.NS -> Readers.M
+State.ALS -> Readers.M
+State.CTR -> Readers.M
+State.REG -> Readers.M
+Readers.V -> Sources.MCP: "proxy_config vs services" { style.stroke-dash: 3 }

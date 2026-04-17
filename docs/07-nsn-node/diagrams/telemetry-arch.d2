@@ -1,0 +1,40 @@
+# telemetry crate 架构
+# 源: crates/telemetry/src/{lib.rs, metrics.rs}, crates/nsn/src/main.rs:260-267
+
+direction: right
+
+classes: {
+  tele: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+  consumer: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+}
+
+Telemetry: "telemetry crate" {
+  INIT: "init_telemetry()\nlib.rs:31" { class: tele }
+  PROV: "SdkMeterProvider" { class: tele }
+  REG: "Prometheus Registry" { class: tele }
+  EXP: "opentelemetry_prometheus\nexporter" { class: tele }
+  M1: "ProxyMetrics\nmetrics.rs:4" { class: tele }
+  M2: "TunnelMetrics\nmetrics.rs:26" { class: tele }
+}
+
+Consumers: "其他 crate" {
+  PX: "proxy" { class: consumer }
+  TW: "tunnel-wg" { class: consumer }
+}
+
+NSN: "nsn binary" {
+  MAIN: "main.rs\ninit_telemetry()"
+  MON: "monitor.rs\n/api/metrics"
+}
+
+NSN.MAIN -> Telemetry.INIT
+Telemetry.INIT -> Telemetry.REG
+Telemetry.INIT -> Telemetry.EXP
+Telemetry.INIT -> Telemetry.PROV
+Telemetry.EXP -> Telemetry.PROV
+Telemetry.PROV -> Consumers.PX: "global meter provider" { style.stroke-dash: 3 }
+Telemetry.PROV -> Consumers.TW: "global meter provider" { style.stroke-dash: 3 }
+Consumers.PX -> Telemetry.M1 { style.stroke-dash: 3 }
+Consumers.TW -> Telemetry.M2 { style.stroke-dash: 3 }
+NSN.MAIN -> NSN.MON: "Arc<Registry>"
+Telemetry.REG -> NSN.MON

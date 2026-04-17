@@ -8,55 +8,7 @@
 
 这 4 个模块共同组成 **nsn 的可观测层**。`state` 是共享状态；`health` / `monitor` 是只读暴露面；`validator` 是 NSD→NSN 规则对账器。
 
-```mermaid
-graph LR
-    subgraph Sources["状态来源"]
-        MCP[MultiControlPlane<br/>config rx]
-        MGW[MultiGatewayManager<br/>GatewayEvent]
-        TM[TunnelManager<br/>GatewayStatusUpdate]
-        WS[tunnel-ws<br/>WssConnectionEvent]
-        NAT[nat/Proxy<br/>atomic counters]
-        ACL[ACL Engine<br/>denial events]
-    end
-
-    subgraph State["state.rs: AppState"]
-        TF[TransportFlags]
-        GS[(gateway_states)]
-        CPS[(control_plane_states)]
-        TUN[(tunnel_metrics)]
-        NS[NatStats]
-        ALS[AclState]
-        CTR[ConnectionTracker]
-        REG[Prometheus Registry]
-    end
-
-    subgraph Readers["读侧"]
-        H[health.rs<br/>/healthz]
-        M[monitor.rs<br/>/api/*]
-        V[validator.rs<br/>find_violations]
-    end
-
-    MCP --> CPS
-    MCP --> ALS
-    MGW --> GS
-    TM --> TUN
-    TM --> GS
-    WS --> CTR
-    NAT --> NS
-    ACL --> ALS
-
-    TF --> H
-    GS --> H
-    CPS --> H
-    GS --> M
-    CPS --> M
-    TUN --> M
-    NS --> M
-    ALS --> M
-    CTR --> M
-    REG --> M
-    V -. proxy_config vs services .-> MCP
-```
+[health / monitor / validator / state 职责边界](./diagrams/state-modules.d2)
 
 ## 1. `state.rs` — AppState
 
@@ -139,24 +91,7 @@ pub struct AppState {
 
 ## 3. `monitor.rs` — 丰富只读 API
 
-```mermaid
-graph TB
-    AX[Axum Router]
-    AX --> H["/healthz<br/>health::healthz"]
-    AX --> S["/api/status"]
-    AX --> N["/api/node"]
-    AX --> G["/api/gateways"]
-    AX --> CP["/api/control-planes"]
-    AX --> T["/api/tunnels"]
-    AX --> SVC["/api/services"]
-    AX --> A["/api/acl"]
-    AX --> NAT["/api/nat"]
-    AX --> C["/api/connections"]
-    AX --> M["/api/metrics<br/>Prometheus text"]
-
-    classDef ep fill:#e8f5e9,stroke:#388e3c
-    class H,S,N,G,CP,T,SVC,A,NAT,C,M ep
-```
+[monitor.rs 路由表](./diagrams/monitor-endpoints.d2)
 
 每个 handler 形状一致 —— `State(state): State<Arc<AppState>>` + 直接 `Json(...)`。详细响应字段见 [monitor-api.md](./monitor-api.md)。
 

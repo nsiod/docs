@@ -1,0 +1,48 @@
+# nsn-binary 模块装配 (内部 crate 依赖)
+# 源: crates/nsn/src/main.rs:run()
+
+direction: down
+
+classes: {
+  binary: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+  internal: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+}
+
+Crates: "内部 crate 依赖" {
+  CM: "common\nConnectorConfig\nServicesConfig\nMachineState\nDataPlaneMode\nSystemInfo" { class: internal }
+  CT: "control\nAuthClient\nMultiControlPlane\nDeviceFlow" { class: internal }
+  CO: "connector\nConnectorManager\nMultiGatewayManager\nGatewayEvent" { class: internal }
+  TW: "tunnel-wg\nTunnelManager\ngotatun Device" { class: internal }
+  TWS: "tunnel-ws\nWsTunnel\nWssConnectionEvent" { class: internal }
+  NS: "netstack\nNetStack\nsmoltcp" { class: internal }
+  NA: "nat\nServiceRouter" { class: internal }
+  AC: "acl\nAclEngine" { class: internal }
+  PX: "proxy\nhttp_peek\nsni_peek" { class: internal }
+  TE: "telemetry\ninit_telemetry\nPrometheus Registry" { class: internal }
+}
+
+NSN: "nsn binary" {
+  MAIN: "main.rs" { class: binary }
+  STATE: "state.rs\nAppState" { class: binary }
+  HEALTH: "health.rs\n/healthz" { class: binary }
+  MON: "monitor.rs\n/api/*" { class: binary }
+  VAL: "validator.rs\nfind_violations" { class: binary }
+}
+
+NSN.MAIN -> Crates.CM
+NSN.MAIN -> Crates.CT
+NSN.MAIN -> Crates.CO
+NSN.MAIN -> Crates.TW
+NSN.MAIN -> Crates.TWS
+NSN.MAIN -> Crates.NS
+NSN.MAIN -> Crates.NA
+NSN.MAIN -> Crates.AC
+NSN.MAIN -> Crates.PX
+NSN.MAIN -> Crates.TE
+
+NSN.MAIN -> NSN.STATE
+NSN.STATE -> NSN.HEALTH
+NSN.STATE -> NSN.MON
+NSN.MAIN -> NSN.VAL
+NSN.VAL -> Crates.CT
+NSN.VAL -> Crates.CM

@@ -1,0 +1,34 @@
+# monitor.rs Axum 路由
+# 源: crates/nsn/src/monitor.rs
+
+direction: down
+
+classes: {
+  ep: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+}
+
+AX: "Axum Router"
+
+H: "/healthz\nhealth::healthz" { class: ep }
+S: "/api/status" { class: ep }
+N: "/api/node" { class: ep }
+G: "/api/gateways" { class: ep }
+CP: "/api/control-planes" { class: ep }
+T: "/api/tunnels" { class: ep }
+SVC: "/api/services" { class: ep }
+A: "/api/acl" { class: ep }
+NAT: "/api/nat" { class: ep }
+C: "/api/connections" { class: ep }
+M: "/api/metrics\nPrometheus text" { class: ep }
+
+AX -> H
+AX -> S
+AX -> N
+AX -> G
+AX -> CP
+AX -> T
+AX -> SVC
+AX -> A
+AX -> NAT
+AX -> C
+AX -> M

@@ -1,0 +1,36 @@
+# 白名单数据流图
+# 源: common/src/services.rs, control/src/messages.rs, nsn 关联组件
+
+direction: down
+
+classes: {
+  io: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+  store: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+  logic: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+}
+
+TOML: "services.toml" { class: io }
+CFG: "ServicesConfig" { class: store }
+SR: "ServiceReport" { class: store }
+NSD_API: "NSD /api/v1/client/services" { class: io }
+NSD: "NSD Policy Engine" { class: io }
+PC: "ProxyConfig" { class: store }
+RX: "proxy_config_rx" { class: logic }
+VAL: "validator::find_violations" { class: logic }
+LOG: "tracing::warn" { class: logic }
+APP: "AppState.services" { class: store }
+ROUTER: "ServiceRouter" { class: logic }
+READ: "Monitor API"
+
+TOML -> CFG: "ServicesConfig::load"
+CFG -> SR: "ServiceReport::from"
+CFG -> APP
+CFG -> ROUTER
+SR -> NSD_API: "control::post_services_report"
+NSD_API -> NSD
+NSD -> PC: "SSE push"
+PC -> RX
+RX -> VAL
+CFG -> VAL
+VAL -> LOG: "Vec<RuleViolation>"
+APP -> READ: "/api/services" { style.stroke-dash: 3 }

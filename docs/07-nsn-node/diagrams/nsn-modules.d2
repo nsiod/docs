@@ -1,0 +1,74 @@
+# NSN 模块装配图
+# 源: crates/nsn/src/main.rs:run()
+
+direction: down
+
+classes: {
+  bin: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+  internal: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+  ext: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+}
+
+CLI: "CLI & Config" {
+  CLIP: "clap Cli"
+  FIG: "figment\ndefaults → toml → env → cli"
+}
+
+Internal: "内部 crate" {
+  COMMON: "common\nConnectorConfig\nServicesConfig\nMachineState\nDataPlaneMode\nSystemInfo" { class: internal }
+  CONTROL: "control\nAuthClient\nMultiControlPlane\nDeviceFlow\nMessages" { class: internal }
+  CONNECTOR: "connector\nConnectorManager\nMultiGatewayManager\nGatewayEvent" { class: internal }
+  TWG: "tunnel-wg\nTunnelManager\ngotatun Device\nGatewayStatusUpdate" { class: internal }
+  TWS: "tunnel-ws\nWsTunnel\nWssConnectionEvent" { class: internal }
+  NETSTACK: "netstack\nNetStack\nsmoltcp\nNewTcpConnection\nNewUdpDatagram" { class: internal }
+  NAT: "nat\nServiceRouter\nPacketNat" { class: internal }
+  ACL: "acl\nAclEngine" { class: internal }
+  PROXY: "proxy\nhttp_peek (Host)\nsni_peek (TLS SNI)" { class: internal }
+  TEL: "telemetry\ninit_telemetry\nPrometheus Registry" { class: internal }
+}
+
+NSN: "nsn binary (crates/nsn/src)" {
+  MAIN: "main.rs\nrun() 编排" { class: bin }
+  STATE: "state.rs\nAppState + GatewayState\nTunnelMetrics / ConnectionTracker\nNatStats / AclState" { class: bin }
+  HEALTH: "health.rs\n/healthz" { class: bin }
+  MON: "monitor.rs\n/api/*" { class: bin }
+  VAL: "validator.rs\nfind_violations" { class: bin }
+}
+
+External: "外部" {
+  NSD: "NSD" { class: ext }
+  NSGW: "NSGW" { class: ext }
+  LOCAL: "local / remote services" { class: ext }
+  PROM: "Prometheus scrape" { class: ext }
+  GOTATUN: "gotatun (external crate)" { class: ext }
+}
+
+CLI.CLIP -> CLI.FIG
+CLI.FIG -> NSN.MAIN
+NSN.MAIN -> Internal.COMMON
+NSN.MAIN -> Internal.CONTROL
+NSN.MAIN -> Internal.CONNECTOR
+NSN.MAIN -> Internal.TWG
+NSN.MAIN -> Internal.TWS
+NSN.MAIN -> Internal.NETSTACK
+NSN.MAIN -> Internal.NAT
+NSN.MAIN -> Internal.ACL
+NSN.MAIN -> Internal.PROXY
+NSN.MAIN -> Internal.TEL
+
+NSN.MAIN -> NSN.STATE
+NSN.HEALTH -> NSN.STATE
+NSN.MON -> NSN.STATE
+NSN.VAL -> Internal.COMMON
+NSN.VAL -> Internal.CONTROL
+
+Internal.CONTROL -> External.NSD: "SSE/Noise/QUIC" { style.stroke-dash: 3 }
+Internal.CONNECTOR -> External.NSGW: "UDP (WG)" { style.stroke-dash: 3 }
+Internal.CONNECTOR -> External.NSGW: "WSS relay" { style.stroke-dash: 3 }
+Internal.TWG -> External.GOTATUN
+Internal.NETSTACK -> Internal.PROXY
+Internal.PROXY -> External.LOCAL
+Internal.NAT -> Internal.PROXY
+
+Internal.TEL -> NSN.MON
+NSN.MON -> External.PROM: "text/plain" { style.stroke-dash: 3 }

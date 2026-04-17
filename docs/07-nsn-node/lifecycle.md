@@ -6,84 +6,7 @@
 
 ## 1. 启动时序图
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User/systemd
-    participant MAIN as main.rs
-    participant FIG as Figment
-    participant TEL as telemetry
-    participant RUN as run()
-    participant AUTH as control::auth
-    participant NSD as NSD
-    participant APP as AppState
-    participant AX as Axum Monitor
-    participant MCP as MultiControlPlane
-    participant HB as Heartbeat Task
-    participant MGW as MultiGatewayManager
-    participant CM as ConnectorManager
-    participant TM as TunnelManager
-    participant NET as NetStack
-
-    U->>MAIN: exec nsn --auth-key ... --config-file ...
-    MAIN->>FIG: merge defaults + toml + env + cli
-    FIG-->>MAIN: ConnectorConfig
-    MAIN->>MAIN: validate_transport_mode
-    MAIN->>MAIN: init tracing (stdout + optional JSON file)
-    MAIN->>TEL: init_telemetry()
-    TEL-->>MAIN: Arc<Registry>
-    MAIN->>RUN: run(RunParams)
-
-    Note over RUN,NSD: 阶段 A. 鉴权 / 注册
-    RUN->>AUTH: discover_nsd_info(url) per NSD
-    AUTH->>NSD: GET /api/v1/info
-    NSD-->>AUTH: {nsd_type, realm, auth_methods}
-    RUN->>AUTH: register(auth_key) or device_flow
-    AUTH->>NSD: POST /api/v1/machine/register
-    NSD-->>AUTH: MachineState (keys, machine_id)
-    AUTH-->>RUN: saved to state_dir
-
-    Note over RUN,APP: 阶段 B. AppState + Monitor API
-    RUN->>RUN: ServicesConfig::load(services.toml)
-    RUN->>APP: AppState::new(config, services, node_info, dp, metrics_registry)
-    RUN-)AX: spawn Axum on 127.0.0.1:9090
-    AX-->>RUN: /healthz + /api/* serving
-
-    Note over RUN,MCP: 阶段 C. 控制面
-    RUN->>MCP: new(nsd_entries) → rx 通道组
-    RUN-)MCP: spawn run()
-    MCP->>NSD: SSE subscribe (or Noise/QUIC)
-    NSD-->>MCP: wg_config / proxy_config / acl_config / gateway_config ...
-    MCP-->>APP: via 各 _task (wg_rx / acl_rx / dns_rx / routing_rx)
-    RUN-)HB: spawn heartbeat task (60s)
-    HB->>NSD: POST /api/v1/machine/heartbeat
-
-    Note over RUN,MGW: 阶段 D. 数据面
-    RUN->>MGW: new(gateways) + with_event_sender(tx)
-    RUN-)RUN: spawn drain GatewayEvent → AppState
-    RUN->>MCP: await wg_config + gateway_config (5s timeout)
-    RUN->>CM: ConnectorManager::new(config, relay_token, peer_key_priv)
-    alt transport_mode=auto or udp
-        RUN->>CM: connect(wg_config)
-        CM->>TM: TunnelManager::new(wg_cfg_rx, ...)
-        TM->>NSD/NSGW: WG handshake over UDP
-        TM-->>RUN: decrypted_rx / to_encrypt_tx
-        RUN->>NET: NetStack::new(ip_address)
-        NET-->>RUN: new_conn_rx / new_dgram_rx
-    else transport_mode=wss
-        RUN->>CM: connect_forced_wss()
-        CM->>NSGW: WSS upgrade
-    end
-
-    Note over RUN: 就绪 (begin serving)
-    RUN-)RUN: spawn relay_connection / relay_datagram per new conn
-
-    Note over RUN,U: 阶段 E. 优雅关停
-    U-->>RUN: SIGTERM / Ctrl-C
-    RUN->>RUN: shutdown_signal() resolves
-    RUN-->>MAIN: Ok(())
-    MAIN-->>U: exit 0
-```
+[NSN 启动时序 (精简版)](./diagrams/nsn-startup-compact.d2)
 
 阶段对应源码：
 
@@ -93,7 +16,7 @@ sequenceDiagram
 - 阶段 D [`main.rs:751-1054`](../../../nsio/crates/nsn/src/main.rs)
 - 阶段 E [`main.rs:1544-1574`](../../../nsio/crates/nsn/src/main.rs)
 
-> 完整的 Mermaid 源码存于 [`diagrams/nsn-startup.mmd`](./diagrams/nsn-startup.mmd)。
+> 完整的 d2 源码存于 [`diagrams/nsn-startup.d2`](./diagrams/nsn-startup.d2)。
 
 ## 2. 启动顺序的关键约束
 

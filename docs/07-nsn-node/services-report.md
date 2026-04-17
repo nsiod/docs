@@ -18,32 +18,7 @@
 
 ## 2. 数据流
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant FS as services.toml
-    participant NSN as nsn run()
-    participant CFG as ServicesConfig
-    participant AP as AppState
-    participant MCP as MultiControlPlane
-    participant NSD as NSD
-    participant VAL as validator
-
-    NSN->>FS: ServicesConfig::load(path)
-    FS-->>NSN: TOML → ServicesConfig
-    NSN->>NSN: enabled_count / disabled_count log
-    NSN->>AP: AppState::new(services, ...)
-    NSN->>CFG: ServiceReport::from(&services_config)
-    CFG-->>NSN: ServiceReport { services, strict_mode, system_info }
-    NSN->>MCP: pass to entries: Vec<(cc, auth, ServiceReport)>
-    MCP->>NSD: POST /api/v1/client/services (before SSE subscribe)
-    NSD-->>MCP: ServicesAck { matched, unmatched, rejected }
-    NSD-->>MCP: SSE push ProxyConfig { rules }
-    MCP-->>NSN: proxy_config_rx.recv()
-    NSN->>VAL: find_violations(services, proxy_config)
-    VAL-->>NSN: Vec<RuleViolation>
-    NSN->>NSN: tracing::warn! per violation; accepted/total counts
-```
+[services.toml → ServiceReport → NSD 数据流](./diagrams/services-report-flow.d2)
 
 - 绑定点：`ServiceReport::from(&services_config)` ([`control/src/messages.rs:98`](../../../nsio/crates/control/src/messages.rs))。
 - system_info 在发送前由 `main.rs` 注入 ([`main.rs:562-563`](../../../nsio/crates/nsn/src/main.rs))。
@@ -191,39 +166,7 @@ INFO nsn::main — proxy rules validated accepted=7 total=8 mode=strict
 
 ## 7. 图: 白名单数据流
 
-```mermaid
-graph TB
-    TOML[services.toml]
-    CFG[ServicesConfig]
-    SR[ServiceReport]
-    NSD_API[NSD /api/v1/client/services]
-    NSD[NSD Policy Engine]
-    PC[ProxyConfig]
-    RX[proxy_config_rx]
-    VAL[validator::find_violations]
-    LOG[tracing::warn]
-    APP[AppState.services]
-    ROUTER[ServiceRouter]
-
-    TOML -->|ServicesConfig::load| CFG
-    CFG -->|ServiceReport::from| SR
-    CFG --> APP
-    CFG --> ROUTER
-    SR -->|control::post_services_report| NSD_API
-    NSD_API --> NSD
-    NSD -- SSE push --> PC
-    PC --> RX
-    RX --> VAL
-    CFG --> VAL
-    VAL -- Vec<RuleViolation> --> LOG
-    APP -.-> |/api/services| READ[Monitor API]
-    classDef io fill:#fff3e0,stroke:#f57c00
-    classDef store fill:#e3f2fd,stroke:#1976d2
-    classDef logic fill:#e8f5e9,stroke:#388e3c
-    class TOML,NSD_API,NSD io
-    class CFG,SR,PC,APP store
-    class VAL,ROUTER,LOG,RX logic
-```
+[白名单数据流](./diagrams/services-report-graph.d2)
 
 ## 8. 关键决策点
 

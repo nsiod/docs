@@ -1,0 +1,86 @@
+# NSN 启动时序 (lifecycle.md 精简版)
+# 源: crates/nsn/src/main.rs
+
+shape: sequence_diagram
+
+U: "User/systemd"
+MAIN: "main.rs"
+FIG: "Figment"
+TEL: "telemetry"
+RUN: "run()"
+AUTH: "control::auth"
+NSD: "NSD"
+APP: "AppState"
+AX: "Axum Monitor"
+MCP: "MultiControlPlane"
+HB: "Heartbeat Task"
+MGW: "MultiGatewayManager"
+CM: "ConnectorManager"
+TM: "TunnelManager"
+NET: "NetStack"
+
+U -> MAIN: "exec nsn --auth-key --config-file"
+MAIN -> FIG: "merge defaults + toml + env + cli"
+FIG -> MAIN: "ConnectorConfig"
+MAIN -> MAIN: "validate_transport_mode"
+MAIN -> MAIN: "init tracing"
+MAIN -> TEL: "init_telemetry()"
+TEL -> MAIN: "Arc<Registry>"
+MAIN -> RUN: "run(RunParams)"
+
+A: "阶段 A. 鉴权 / 注册" {
+  RUN -> AUTH: "discover_nsd_info(url) per NSD"
+  AUTH -> NSD: "GET /api/v1/info"
+  NSD -> AUTH: "nsd_type, realm, auth_methods"
+  RUN -> AUTH: "register(auth_key) or device_flow"
+  AUTH -> NSD: "POST /api/v1/machine/register"
+  NSD -> AUTH: "MachineState (keys, machine_id)"
+  AUTH -> RUN: "saved to state_dir"
+}
+
+B: "阶段 B. AppState + Monitor API" {
+  RUN -> RUN: "ServicesConfig::load(services.toml)"
+  RUN -> APP: "AppState::new(config, services, node_info, dp, metrics_registry)"
+  RUN -> AX: "spawn Axum on 127.0.0.1:9090"
+  AX -> RUN: "/healthz + /api/ serving"
+}
+
+C: "阶段 C. 控制面" {
+  RUN -> MCP: "new(nsd_entries) → rx 通道组"
+  RUN -> MCP: "spawn run()"
+  MCP -> NSD: "SSE subscribe (or Noise/QUIC)"
+  NSD -> MCP: "wg_config / proxy_config / acl_config / ..."
+  MCP -> APP: "via wg_rx / acl_rx / dns_rx / routing_rx"
+  RUN -> HB: "spawn heartbeat task (60s)"
+  HB -> NSD: "POST /api/v1/machine/heartbeat"
+}
+
+D: "阶段 D. 数据面" {
+  RUN -> MGW: "new(gateways) + with_event_sender(tx)"
+  RUN -> RUN: "spawn drain GatewayEvent → AppState"
+  RUN -> MCP: "await wg_config + gateway_config (5s timeout)"
+  RUN -> CM: "ConnectorManager::new(config, relay_token, priv_key)"
+
+  choice: "transport_mode" {
+    udp: "auto / udp" {
+      RUN -> CM: "connect(wg_config)"
+      CM -> TM: "TunnelManager::new(wg_cfg_rx, ...)"
+      TM -> NSD: "WG handshake over UDP"
+      TM -> RUN: "decrypted_rx / to_encrypt_tx"
+      RUN -> NET: "NetStack::new(ip_address)"
+      NET -> RUN: "new_conn_rx / new_dgram_rx"
+    }
+    wss: "wss" {
+      RUN -> CM: "connect_forced_wss()"
+      CM -> NSD: "WSS upgrade"
+    }
+  }
+  RUN -> RUN: "spawn relay_connection / relay_datagram"
+}
+
+E: "阶段 E. 优雅关停" {
+  U -> RUN: "SIGTERM / Ctrl-C"
+  RUN -> RUN: "shutdown_signal() resolves"
+  RUN -> MAIN: "Ok(())"
+  MAIN -> U: "exit 0"
+}

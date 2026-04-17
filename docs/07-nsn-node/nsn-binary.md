@@ -58,54 +58,9 @@ ConnectorConfig::defaults()        # crates/common 默认值
 
 ## 4. 模块装配
 
-`run()` 按顺序把 10 个内部 crate 组装成一条运行时管线。见 [`diagrams/nsn-modules.mmd`](./diagrams/nsn-modules.mmd)。
+`run()` 按顺序把 10 个内部 crate 组装成一条运行时管线。见 [`diagrams/nsn-modules.d2`](./diagrams/nsn-modules.d2)。
 
-```mermaid
-graph TB
-    subgraph Crates["内部 crate 依赖"]
-        CM[common<br/>ConnectorConfig<br/>ServicesConfig<br/>MachineState<br/>DataPlaneMode<br/>SystemInfo]
-        CT[control<br/>AuthClient<br/>MultiControlPlane<br/>DeviceFlow]
-        CO[connector<br/>ConnectorManager<br/>MultiGatewayManager<br/>GatewayEvent]
-        TW[tunnel-wg<br/>TunnelManager<br/>gotatun Device]
-        TWS[tunnel-ws<br/>WsTunnel<br/>WssConnectionEvent]
-        NS[netstack<br/>NetStack<br/>smoltcp]
-        NA[nat<br/>ServiceRouter]
-        AC[acl<br/>AclEngine]
-        PX[proxy<br/>http_peek<br/>sni_peek]
-        TE[telemetry<br/>init_telemetry<br/>Prometheus Registry]
-    end
-
-    subgraph NSN["nsn binary"]
-        MAIN[main.rs]
-        STATE[state.rs<br/>AppState]
-        HEALTH[health.rs<br/>/healthz]
-        MON[monitor.rs<br/>/api/*]
-        VAL[validator.rs<br/>find_violations]
-    end
-
-    MAIN --> CM
-    MAIN --> CT
-    MAIN --> CO
-    MAIN --> TW
-    MAIN --> TWS
-    MAIN --> NS
-    MAIN --> NA
-    MAIN --> AC
-    MAIN --> PX
-    MAIN --> TE
-
-    MAIN --> STATE
-    STATE --> HEALTH
-    STATE --> MON
-    MAIN --> VAL
-    VAL --> CT
-    VAL --> CM
-
-    classDef binary fill:#e8f5e9,stroke:#388e3c
-    classDef internal fill:#e3f2fd,stroke:#1976d2
-    class MAIN,STATE,HEALTH,MON,VAL binary
-    class CM,CT,CO,TW,TWS,NS,NA,AC,PX,TE internal
-```
+[nsn-binary 模块装配](./diagrams/nsn-modules-detailed.d2)
 
 ### 4.1 `run()` 里装配的任务
 

@@ -1,0 +1,27 @@
+# services.toml → ServiceReport → NSD 数据流
+# 源: common/src/services.rs, control/src/messages.rs, nsn/src/main.rs, control/src/sse.rs
+
+shape: sequence_diagram
+
+FS: "services.toml"
+NSN: "nsn run()"
+CFG: "ServicesConfig"
+AP: "AppState"
+MCP: "MultiControlPlane"
+NSD: "NSD"
+VAL: "validator"
+
+NSN -> FS: "ServicesConfig::load(path)"
+FS -> NSN: "TOML → ServicesConfig"
+NSN -> NSN: "enabled_count / disabled_count log"
+NSN -> AP: "AppState::new(services, ...)"
+NSN -> CFG: "ServiceReport::from(services_config)"
+CFG -> NSN: "ServiceReport\nservices, strict_mode, system_info"
+NSN -> MCP: "pass to entries: Vec<(cc, auth, ServiceReport)>"
+MCP -> NSD: "POST /api/v1/client/services\n(before SSE subscribe)"
+NSD -> MCP: "ServicesAck\nmatched, unmatched, rejected"
+NSD -> MCP: "SSE push ProxyConfig rules"
+MCP -> NSN: "proxy_config_rx.recv()"
+NSN -> VAL: "find_violations(services, proxy_config)"
+VAL -> NSN: "Vec<RuleViolation>"
+NSN -> NSN: "tracing::warn! per violation;\naccepted/total counts"
