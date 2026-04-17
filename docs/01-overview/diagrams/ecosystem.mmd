@@ -20,7 +20,7 @@ graph TB
     subgraph User["用户侧 (访问方)"]
         NSC["NSC<br/>Client Binary<br/>Virtual IP 127.11.x.x<br/>Local DNS *.n.ns<br/>NscRouter"]
         APP["User App<br/>ssh / curl / psql"]
-        BROWSER["Browser / curl<br/>无 NSC 入站<br/>*.n.ns 公网 DNS"]
+        BROWSER["Browser / curl<br/>无 NSC 入站<br/>公网域名由 NSD 分配<br/>(非 *.n.ns)"]
     end
 
     NSD1 -. "SSE config push<br/>(wg/proxy/acl/gateway)" .-> NSN
@@ -39,8 +39,9 @@ graph TB
     NSC -. "WG direct peer<br/>(规划中: direct_peers)" .-> NSN
 
     %% 无 NSC 入站: 浏览器/curl 直接打 NSGW :443,
-    %% traefik 读 Host / SNI 后桥接到目标 NSN (站点主动对外暴露 HTTP/S 的场景)
-    BROWSER ==>|"公网 HTTPS :443<br/>Host / SNI = *.n.ns"| GW1
+    %% 公网域名由 NSD 单独签发(非 *.n.ns — 后者 NSC 专属);
+    %% traefik 按 Host/SNI 路由到目标 NSN, 并可在此层叠加 OIDC / 鉴权 / 限速等中间件
+    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(可叠加 OIDC / 鉴权 / 限速)"| GW1
 
     NSN --> LOCAL
     NSN --> REMOTE

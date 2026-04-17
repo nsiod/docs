@@ -130,7 +130,7 @@ flowchart TD
     NSGW -->|"Host / SNI<br/>路由"| NSN
 ```
 
-> 入站面的另一条路径: 当用户**直接通过公网 HTTPS 访问** NSGW(`:443`)时,traefik 会读 `Host` 头或 TLS `SNI` 扩展 —— 这也是 `*.n.ns` 被消费的场景,而且**不经过 NSC**。这就是 NSGW 需要识别 `*.n.ns` 的原因。
+> 入站面的另一条路径: 当站点主动把某个 HTTP(S) 服务**对公网暴露**时,NSD 会为它单独签发一个**公网域名**(例如 `myapp.<tenant>.example.com`,CNAME 到 NSGW),浏览器/`curl` 直接 `https://` 访问该域名。NSGW 的 traefik 按 `Host` / SNI 匹配这个公网域名(**不是 `*.n.ns`**)后桥接到目标 NSN,并可在这一层叠加 OIDC / 鉴权 / 限速等中间件。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。`*.n.ns` 只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN,浏览器**永远到不了** `*.n.ns`。
 
 ### `*.gw.ns` / `*.d.ns`
 
@@ -206,7 +206,7 @@ NSC 的 VIP 管理代码在 `crates/nsc/src/vip.rs`,路由聚合在 `crates/nsc/
 | 用户 SSH 到站点 | `ssh.{nid}.n.ns` | 用户 App | NSC Local DNS | `127.11.x.x`(VIP) |
 | 浏览器直连公网 HTTPS | `web.{nid}.n.ns` | 浏览器 | 公网 DNS | NXDOMAIN(失败) |
 | NSC 启动列服务 | `ssh.{nid}.n.ns` | `nsc status` | 本进程内路由表 | `(site={nid}, svc=ssh)` |
-| NSGW 接入 TLS 请求 | `web.{nid}.n.ns`(SNI) | 浏览器 | NSGW traefik | 命中路由,转发到 NSN |
+| NSGW 接入 TLS 请求 | `myapp.<tenant>.example.com`(由 NSD 签发的公网域名) | 浏览器 | 公网 DNS → NSGW traefik | 命中 Host/SNI 路由,走中间件后桥接到 NSN;**与 `*.n.ns` 无关** |
 | NSN 识别自己的 FQID | `*.{nid}.n.ns` | NSN 启动时 | 本进程(已知 nid) | 内部常量 |
 | 系统 `dig` 查询 | `primary.d.ns` | 工具 | 不查真实 DNS,仅 NSC 辅助查询时命中 | 仅 debug 模式非 NXDOMAIN |
 

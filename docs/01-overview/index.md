@@ -53,13 +53,13 @@ graph TB
     GW1 ==>|"WG / WSS"| NSN
     GW2 ==>|"WG / WSS"| NSN
     NSC -. "WG direct peer (规划中)" .-> NSN
-    BROWSER ==>|"公网 HTTPS :443<br/>Host / SNI = *.n.ns"| GW1
+    BROWSER ==>|"公网 HTTPS :443<br/>Host = NSD 分配的公网域名<br/>(可叠加 OIDC / 鉴权 / 限速)"| GW1
     NSN --> LOCAL
 ```
 
 > 图中 NSC↔NSN 虚线表示**机制已支持、控制面尚未下发**的直连路径: `tunnel-wg` 的 `PeerConfig` 只关心 `pubkey + endpoint + allowed_ips`,对 NSGW 与 NSN 无区别;当 NSD 未来下发 `direct_peers` 事件(两端可达或打洞成功)时,NSC 可以把 NSN 当作直接 WG peer,不再经由 NSGW 中继。详见 [transport-design.md 的"直连与 P2P"](./transport-design.md#直连与-p2p-未来设计)。
 >
-> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 只要 `*.n.ns` 的权威 DNS(或用户自建 resolver)把域名解析到 NSGW 的公网 IP,普通浏览器或 `curl` 可以直接以 `https://web.ab3xk9mnpq.n.ns/` 访问 —— traefik 读 `Host` 头 / TLS `SNI` 后按路由表把请求桥接到对应 NSN,再由 NSN 的 proxy+ACL 决定是否放行到本地服务。代价是失去了 NSC 的 VIP 隔离与端到端加密的那一段 —— 只适合站点明确希望"对公网暴露 HTTP(S)"的场景。详见 [dns-naming.md 的入站面说明](./dns-naming.md)。
+> 图中 Browser → NSGW 实线是**不装 NSC 的入站路径**: 这条路径**不使用 `*.n.ns`**(该命名空间只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN)。NSD 会为需要公网暴露的服务**单独签发一个公网域名**(例如 `myapp.<tenant>.example.com`,CNAME 指向 NSGW),把它登记到 NSGW 的 traefik 路由表里;traefik 按 `Host` / SNI 匹配后桥接到对应 NSN。由于 TLS 在 NSGW 终结,可以在这一层叠加 **OIDC / 基本鉴权 / 限速 / WAF / 请求改写**等 traefik 中间件 —— 这是 `*.n.ns` 内部路径(NSC→NSGW→NSN)无法做到的(后者是端到端加密的 L4 隧道,NSGW 看不到明文 HTTP)。代价: 公网路径丢失 VIP 隔离、TLS 仅到 NSGW、只承载 HTTP(S);适合 dashboard / webhook / OAuth 回调这类站点主动发布的场景。详见 [ecosystem.md 的"无 NSC 入站"](./ecosystem.md#无-nsc-入站-browser--nsgw--nsn)。
 
 | 组件 | 中文名 | 定位 | 语言/技术栈 | 部署位置 |
 |------|--------|------|-------------|---------|

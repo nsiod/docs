@@ -233,26 +233,46 @@ NSC     control    tunnel  (via GW · 直连规划中)  ──
 
 ### 无 NSC 入站 (Browser → NSGW → NSN)
 
-当站点希望把某个 HTTP(S) 服务暴露给**没有安装 NSC 的最终用户**(例如浏览器、`curl`、移动端 webview) 时,NSIO 通过 NSGW 的 HTTPS 入口提供了一条"不走客户端"的路径:
+当站点希望把某个 HTTP(S) 服务暴露给**没有安装 NSC 的最终用户**(浏览器、`curl`、移动端 webview、第三方 webhook 发送方) 时,NSIO 通过 NSGW 的 HTTPS 入口提供了一条"不走客户端"的路径:
 
 ```
-Browser / curl  ──  https://web.<nid>.n.ns/  ──→  NSGW :443
-                                                  ↓ traefik 读 Host 头 / TLS SNI
-                                                  ↓ 按 *.n.ns 路由表查出目标 peer
-                                                  ↓ WG / WSS 桥接
-                                                 NSN  →  proxy + ACL  →  本地服务
+Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :443
+                                                       ↓ TLS 终结 + 中间件链
+                                                       ↓   (OIDC / 基本鉴权 /
+                                                       ↓    限速 / WAF / 请求改写)
+                                                       ↓ traefik 按 Host / SNI
+                                                       ↓ 查公网域名 → NSN peer
+                                                       ↓ WG / WSS 桥接
+                                                       NSN → proxy + ACL → 本地服务
 ```
 
-前提:
-- `*.n.ns` 的公网权威 DNS(或用户自建 resolver)要把域名解析到 NSGW 的公网 IP;这与 NSC 本地把 `*.n.ns` 解析到 `127.11.x.x` 是独立的两张表。
-- 站点管理员在 `services.toml` 里显式把该服务声明为"对外 HTTPS 可访问"(等价于把它加进 NSGW 的路由与 NSN 的 ACL 白名单)。
+**公网域名由 NSD 分配,与 `*.n.ns` 完全独立**:
 
-这条路径的代价:
-- **失去 NSC 侧的 VIP 隔离**。目标服务的真实主机名对浏览器可见,而不是本地 `127.11.x.x` 的匿名 VIP。
-- **失去端到端加密的那一段**。TLS 只到 NSGW 终结;NSGW → NSN 这一跳靠 WG 或 WSS 加密,但 NSGW 在中间能看到明文 HTTP。
-- **只能承载 HTTP(S)**。非 HTTP 协议(SSH / psql / 任意 TCP)仍必须走 NSC。
+- `*.n.ns` 是 NSC 内部命名空间 —— 只在 NSC 本地 DNS 生效,公网 resolver 返回 NXDOMAIN,因此浏览器**永远到不了** `web.<nid>.n.ns`。
+- 当站点管理员勾选"公网发布"时,NSD 给这个服务**额外签发一个真正的公网域名**(例如 `myapp.<tenant>.example.com`,由 NSIO 控制的权威 DNS CNAME 到 NSGW,或让用户把自己的域名 CNAME 过来),并把"公网域名 → NSN peer"的映射下发到 NSGW 的 traefik 路由表。
+- TLS 证书由 NSGW 申请(ACME / Let's Encrypt)或由站点自带。
 
-这条路径存在的原因: 许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调 —— 强制所有访问者装 NSC 是过度设计。`Host` / `SNI` 路由让 NSGW 对这类 HTTP 入口天然友好。
+**这一层可以叠加的中间件**(traefik 原生或自研):
+
+| 中间件 | 作用 | 典型场景 |
+|--------|------|---------|
+| OIDC / OAuth2 | 在 NSGW 前置身份验证,未登录用户被重定向到 IdP | 给内部 dashboard 加 SSO |
+| 基本鉴权 / API Key | `Authorization` 头校验 | 保护 webhook / API |
+| 限速 (rate limit) | 按 IP / 用户 / token 限流 | 防刷 |
+| WAF / 请求过滤 | OWASP 规则、IP 黑白名单 | 基础安全加固 |
+| 请求改写 / 头注入 | 加 `X-Forwarded-User` 等 | 把身份信息透传给后端 |
+| 审计日志 | 谁访问了什么、何时、结果 | 合规 |
+
+这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
+
+**代价 / 约束**:
+
+- **失去端到端加密**。NSGW 在中间能读到明文 HTTP —— 这是启用中间件的前提,也是它与内部路径的本质区别。
+- **只承载 HTTP(S)**。非 HTTP 协议(SSH / psql / 任意 TCP)仍必须走 NSC。
+- **需要显式发布**。站点管理员要在 NSD 面板声明"这个服务公网暴露",NSD 才会触发公网域名签发与 NSGW 路由下发;默认仍是 `*.n.ns` 内部可见。
+- **NSN 侧仍走 ACL**。公网域名入站的请求在到达 NSN 后,仍由 `acl` crate 做一次"允许"检查,ACL 未放行的路径即使 traefik 路由命中也会被 NSN 拒绝。
+
+为什么这条路径存在:许多站点只想发布一个 dashboard、一个 webhook 入口、一个 OAuth 回调,强制所有访问者装 NSC 是过度设计。把 HTTP(S) 发布和身份认证下沉到 NSGW,站点侧只需要一个普通的 HTTP 服务 —— 不用管 TLS、不用管 SSO、不用管限速。
 
 ## 部署拓扑模板
 
