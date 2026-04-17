@@ -1,11 +1,3 @@
-/* Center and constrain mermaid renders within content column */
-.rspress-doc .mermaid,
-.rspress-doc svg[aria-roledescription] {
-  display: block;
-  margin: 1rem auto;
-  max-width: 100%;
-}
-
 /* D2-generated SVGs: injected as <img> by remark-d2-include; keep them from
    overflowing the prose column on narrow viewports while preserving crispness
    at native size on wider screens. */
@@ -26,34 +18,9 @@ body {
 }
 
 /* Tame anchor-jump overshoot: when clicking a TOC link the browser computes
-   the target from layout that may still be shifting (fonts, mermaid render).
+   the target from layout that may still be shifting (fonts).
    Adding scroll-margin keeps the heading clearly below the sticky navbar
    after the layout settles. */
 .rspress-doc :is(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: 5rem;
-}
-
-/* Mermaid render flicker mitigation.
-   rspress-plugin-mermaid renders SVG asynchronously via useState(svg) —
-   the initial paint has an empty <div> (height 0), then the SVG pops in.
-   The plugin also re-runs render() on documentElement.class changes,
-   and each render can produce sub-pixel size differences, causing the
-   page to jitter while scrolling.
-
-   contain: layout paint — layout/paint changes inside the diagram do not
-   propagate to the rest of the page, so sub-pixel re-render differences
-   never move content above the viewport.
-
-   min-height — reserves a realistic placeholder so the initial empty
-   render doesn't collapse the container to 0, which would then snap
-   to full height once mermaid finishes rendering. */
-.rspress-doc .mermaid {
-  contain: layout paint;
-  min-height: 240px;
-}
-
-/* Once the SVG has painted, an ancestor ends up with an explicit height,
-   so subsequent re-renders of the same diagram stay within those bounds. */
-.rspress-doc .mermaid svg[aria-roledescription] {
-  display: block;
 }

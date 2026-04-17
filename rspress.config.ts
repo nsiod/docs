@@ -1,9 +1,7 @@
 import path from 'node:path';
 import { defineConfig } from 'rspress/config';
 import { pluginShiki } from '@rspress/plugin-shiki';
-import mermaid from 'rspress-plugin-mermaid';
 import remarkLangAliases from './scripts/remark-lang-aliases.mjs';
-import remarkMmdInclude from './scripts/remark-mmd-include.mjs';
 import remarkD2Include from './scripts/remark-d2-include.mjs';
 
 export default defineConfig({
@@ -16,10 +14,9 @@ export default defineConfig({
   markdown: {
     // mdxRs must be disabled so JS-side remark plugins are honored.
     mdxRs: false,
-    remarkPlugins: [remarkLangAliases, remarkMmdInclude, remarkD2Include],
+    remarkPlugins: [remarkLangAliases, remarkD2Include],
   },
   plugins: [
-    mermaid(),
     pluginShiki({
       langs: ['bash', 'hcl', 'json', 'jsonc', 'markdown', 'rust', 'text', 'toml', 'ts', 'typescript', 'yaml'],
     }),
@@ -28,11 +25,6 @@ export default defineConfig({
     footer: {
       message: 'NSIO Architecture Docs · MIT License',
     },
-    // Do NOT use 'auto'. rspress toggles classes on <html> while scrolling to
-    // hide/show the navbar, and rspress-plugin-mermaid's MermaidRender registers
-    // a MutationObserver on documentElement.class that re-runs mermaid.render()
-    // on every class change. Sub-pixel height differences between re-renders
-    // cause the page to flicker / jitter near mermaid diagrams while scrolling.
     hideNavbar: 'never',
     // Content animation intercepts layout during route transitions and, combined
     // with TOC anchor jumps, causes the page to over-scroll past the target. Off.

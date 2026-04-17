@@ -11,9 +11,8 @@ const PUBLIC_ROOT = path.join(DOCS_ROOT, 'public');
  * Finds inline links whose URL targets a `.d2` file and injects an `<img>`
  * pointing to the sibling rendered SVG immediately after the paragraph.
  *
- * Mirrors `remark-mmd-include.mjs`'s URL-rewriting behaviour: by the time this
- * plugin runs, rspress has already rewritten relative link URLs to
- * site-absolute paths suffixed with `.html`, so e.g.
+ * By the time this plugin runs, rspress has already rewritten relative link
+ * URLs to site-absolute paths suffixed with `.html`, so e.g.
  *   `./diagrams/foo.d2` → `/<section>/diagrams/foo.d2.html`
  * We reverse that rewrite before checking the file exists, and build an
  * image URL that still resolves relative to the source markdown.
