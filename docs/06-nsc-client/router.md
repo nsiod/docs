@@ -71,14 +71,26 @@ for route in self.routes.values_mut() { ... }
 ### 查询接口
 
 ```rust
+// 按 (VIP, port) 查 —— VIP listener / 应用 TCP 客户端使用
 fn resolve(&self, vip: IpAddr, port: u16) -> Option<&NscRoute>
+
+// 按域名查 —— HTTP 代理使用(跳过 VIP listener,直接拿 gateway + site/host/port)
+fn lookup_domain(&self, domain: &str) -> Option<&SiteInfo>
+
 fn vip_for_site(&self, site: &str) -> Option<Ipv4Addr>
 fn route_count(&self) -> usize
 fn route_snapshots(&self) -> Vec<(IpAddr, u16, NscRoute)>
 fn status_snapshot(&self) -> Vec<SiteStatus>
+
+// 统一出口:给定 (site, host, port),打开一条 WSS CMD_OPEN_V4 逻辑流到 primary gateway
+async fn open_stream(&self, site: &str, host: &str, port: u16) -> Result<WssStream>
 ```
 
-`route_snapshots` 的用途是 `ProxyManager::update` 遍历它并为每个 `(VIP, port)` 启动一个 TCP listener（`crates/nsc/src/proxy.rs:80`）。
+- `resolve` 是 VIP listener 路径的入口(`proxy.rs:142`)——按 `(VIP, port)` 命中才进 WSS。
+- `lookup_domain` 是 HTTP 代理路径的入口(`http_proxy.rs:resolve_target`)——按**域名**命中就走 `open_stream`,**不经过** `127.11.x.x` listener。
+- `open_stream` 把 "选 primary gateway + 建 WSS 流 + 发 CMD_OPEN_V4" 封装起来,VIP listener 和 HTTP 代理两个入口共用它,路由决策不分叉。
+
+`route_snapshots` 的用途是 `ProxyManager::update` 遍历它并为每个 `(VIP, port)` 启动一个 TCP listener(`crates/nsc/src/proxy.rs:80`)——**仅供 VIP 入口使用**,HTTP 代理不参与。
 
 `status_snapshot` 被 `main.rs` 在每次 routing 更新后用于 `print_sites` 终端输出。
 

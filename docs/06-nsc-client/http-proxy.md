@@ -37,18 +37,18 @@ flowchart TD
   CP --> RES[resolve_target]
   HP --> RES
 
-  RES --> Q1{DnsRecords 命中?}
-  Q1 -->|是| VIP[目标 = VIP:port<br/>进入 NSC VIP listener]
+  RES --> Q1{NscRouter 命中<br/>(域名∈已知 site)?}
+  Q1 -->|是| TUN["NscRouter.open_stream<br/>WSS + CMD_OPEN_V4<br/>直连 NSGW"]
   Q1 -->|否| Q2{host 是字面 IP?}
   Q2 -->|是| DIRECT_IP[目标 = IP:port<br/>OS 直连]
   Q2 -->|否| DNS[OS lookup_host<br/>第一个地址]
   DNS --> DIRECT[直连互联网]
 
-  VIP --> CONN[TcpStream::connect]
-  DIRECT_IP --> CONN
+  DIRECT_IP --> CONN[TcpStream::connect]
   DIRECT --> CONN
 
-  CONN --> CK{method?}
+  TUN --> CK{method?}
+  CONN --> CK
   CK -->|CONNECT| ACK[返回 200 Connection established]
   CK -->|plain HTTP| REWRITE[改写请求行: 绝对 URI → 相对 path]
 
@@ -58,41 +58,52 @@ flowchart TD
 
 ### `resolve_target` 的优先级
 
-`crates/nsc/src/http_proxy.rs:245`：
-
 ```rust
-// 1. NSC DNS 命中 → 用 VIP（走本机 VIP listener → WSS 隧道）
-if let Some(&vip) = guard.get(&host.to_lowercase()) { return SocketAddr(vip, port); }
+// 1. NscRouter 命中 (domain ∈ 已知 site) → 直接打开一条 WSS 流到 NSGW
+//    (不走本地 VIP listener, 不做 TcpStream::connect 到 127.11.x.x)
+if let Some(site) = router.lookup_domain(&host.to_lowercase()) {
+    return Target::Tunnel { site, host, port };
+}
 
-// 2. host 本身是字面 IP → 直接解析
-if let Ok(ip) = host.parse::<IpAddr>() { return SocketAddr(ip, port); }
+// 2. host 本身是字面 IP → OS 直连
+if let Ok(ip) = host.parse::<IpAddr>() {
+    return Target::Direct(SocketAddr::new(ip, port));
+}
 
-// 3. OS DNS 解析 → 第一个地址
+// 3. OS DNS 解析 → 第一个地址, 直连互联网
 match tokio::net::lookup_host(...).await { ... }
 ```
 
-**关键**：第 1 步用的是**共享的** `DnsRecords`，也就是 `dns.rs` 里那张表——HTTP 代理直接读，**不发** DNS 查询。因此：
+**关键**:第 1 步查 NSC 自己的路由表(`NscRouter` + `DnsRecords`)。HTTP 代理直接读,**不发** DNS 查询。因此:
 
-- NSC 命中的域名**立刻**走 VIP，不产生任何 DNS 流量；
-- 未命中的域名走 OS 解析（libc / resolver），和用户本机默认一致。
+- NSC 命中的域名**立刻**进入"直连 NSGW"分支,不产生任何 DNS 流量,也不会在本机回环上多跳一次;
+- 未命中的域名走 OS 解析(libc / resolver),和用户本机默认一致。
 
-### 走 VIP 的「双跳」架构
+### 直连 NSGW(无本地 VIP 中转)
 
-NSC 命中的流量路径看起来是：
+命中 NSC 的流量**不经过** `127.11.x.x` VIP listener——HTTP 代理直接调 `NscRouter::open_stream(site, host:port)` 向 NSGW 开一条 WSS 逻辑流:
 
 ```
 browser → NSC HTTP proxy (127.0.0.1:8080)
-        ↓ 内部 TCP 连接
-        → NSC VIP listener (127.11.0.1:80)
-        ↓ WSS + CMD_OPEN_V4
+        ↓ NscRouter::open_stream(site, host:port)
+        ↓ WSS + CMD_OPEN_V4 (host:port, tcp)
         → NSGW → NSN → 本地服务
 ```
 
-注意 HTTP 代理**没有自己**连 NSGW——它只是把目标 IP 换成 VIP，复用了 `proxy.rs` 已经建好的 listener。这样：
+这样做的理由:
 
-- HTTP 代理代码里**零**隧道逻辑；
-- 同一个 listener 同时服务 VIP 直连和 HTTP 代理两种入口；
-- 新增 service 时只需 router/listener 侧感知，HTTP 代理自动跟上。
+- **零回环跳**:旧的"browser → 127.0.0.1:8080 → 127.11.0.1:80 → WSS" 双跳会多出一次 TCP 状态机 + 一次内存拷贝,纯属浪费;
+- **目标语义更精确**:VIP listener 对每个 `(site, port)` 硬编码一个监听口,无法表达"任意 port / 任意 host"——HTTP CONNECT 经常点到非标准端口(`ssh.site.n.ns:2222`、`git.site.n.ns:8443`),走直连 WSS 以 `(host, port)` 为单位开流,**不要求** NSC 预先为该端口分配 listener;
+- **和 VIP 路径解耦**:VIP listener 继续服务非 HTTP 协议(SSH/DB/Redis 的客户端会自己 DNS 解析 → TCP connect,仍然落在 VIP)。两个入口共用 `NscRouter` 的路由决策,但各自握住自己的 socket。
+
+VIP listener 与 HTTP 代理的分工:
+
+| 入口 | 启动门槛 | 目标表达能力 | 命中时的下游 |
+|------|----------|--------------|---------------|
+| VIP listener(`127.11.x.x:port`) | 需预先为 `(site, port)` 分配 listener | 仅预分配过的端口集合 | `NscRouter::open_stream` → WSS |
+| HTTP 代理(`127.0.0.1:8080`) | 单 listener 通吃所有 `(host, port)` | 任意 port、任意 host(含非 n.ns 的直连 fallback) | 命中 NSC 时直接 `NscRouter::open_stream` → WSS;未命中走 OS 直连 |
+
+两者**共用同一个 `NscRouter`**,路由不会不一致;但 HTTP 代理**不复用** VIP 的 socket——它独立打流。
 
 ## `CONNECT` 流程
 
@@ -101,22 +112,22 @@ sequenceDiagram
   autonumber
   participant B as Browser
   participant HP as NSC HTTP proxy<br/>127.0.0.1:8080
-  participant DNS as DnsRecords
-  participant VIP as VIP proxy<br/>127.11.0.1:22
+  participant R as NscRouter
   participant GW as NSGW
   participant NSN
 
   B->>HP: CONNECT ssh.office.n.ns:22 HTTP/1.1
   HP->>HP: 读 headers，丢到空行
-  HP->>DNS: get("ssh.office.n.ns") → 127.11.0.1
-  HP->>VIP: TCP connect(127.11.0.1:22)
-  VIP->>GW: WSS + CMD_OPEN_V4 (127.0.0.1:22, TCP)
-  GW->>NSN: relay
-  GW-->>VIP: relay ok
-  VIP-->>HP: TCP established
+  HP->>R: lookup_domain("ssh.office.n.ns") → site=office
+  HP->>GW: WSS + CMD_OPEN_V4 (ssh.office.n.ns:22, TCP)<br/>(NscRouter.open_stream)
+  GW->>NSN: relay (stream_id 映射)
+  NSN-->>GW: OpenAck
+  GW-->>HP: OpenAck
   HP-->>B: HTTP/1.1 200 Connection established\r\n\r\n
   Note over B,NSN: 双向透传（copy_bidirectional），本代理无状态
 ```
+
+**注意**:sequence 里**没有** VIP listener 这一跳——`NscRouter::open_stream` 直接返回一个 `WssStream` 读写句柄,HTTP 代理拿它和 browser socket 做 `copy_bidirectional`。旧版本"HP → 127.11.0.1:22"的 TCP 中转已经删除。
 
 对 HTTPS 的处理完全透明——客户端发出的 TLS 握手直接被隧道转发到远端服务，NSC 不解包、不看内容、不做 MITM。
 
@@ -165,13 +176,14 @@ curl http://example.com             # 未命中 → 直连
 
 | 场景 | VIP 直连（`127.11.0.1:22`） | HTTP 代理（`127.0.0.1:8080`） |
 |---|---|---|
-| 是否需要改客户端配置 | 改 DNS（`127.0.0.53`）or `/etc/hosts` | 改 `http_proxy` / `https_proxy` 环境变量或系统代理 |
+| 是否需要改客户端配置 | 改 DNS(默认 `127.0.0.53`,或 `--dns-listen` 覆盖值) 或 `/etc/hosts` | 改 `http_proxy` / `https_proxy` 环境变量或系统代理 |
 | 浏览器可用性 | 可能被 secure DNS 绕过 | 100% 生效 |
 | 非 HTTP 协议（SSH/DB/Redis） | 直接可用 | 可用（通过 `CONNECT`） |
 | 运维复杂度 | 需修改系统 resolver | 零系统改动 |
+| 下游通道 | TcpStream 进入 VIP listener → WSS | 直接调 `NscRouter::open_stream` → WSS |
 | 适合场景 | 命令行为主的服务器/开发机 | 浏览器 + 多样化工具链 |
 
-两者**不互斥**——可以同时启用。HTTP 代理内部最终也经过 VIP listener 出去。
+两者**不互斥**——可以同时启用,共用 `NscRouter` 的路由决策,但各自独立打 WSS 流(HTTP 代理不经过 VIP listener)。
 
 ## 代码引用
 

@@ -181,7 +181,8 @@ registrations/               # 每个 realm 一份
 |---|---|
 | 默认 userspace 模式 + WSS relay | ✅ 可用 |
 | `127.11.0.0/16` 分配 + 本地 DNS | ✅ 可用 |
-| `--http-proxy` 本地 HTTP 代理 | ✅ 可用（见 [http-proxy.md](./http-proxy.md)） |
+| `--http-proxy` 本地 HTTP 代理(直连 NSGW,不走 VIP listener) | ✅ 可用（见 [http-proxy.md](./http-proxy.md)） |
+| `--dns-listen` 可配置 DNS 监听地址(默认 `127.0.0.53:53`) | ✅ 可用 |
 | SSE: routing / gateway / dns | ✅ 消费 |
 | SSE: wg / proxy / acl / token_refresh | ⚠️ 接收但忽略 |
 | TUN 数据面 | ❌ 仅改了 VIP 前缀，未建 TUN 设备 |
