@@ -154,6 +154,6 @@ graph LR
 
 ## 阅读本章的顺序建议
 
-- 想快速理解**是什么/为什么**: [README.md](./README.md) → 本文 → [feature-matrix.md](./feature-matrix.md)
+- 想快速理解**是什么/为什么**: [index.md](./index.md) → 本文 → [feature-matrix.md](./feature-matrix.md)
 - 想做**NSD/NSGW 的详细设计**: 先读 [nsd-capability-model.md](./nsd-capability-model.md) / [nsgw-capability-model.md](./nsgw-capability-model.md),再读对应 vision.md
 - 想做**排期和资源规划**: [roadmap.md](./roadmap.md) + [operational-model.md](./operational-model.md)

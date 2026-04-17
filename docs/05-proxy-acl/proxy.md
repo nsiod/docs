@@ -131,7 +131,7 @@ pub async fn handle_udp(
 | `total_connections` | 累计 TCP 连接数 |
 | `bytes_tx` / `bytes_rx` | 累计向后端发送 / 从后端接收的字节 |
 
-这些指标通过 `/api/nat` 与 Prometheus 输出, 详见 [07 · NSN 节点](../07-nsn-node/README.md) 的 telemetry 章节。
+这些指标通过 `/api/nat` 与 Prometheus 输出, 详见 [07 · NSN 节点](../07-nsn-node/index.md) 的 telemetry 章节。
 
 ## 7. `Error` 类型
 

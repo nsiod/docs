@@ -1,0 +1,7 @@
+/* Center and constrain mermaid renders within content column */
+.rspress-doc .mermaid,
+.rspress-doc svg[aria-roledescription] {
+  display: block;
+  margin: 1rem auto;
+  max-width: 100%;
+}

@@ -1,0 +1,84 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "首页"
+  },
+  {
+    "type": "dir",
+    "name": "01-overview",
+    "label": "01 · 系统总览",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "02-control-plane",
+    "label": "02 · 控制面",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "03-data-plane",
+    "label": "03 · 数据面",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "04-network-stack",
+    "label": "04 · 网络栈",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "05-proxy-acl",
+    "label": "05 · Proxy / ACL",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "06-nsc-client",
+    "label": "06 · NSC 客户端",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "07-nsn-node",
+    "label": "07 · NSN 节点",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "08-nsd-control",
+    "label": "08 · NSD 控制",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "09-nsgw-gateway",
+    "label": "09 · NSGW 网关",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "10-nsn-nsc-critique",
+    "label": "10 · 端到端评估",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "11-nsd-nsgw-vision",
+    "label": "11 · 控制面演进",
+    "collapsible": true,
+    "collapsed": true
+  }
+]

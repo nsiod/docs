@@ -10,6 +10,8 @@ out/
 .turbo/
 .vite/
 .cache/
+doc_build/
+.rspress/
 
 # TypeScript
 *.tsbuildinfo

@@ -8,7 +8,7 @@
 
 ### 两种数据面:TUN 模式 vs UserSpace 模式
 
-详见 [../03-data-plane/README.md](../03-data-plane/README.md)。简述:
+详见 [../03-data-plane/index.md](../03-data-plane/index.md)。简述:
 
 - **WG 模式**: `crates/tunnel-wg/` via `gotatun`,用户态 WireGuard,不需要 root
 - **WSS 模式**: `crates/tunnel-ws/` 的 WsFrame 二进制协议,UDP 被阻断时的 fallback

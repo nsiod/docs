@@ -147,7 +147,7 @@ NSC 做的是**出站 SNAT + PAT**：本地 `127.11.x.x:port` → `{site (via NS
 | 目标信息 | local service listener | remote NSN service port via NSGW |
 | 状态源 | 本地 `services.toml` + NSD ACL | NSD SSE `routing_config` + `gateway_config` |
 
-详见 [05 代理与 ACL](../05-proxy-acl/README.md) 的 NSN 侧路由章节。
+详见 [05 代理与 ACL](../05-proxy-acl/index.md) 的 NSN 侧路由章节。
 
 ## 冷启动时序
 

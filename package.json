@@ -1,0 +1,19 @@
+{
+  "name": "nsio-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rspress dev",
+    "build": "rspress build",
+    "preview": "rspress preview"
+  },
+  "dependencies": {
+    "rspress": "2.0.0-beta.21",
+    "rspress-plugin-mermaid": "1.0.1",
+    "unist-util-visit": "5.0.0"
+  },
+  "devDependencies": {
+    "@rspress/plugin-shiki": "2.0.0-beta.13"
+  }
+}

@@ -240,7 +240,7 @@ NSD 把策略推给 NSN 时, NSN 的 `ServiceRouter::load_acl` 会触发 `AclEng
 ## 8. 运行时观测
 
 - 日志: accept 走 `debug` (`crates/acl/src/engine.rs:144`), deny 走 `warn` (`crates/acl/src/engine.rs:160`, `"ACL deny: no matching rule"`), 可以用 `RUST_LOG=acl=warn` 把日志压缩成"只显示拒绝";
-- Monitor API: NSN 通过 `/api/acl` 暴露当前策略快照与最近若干拒绝事件 (详见 [07 · NSN 节点](../07-nsn-node/README.md));
+- Monitor API: NSN 通过 `/api/acl` 暴露当前策略快照与最近若干拒绝事件 (详见 [07 · NSN 节点](../07-nsn-node/index.md));
 - 端到端事实: `/api/connections` 记录每条连接的 ACL 决策和匹配规则下标, 便于审计回放。
 
 ## 9. 错误表
@@ -278,4 +278,4 @@ NSD 把策略推给 NSN 时, NSN 的 `ServiceRouter::load_acl` 会触发 `AclEng
 - [proxy.md](./proxy.md) — `handle_tcp_connection` / `handle_udp` 底层原语
 - [http-host-routing.md](./http-host-routing.md) — :80 路由在 ACL 侧为何用固定端口
 - [sni-routing.md](./sni-routing.md) — :443 路由同理
-- [02 · 控制面](../02-control-plane/README.md) — NSD 如何下发 `AclConfig` 与多源合并策略
+- [02 · 控制面](../02-control-plane/index.md) — NSD 如何下发 `AclConfig` 与多源合并策略

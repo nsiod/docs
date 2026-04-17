@@ -215,5 +215,5 @@ sequenceDiagram
 
 - 所有 mock 源文件: `tests/docker/nsgw-mock/`
 - 双 NSGW compose: `tests/docker/docker-compose.nsgw.yml`
-- 生产 gerbil: `tmp/gateway/` + `tmp/gateway/README.md`
+- 生产 gerbil: `tmp/gateway/` + `tmp/gateway/index.md`
 - 注册时序的 NSD 侧: `tests/docker/nsd-mock/src/registry.ts:317-347` + `:395-412`

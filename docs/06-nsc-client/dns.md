@@ -69,7 +69,7 @@ if let Some(vip) = r.vip_for_site(&entry.site) {
 }
 ```
 
-见 `crates/nsc/src/main.rs:258`。域名由 NSD 生成，形如 `{service}.{site}.n.ns`（见 [01 概述里的 DNS 命名约定](../01-overview/README.md)或 `/app/ai/nsio/docs/dns-naming.md`）。
+见 `crates/nsc/src/main.rs:258`。域名由 NSD 生成，形如 `{service}.{site}.n.ns`（见 [01 概述里的 DNS 命名约定](../01-overview/index.md)或 `/app/ai/nsio/docs/dns-naming.md`）。
 
 ### 路径 2: `dns_config` 显式下发（自定义域）
 
