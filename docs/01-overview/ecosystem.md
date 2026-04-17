@@ -265,6 +265,35 @@ Browser / curl ──→ https://<NSD 签发的公网域名>/  ──→  NSGW :
 
 这是 `*.n.ns` 内部路径(NSC → NSGW → NSN)**无法做到**的:内部路径是端到端加密的 L4 隧道,NSGW 只看得到加密后的字节,身份和内容信息要么在 NSC 侧(客户端不一定可信),要么在 NSN 侧(站点侧),中间网关没有机会插手。公网域名入口正相反 —— TLS 在 NSGW 终结,HTTP 明文可见,于是身份认证和流量治理才能下沉到这个共享层。
 
+**中间件由站点方/运营方在配置里声明,NSD 负责翻译下发**:
+
+- 站点方在 `services.toml`(或 NSD 控制台)里针对需要公网发布的服务声明 **`public` 块** —— 包括是否启用公网发布、用哪个公网域名(自带 CNAME 或由 NSD 签发)、启用哪些中间件、中间件的具体参数(IdP 发现地址、限速阈值、WAF 规则集等)。
+- NSD 把声明**翻译成 NSGW 的 traefik 动态配置**(router / middleware / service 三元组),通过已有的 SSE 配置下发通道推给对应 NSGW 实例;NSGW 的 traefik 热加载,无须重启。
+- 同一个服务可以叠加多个中间件,声明顺序即 traefik 的中间件链顺序。
+
+一个概念示例(**当前 `services.toml` schema 未包含 `[services.X.public]` 块,以下是产品设计层面的目标形态,供理解模型用**):
+
+```toml
+[services.dashboard]
+protocol = "http"
+host     = "127.0.0.1"
+port     = 3000
+enabled  = true
+
+[services.dashboard.public]
+enabled  = true
+domain   = "dashboard.acme.example.com"   # 可选; 不填则由 NSD 签发
+tls      = "acme"                          # acme | byo | passthrough
+middlewares = [
+    { type = "oidc", issuer = "https://idp.acme.com", client_id = "...", scopes = ["openid", "email"] },
+    { type = "ratelimit", rps = 20, burst = 40 },
+    { type = "waf", ruleset = "owasp-crs-4" },
+    { type = "header_rewrite", set = { "X-Forwarded-User" = "{{.oidc.sub}}" } },
+]
+```
+
+实际落地时这些字段应纳入 `ServiceDef`(`crates/common/src/services.rs:138`) 并扩展 NSD 的 SSE 事件(追加 `gateway_http_config` 或类似事件),目前两端均未实现。
+
 **代价 / 约束**:
 
 - **失去端到端加密**。NSGW 在中间能读到明文 HTTP —— 这是启用中间件的前提,也是它与内部路径的本质区别。
