@@ -1,0 +1,31 @@
+# NSGW 六大能力轴一览
+# 源: nsgw-capability-model.md 内联 mermaid
+
+direction: down
+
+classes: {
+  core: { style: { fill: "#dbeafe"; stroke: "#3b82f6" } }
+  defense: { style: { fill: "#fee2e2"; stroke: "#ef4444" } }
+  ops: { style: { fill: "#fef3c7"; stroke: "#f59e0b" } }
+}
+
+Core: "核心能力" {
+  CONN: "① 连接\nWG · WSS · QUIC · Noise" { class: core }
+  ROUTE: "② 路由\nAnycast · GeoDNS · SNI · Host" { class: core }
+}
+Defense: "防御与可靠性" {
+  SEC: "③ 安全\nDDoS · 限速 · WAF · mTLS" { class: defense }
+  HA: "④ 容灾与高可用\n多活 · 蓝绿 · 热升级" { class: defense }
+}
+Ops: "运维" {
+  OBS: "⑤ 可观测\ntracing · 流量图 · 拓扑图" { class: ops }
+  RES: "⑥ 资源管理\nQoS · 带宽限额 · 计费埋点" { class: ops }
+}
+
+Core.CONN -> Core.ROUTE
+Core.ROUTE -> Defense.SEC
+Defense.SEC -> Defense.HA
+Core.CONN -> Defense.HA
+Defense.HA -> Ops.OBS
+Core.CONN -> Ops.RES
+Defense.SEC -> Ops.RES

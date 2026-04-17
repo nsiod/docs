@@ -1,0 +1,21 @@
+# 每个 NSGW 的状态机 (GatewayStatus)
+# 源: crates/connector/src/multi.rs:49-61
+
+direction: down
+
+start: "起点" { shape: circle }
+Pending: Pending
+Connected: Connected
+Reconnecting: Reconnecting
+Failed: Failed
+Disabled: Disabled
+
+start -> Pending: "ctor"
+Pending -> Connected: "first connect OK"
+Pending -> Failed: "first connect fail"
+Connected -> Reconnecting: "TCP/UDP drop"
+Reconnecting -> Connected: "retry OK"
+Reconnecting -> Failed: "retry exhausted"
+Failed -> Reconnecting: "backoff elapsed"
+start -> Disabled: "config.enabled == false"
+Disabled -> Pending: "admin re-enable"

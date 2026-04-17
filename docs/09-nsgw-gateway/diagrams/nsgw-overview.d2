@@ -1,0 +1,33 @@
+# NSGW 总览: 外部入口、对内组件、控制面
+
+direction: right
+
+Ext: "外部入口" {
+  NSC: "NSC\n(Browser / Bun / Rust)"
+  WEB: "Web Browser\n(Mode 1 直连)"
+}
+
+NSGW: "NSGW (this doc)" {
+  TRA: "traefik v3.6.13\n:443 HTTPS / :8080 HTTP"
+  WSS: "WSS relay (Bun.serve)\n/relay · /client"
+  WG: "kernel WG\nwg0 · :51820/udp"
+  REG: "NSD registry sync\nSSE /api/v1/config/stream"
+}
+
+Site: "站点侧" {
+  NSN: "NSN\ngotatun (用户态 WG)"
+}
+
+Ctrl: "控制面" {
+  NSD: "NSD"
+}
+
+Ext.WEB -> NSGW.TRA: "Host: app.ex.com"
+Ext.NSC -> NSGW.WSS: "WSS /relay"
+Ext.NSC -> NSGW.WG: "UDP 51820"
+NSGW.TRA -> NSGW.WG: "WG tunnel\nnsn_wg_ip:virtual_port"
+NSGW.WG -> Site.NSN: "WireGuard" { style.stroke-width: 3 }
+NSGW.WSS -> Site.NSN: "WsFrame" { style.stroke-width: 3 }
+Ctrl.NSD -> NSGW.REG: "wg_config / routing_config / gateway_config" { style.stroke-dash: 3 }
+NSGW.REG -> NSGW.WG: "addPeer / handleRoutingConfig" { style.stroke-dash: 3 }
+NSGW.REG -> NSGW.TRA: "routes.yml" { style.stroke-dash: 3 }

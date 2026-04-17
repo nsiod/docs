@@ -15,29 +15,7 @@ NSIO 的数据面（NSN / NSGW / NSC）被刻意做成**无状态的对称节点
 
 ## NSD 在 NSIO 中的位置
 
-```mermaid
-graph LR
-    subgraph Control["控制面 (有状态)"]
-        NSD[NSD<br/>Registry · Auth · Policy · SSE]
-    end
-
-    subgraph DataPlane["数据面 (无状态)"]
-        NSN[NSN 站点节点]
-        NSGW[NSGW 网关]
-        NSC[NSC 客户端]
-    end
-
-    NSN -->|"POST /machine/register<br/>/machine/auth<br/>/services/report"| NSD
-    NSGW -->|"POST /machine/register<br/>/gateway/report"| NSD
-    NSC -->|"POST /machine/register<br/>/machine/auth"| NSD
-
-    NSD -.->|"SSE: wg_config · proxy_config<br/>acl_config · gateway_config<br/>routing_config · dns_config"| NSN
-    NSD -.->|"SSE: wg_config · routing_config"| NSGW
-    NSD -.->|"SSE: gateway_config · dns_config"| NSC
-
-    NSN ===|"WG / WSS / Noise / QUIC"| NSGW
-    NSC ===|"WG / WSS"| NSGW
-```
+[NSD 在 NSIO 中的位置](./diagrams/nsd-position.d2)
 
 图中实线是 HTTP POST（一次性请求），虚线是长连 SSE（NSD → Client 的单向推送），粗线是数据面隧道（不经过 NSD）。
 

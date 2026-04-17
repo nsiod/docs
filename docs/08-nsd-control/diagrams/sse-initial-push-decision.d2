@@ -1,0 +1,21 @@
+# 订阅建立时的初始推送决策树
+# 源: tests/docker/nsd-mock/src/registry.ts:317-347
+
+direction: down
+
+A: "SSE 订阅建立"
+B: "machine_id 是否已上报 services?" { shape: diamond }
+C: "push wg_config + gateway_config +\nproxy_config + services_ack + dns_config"
+D: "是否 type=gateway?" { shape: diamond }
+E: "push wg_config\n+ routing_config 若有 NSN"
+F: "gateways.size > 0?" { shape: diamond }
+G: "push gateway_config"
+H: "不 push 任何事件"
+
+A -> B
+B -> C: "是"
+B -> D: "否"
+D -> E: "是"
+D -> F: "否"
+F -> G: "是"
+F -> H: "否"

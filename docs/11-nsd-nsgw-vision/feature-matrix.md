@@ -26,28 +26,7 @@
 
 ## 覆盖度总览
 
-```mermaid
-quadrantChart
-    title 功能能力覆盖度 (当前 → 愿景)
-    x-axis 基础功能 --> 高级功能
-    y-axis 不紧迫 --> 紧迫
-    quadrant-1 优先立项 (GA 阶段)
-    quadrant-2 MVP 必做
-    quadrant-3 可以推后
-    quadrant-4 Enterprise 专属
-    "机器身份 Ed25519": [0.15, 0.9]
-    "ACL 下发 SSE": [0.2, 0.85]
-    "OIDC SSO": [0.3, 0.75]
-    "Web UI": [0.25, 0.7]
-    "Device Posture": [0.7, 0.8]
-    "Policy DSL Rego": [0.75, 0.75]
-    "P2P 打洞": [0.6, 0.65]
-    "多 NSD 并行": [0.85, 0.7]
-    "BYO-CA": [0.9, 0.4]
-    "硬件加速": [0.95, 0.3]
-    "i18n 16 种": [0.2, 0.3]
-    "WORM 审计": [0.8, 0.45]
-```
+[功能能力覆盖度四象限](./diagrams/feature-coverage-quadrant.d2)
 
 ---
 

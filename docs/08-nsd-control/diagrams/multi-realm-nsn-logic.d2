@@ -1,0 +1,28 @@
+# NSN 端多 NSD 并发连接与合并
+# 源: crates/control/src/multi.rs:51
+
+direction: down
+
+NSD_A: "NSD-A"
+NSD_B: "NSD-B"
+NSD_C: "NSD-C"
+
+NSN: "NSN 进程" {
+  MCP: "MultiControlPlane"
+  S1: "SseControl\n连 NSD-A"
+  S2: "SseControl\n连 NSD-B"
+  S3: "SseControl\n连 NSD-C"
+  STORE: "NsdConfigStore\n按 NSD 分桶" { shape: cylinder }
+  MERGE: "合并器\nmerge_wg / merge_proxy / merge_acl"
+  CHAN: "mpsc 输出通道"
+
+  S1 -> STORE
+  S2 -> STORE
+  S3 -> STORE
+  STORE -> MERGE
+  MERGE -> CHAN
+}
+
+NSD_A -> NSN.S1: "SSE" { style.stroke-dash: 3 }
+NSD_B -> NSN.S2: "SSE" { style.stroke-dash: 3 }
+NSD_C -> NSN.S3: "SSE" { style.stroke-dash: 3 }

@@ -1,0 +1,46 @@
+# 数据面扩展能力总览
+# 源: data-plane-extensions.md 内联 mermaid
+
+direction: down
+
+Protocol: "协议层" {
+  P1: "WireGuard UDP"
+  P2: "WSS TCP"
+  P3: "QUIC"
+  P4: "MASQUE"
+}
+Path: "路径优化" {
+  Q1: "P2P Hole Punch"
+  Q2: "MPTCP"
+  Q3: "WG+WSS 并行"
+  Q4: "Anycast"
+}
+Resilience: "弹性" {
+  R1: "BBR"
+  R2: "FEC"
+  R3: "断点续连"
+}
+Scale: "规模" {
+  S1: "边缘计算"
+  S2: "跨云"
+  S3: "硬件加速"
+}
+Enterprise: "企业特性" {
+  E1: "BYO-CA"
+  E2: "私有 DNS"
+  E3: "IoT 优化"
+}
+
+Protocol.P1 -> Path.Q1
+Protocol.P1 -> Path.Q3
+Protocol.P2 -> Path.Q2
+Protocol.P2 -> Resilience.R1
+Protocol.P3 -> Resilience.R3
+Path.Q1 -> Path.Q4
+Path.Q3 -> Resilience.R2
+Scale.S1 -> Path.Q4
+Scale.S2 -> Path.Q4
+Scale.S3 -> Protocol.P1
+Enterprise.E1 -> Protocol.P1
+Enterprise.E2 -> Scale
+Enterprise.E3 -> Resilience.R3

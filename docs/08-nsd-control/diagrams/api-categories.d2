@@ -1,0 +1,19 @@
+# NSD API 分类总览
+# 源: tests/docker/nsd-mock/src/, crates/control/src/
+
+direction: right
+
+HTTP: "HTTP 单次请求" {
+  DISCOVERY: "Discovery\nGET /api/v1/info"
+  REG_AUTH: "Registration + Auth\nPOST /api/v1/machine/*\nPOST /api/v1/device/*"
+  REPORT: "Report\nPOST /api/v1/services/report\nPOST /api/v1/gateway/report"
+  ADMIN: "Admin\nGET /api/v1/services\nGET /api/v1/machines\nGET /ready"
+}
+
+SSE: "SSE 长连接" {
+  STREAM: "GET /api/v1/config/stream"
+}
+
+HTTP.DISCOVERY -> HTTP.REG_AUTH { style.stroke-dash: 3 }
+HTTP.REG_AUTH -> HTTP.REPORT { style.stroke-dash: 3 }
+HTTP.REG_AUTH -> SSE.STREAM { style.stroke-dash: 3 }

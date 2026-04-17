@@ -76,7 +76,7 @@ match self.proto {
 }
 ```
 
-流程图: [diagrams/acl-matcher.mmd](./diagrams/acl-matcher.mmd)。
+流程图: [diagrams/acl-matcher.d2](./diagrams/acl-matcher.d2)。
 
 ## 4. 主体匹配 (`subject`)
 

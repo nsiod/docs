@@ -1,0 +1,50 @@
+# NSGW 多区域部署拓扑
+
+direction: down
+
+US: "美西 / 美东 / AP" {
+  GW1: "NSGW-1 · us-east\ntraefik + kernel WG + WSS"
+  GW2: "NSGW-2 · us-west\n同上"
+}
+
+EU: "EU" {
+  GW3: "NSGW-3 · eu-west\n同上"
+}
+
+APAC: "APAC" {
+  GW4: "NSGW-4 · ap-east\n同上"
+}
+
+Ctrl: "控制面 (HA)" {
+  NSD1: "NSD-1"
+  NSD2: "NSD-2"
+}
+
+Sites: "站点侧" {
+  NSN1: "NSN (office-us)"
+  NSN2: "NSN (office-eu)"
+}
+
+Users: "用户侧" {
+  NSC1: "NSC (laptop)"
+}
+
+Ctrl.NSD1 -> Users.NSC1: "SSE push gateway_config" { style.stroke-dash: 3 }
+Ctrl.NSD1 -> Sites.NSN1: "SSE push gateway_config" { style.stroke-dash: 3 }
+Ctrl.NSD1 -> Sites.NSN2: "SSE push gateway_config" { style.stroke-dash: 3 }
+Ctrl.NSD2 -> Sites.NSN1: "SSE (HA)" { style.stroke-dash: 3 }
+
+Users.NSC1 -> US.GW1: "prefer NSGW-1 (lowest latency)" { style.stroke-width: 3 }
+Users.NSC1 -> EU.GW3: "fallback" { style.stroke-dash: 3 }
+Sites.NSN1 -> US.GW1: { style.stroke-width: 3 }
+Sites.NSN2 -> EU.GW3: { style.stroke-width: 3 }
+Sites.NSN2 -> US.GW1: "fallback" { style.stroke-dash: 3 }
+
+US.GW1 -> Ctrl.NSD1: "POST gateway_report" { style.stroke-dash: 3 }
+US.GW2 -> Ctrl.NSD1: "POST gateway_report" { style.stroke-dash: 3 }
+EU.GW3 -> Ctrl.NSD1: "POST gateway_report" { style.stroke-dash: 3 }
+APAC.GW4 -> Ctrl.NSD1: "POST gateway_report" { style.stroke-dash: 3 }
+US.GW1 -> Ctrl.NSD1: "SSE wg_config/routing_config" { style.stroke-dash: 3 }
+US.GW2 -> Ctrl.NSD1: "SSE wg_config/routing_config" { style.stroke-dash: 3 }
+EU.GW3 -> Ctrl.NSD1: "SSE wg_config/routing_config" { style.stroke-dash: 3 }
+APAC.GW4 -> Ctrl.NSD1: "SSE wg_config/routing_config" { style.stroke-dash: 3 }

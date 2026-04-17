@@ -1,0 +1,25 @@
+# 信任边界全景与失守点
+# 源: security-concerns.md §0
+
+direction: right
+
+USER: "用户/操作者"
+NSN: "NSN" { style.fill: "#cfe" }
+NSC: "NSC" { style.fill: "#cfe" }
+NSD: "NSD" { style.fill: "#ffd" }
+NSGW: "NSGW" { style.fill: "#ffd" }
+
+DISK: "NSN 本地磁盘" {
+  IDFILE: "machinekey.json\nplain hex (SEC-004)" { style.fill: "#fdd" }
+}
+
+USER -> NSN: "auth_key 或\nOAuth2 device_code"
+NSN -> NSD: "register/auth/heartbeat\nHTTP plaintext (SEC-002)"
+NSN -> NSD: "SSE config push\nJWT Bearer"
+NSN -> NSGW: "WSS data + Open frame\nACL gated (SEC-001)"
+NSC -> NSGW: "WSS / WG"
+NSC -> NSGW: "无 outbound ACL\n(SEC-006)" { style.stroke-dash: 3 }
+
+NSD -> NSN: "empty ACL → 交集清空\n(SEC-005)"
+
+NSN -- DISK

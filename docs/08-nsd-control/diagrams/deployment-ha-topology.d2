@@ -1,0 +1,32 @@
+# 生产 NSD 的 HA 部署拓扑
+# 源: tmp/control/ 架构设计
+
+direction: down
+
+Edge: "边缘层" {
+  TRAEFIK: "traefik"
+}
+
+Control: "NSD 控制面（可水平扩展）" {
+  NSD1: "NSD instance 1"
+  NSD2: "NSD instance 2"
+}
+
+State: "共享状态层" {
+  PG: "PostgreSQL\n主从复制" { shape: cylinder }
+  REDIS: "Redis\nSSE pub/sub · 可选" { shape: cylinder }
+}
+
+Clients: "Clients" {
+  NSN: "NSN nodes"
+  NSGW: "NSGW gateways"
+  NSC: "NSC clients"
+}
+
+Edge.TRAEFIK -> Control.NSD1
+Edge.TRAEFIK -> Control.NSD2
+Control.NSD1 -> State.PG
+Control.NSD2 -> State.PG
+Control.NSD1 -> State.REDIS { style.stroke-dash: 3 }
+Control.NSD2 -> State.REDIS { style.stroke-dash: 3 }
+Clients -> Edge.TRAEFIK

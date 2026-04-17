@@ -1,0 +1,29 @@
+# NSD 进程边界与五大核心职责
+# 源: tests/docker/nsd-mock/src/*, tmp/control/server/*
+
+direction: down
+
+NSD: "NSD 进程边界" {
+  REG: "① 设备注册表\nMachine / Gateway 表"
+  AUTH: "② 认证服务\nauthkey · device flow · signature · JWT"
+  POL: "③ 策略引擎\nProxyConfig · AclConfig · Routing · DNS"
+  SSE: "④ 配置分发\nSSE 订阅表 · 差量推送"
+  UI: "⑤ Web UI / API\n管理员操作入口"
+
+  AUTH -> REG
+  UI -> REG
+  UI -> POL
+  REG -> POL
+  POL -> SSE
+  REG -> SSE
+}
+
+CLI_NSN: "NSN/NSC HTTP"
+CLI_NSGW: "NSGW HTTP"
+ADMIN: "Admin Browser"
+
+CLI_NSN -> NSD.AUTH
+CLI_NSN -> NSD.SSE
+CLI_NSGW -> NSD.AUTH
+CLI_NSGW -> NSD.SSE
+ADMIN -> NSD.UI

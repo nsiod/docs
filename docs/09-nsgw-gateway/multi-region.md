@@ -6,49 +6,7 @@
 
 一个典型的跨洲部署:
 
-```mermaid
-graph TB
-    subgraph US["美西 / 美东 / AP"]
-        GW1["NSGW-1 · us-east<br/>traefik + kernel WG + WSS"]
-        GW2["NSGW-2 · us-west<br/>同上"]
-    end
-
-    subgraph EU["EU"]
-        GW3["NSGW-3 · eu-west<br/>同上"]
-    end
-
-    subgraph APAC["APAC"]
-        GW4["NSGW-4 · ap-east<br/>同上"]
-    end
-
-    subgraph Ctrl["控制面(HA)"]
-        NSD1["NSD-1"]
-        NSD2["NSD-2"]
-    end
-
-    subgraph Sites["站点侧"]
-        NSN1["NSN (office-us)"]
-        NSN2["NSN (office-eu)"]
-    end
-
-    subgraph Users["用户侧"]
-        NSC1["NSC (laptop)"]
-    end
-
-    NSD1 -. "SSE push gateway_config" .-> NSC1
-    NSD1 -. "SSE push gateway_config" .-> NSN1
-    NSD1 -. "SSE push gateway_config" .-> NSN2
-    NSD2 -. "SSE (HA)" .-> NSN1
-
-    NSC1 ==>|"prefer NSGW-1 (lowest latency)"| GW1
-    NSC1 -. "fallback" .-> GW3
-    NSN1 ==> GW1
-    NSN2 ==> GW3
-    NSN2 -. "fallback" .-> GW1
-
-    GW1 & GW2 & GW3 & GW4 -. "POST gateway_report" .-> NSD1
-    GW1 & GW2 & GW3 & GW4 -. "SSE wg_config/routing_config" .-> NSD1
-```
+[NSGW 多区域部署拓扑](./diagrams/multi-region-topology.d2)
 
 **核心观察**:
 - 每个 NSGW 是**独立进程**,只跟 NSD 对话;NSGW 之间不互相知道对方存在。
@@ -93,18 +51,7 @@ pub enum GatewayStatus {
 
 从 `Pending` → 首次 `connect()` 成功 → `Connected`;失败 → `Failed`;重连中 → `Reconnecting`;管理员关闭 → `Disabled`。
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending: ctor
-    Pending --> Connected: first connect OK
-    Pending --> Failed: first connect fail
-    Connected --> Reconnecting: TCP/UDP drop
-    Reconnecting --> Connected: retry OK
-    Reconnecting --> Failed: retry exhausted
-    Failed --> Reconnecting: backoff elapsed
-    [*] --> Disabled: config.enabled == false
-    Disabled --> Pending: admin re-enable
-```
+[GatewayStatus 状态机](./diagrams/gateway-status-state.d2)
 
 ### 每个网关的事件
 
@@ -130,38 +77,7 @@ stateDiagram-v2
 
 ## Failover 时序(单网关失联)
 
-```mermaid
-sequenceDiagram
-    participant NSN as NSN connector
-    participant G1 as NSGW-1
-    participant G2 as NSGW-2
-    participant ND as NSD
-
-    Note over NSN,G1: 正常期:NSN 通过 NSGW-1 转发业务流量
-    NSN->>G1: WG handshake (keepalive)
-    G1-->>NSN: handshake response
-
-    Note over G1: NSGW-1 宿主宕机
-    NSN->>G1: WG data (no reply)
-    Note over NSN: TunnelManager 探测无响应
-    NSN->>NSN: mark G1 Reconnecting(attempt=1)
-    NSN-->>NSN: emit GatewayEvent::Reconnecting
-
-    NSN->>NSN: select_gateway() → G2 (next lowest latency)
-    NSN->>G2: WG handshake (already connected)
-    G2-->>NSN: data continues via G2
-
-    Note over ND: 独立 detect(健康探针)
-    ND->>G1: (health probe fails)
-    Note over ND: NSD 在一段后清掉 NSGW-1 peer 项
-    ND-->>NSN: gateway_config without NSGW-1
-    NSN->>NSN: mark G1 Disabled until re-register
-
-    Note over G1: NSGW-1 恢复
-    G1->>ND: POST /gateway/report
-    ND-->>NSN: gateway_config with NSGW-1 again
-    NSN->>NSN: mark G1 Pending → 重试连接
-```
+[单网关失联的 failover 时序](./diagrams/single-gw-failover.d2)
 
 **关键时间参数**(来自代码):
 - `ConnectorManager::connect()` UDP 探测超时 5 s(`lib.rs:241` 注释所在 `probe_udp` 函数,见 [connector.md §1.3](../03-data-plane/connector.md#13-udp-探活probe_udp))。

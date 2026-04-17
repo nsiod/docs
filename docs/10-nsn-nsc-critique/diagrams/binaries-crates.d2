@@ -1,0 +1,34 @@
+# NSN / NSC 二进制与内部 crate 装配
+# 源: current-state.md §1
+
+direction: down
+
+NSN: "nsn (站点节点)" {
+  NSN_MAIN: "main.rs\n1633 行\nspawn 30+ tasks"
+  NSN_STATE: "state.rs\n660 行\nAppState 全局"
+  NSN_MON: "monitor.rs\n430 行\n11 条 HTTP API"
+}
+
+NSC: "nsc (用户客户端)" {
+  NSC_MAIN: "main.rs\n337 行\n4 个 select 分支"
+  NSC_PROXY: "proxy / router / dns\nHTTP 代理 + 127.11/16 VIP"
+}
+
+CONNECTOR: "connector\n522+397"
+TUNWG: "tunnel-wg\n629"
+TUNWS: "tunnel-ws\n1138"
+NETSTACK: "netstack\n705+204"
+NAT: "nat\n678+...+..."
+PROXY: "proxy\ntcp+udp"
+ACL: "acl\n542+matcher+policy"
+CONTROL: "control\n545+566+397+374+367+...."
+
+NSN.NSN_MAIN -> CONNECTOR: "consumes"
+NSN.NSN_MAIN -> TUNWG: "consumes"
+NSN.NSN_MAIN -> NETSTACK: "consumes"
+NSN.NSN_MAIN -> NAT: "consumes"
+NSN.NSN_MAIN -> PROXY: "consumes"
+NSN.NSN_MAIN -> ACL: "consumes"
+NSN.NSN_MAIN -> CONTROL: "consumes"
+NSC.NSC_MAIN -> CONTROL: "consumes"
+NSC.NSC_MAIN -> CONTROL: "discards: wg/proxy/acl/token rx" { style.stroke-dash: 3 }

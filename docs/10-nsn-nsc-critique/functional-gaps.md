@@ -2,33 +2,7 @@
 
 > 这里记录的是**未完成实现**：把缺失的代码写完就消失，无需重新设计接口。判别规则见 [methodology.md §5](./methodology.md#5-结构性缺陷-vs-未完成实现-判别)。带「⚠ 影响安全」标记的缺陷可能跨入 [security-concerns.md](./security-concerns.md)。
 
-```mermaid
-flowchart LR
-    classDef impl fill:#cfc,stroke:#3a3
-    classDef stub fill:#fec,stroke:#e90
-    classDef todo fill:#fcc,stroke:#c33
-
-    subgraph NSN["nsn"]
-        N1["wg/wss/auto transport"]:::impl
-        N2["proxy 80/443/raw"]:::impl
-        N3["ACL engine + reload"]:::impl
-        N4["AclFilteredSend (IP-layer)"]:::stub
-        N5["conntrack GC / TTL"]:::todo
-        N6["IPv6 NAT / NetStack"]:::todo
-        N7["MultiGW health probe"]:::todo
-    end
-
-    subgraph NSC["nsc"]
-        C1["UserSpace + WSS proxy"]:::impl
-        C2["Local DNS *.n.ns"]:::impl
-        C3["HTTP CONNECT proxy"]:::impl
-        C4["TUN data plane"]:::stub
-        C5["--device-flow"]:::todo
-        C6["Status subcommand"]:::todo
-        C7["token refresh consumer"]:::todo
-        C8["NSC ACL"]:::todo
-    end
-```
+[FUNC-* 缺陷概览 · NSN/NSC 模块实现状态](./diagrams/func-gaps-overview.d2)
 
 ---
 

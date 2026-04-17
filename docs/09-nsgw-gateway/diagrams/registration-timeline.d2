@@ -1,0 +1,37 @@
+# 注册 + 订阅时序 (端到端)
+
+shape: sequence_diagram
+
+EP: "entrypoint.sh"
+BU: "bun index.ts"
+TR: "traefik"
+ND: "NSD"
+NSN: "NSN (已在运行)"
+
+EP -> EP: "wg genkey"
+EP -> EP: "ip link add wg0 + 100.64.0.1/16"
+EP -> EP: "openssl self-signed cert"
+EP -> EP: "tls.yml -> /etc/traefik/dynamic/"
+EP -> TR: "traefik --configFile=/etc/traefik/traefik.yml"
+TR -> TR: "watch /etc/traefik/dynamic/ (empty routes.yml)"
+EP -> BU: "exec bun run src/index.ts"
+
+BU -> BU: "loadConfig() + getServerPubkey()"
+BU -> BU: "Bun.serve health on :9091"
+BU -> BU: "Bun.serve WSS on :9443 (conditional)"
+
+loop_nsd: "for each NSD in CONTROL_CENTERS" {
+  BU -> ND: "POST /api/v1/machine/register (type=gateway)"
+  ND -> BU: "200"
+  BU -> ND: "POST /api/v1/gateway/report (pubkey + endpoints)"
+  ND -> BU: "204"
+  ND -> NSN: "broadcast gateway_config"
+  ND -> NSN: "broadcast wg_config (NSN peer list includes this NSGW)"
+  BU -> ND: "GET /api/v1/config/stream?machine_id=nsgw-1-gw (SSE)"
+  ND -> BU: "immediate wg_config (NSN peer list)"
+  ND -> BU: "immediate routing_config (domain -> nsn_wg_ip:port)"
+}
+
+BU -> BU: "handleRoutingConfig -> write routes.yml"
+TR -> TR: "file watcher reload"
+NSN -> BU: "WG handshake (now works; peer just added)"

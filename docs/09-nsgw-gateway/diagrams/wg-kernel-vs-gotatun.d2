@@ -1,0 +1,21 @@
+# NSGW kernel WG 与 NSN 用户态 gotatun 的路径对比
+
+direction: right
+
+NSC_side: "NSC 侧" {
+  NSCuser: "NSC\ngotatun (用户态)"
+}
+
+NSGW_box: "NSGW (kernel WG)" {
+  WG0: "wg0 interface\nkernel wireguard"
+  IPRT: "kernel IP routing"
+}
+
+NSN_side: "NSN 侧" {
+  NSNuser: "NSN\ngotatun (用户态)"
+}
+
+NSC_side.NSCuser -> NSGW_box.WG0: "UDP :51820\nWG handshake + data" { style.stroke-width: 3 }
+NSGW_box.WG0 -> NSGW_box.IPRT: "解密后投入\nnetns"
+NSGW_box.IPRT -> NSGW_box.WG0: "match allowed-ips\n100.64.x.x/24"
+NSGW_box.WG0 -> NSN_side.NSNuser: "UDP\nWG encrypt" { style.stroke-width: 3 }

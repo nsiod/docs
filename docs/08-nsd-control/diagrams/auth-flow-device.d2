@@ -1,0 +1,25 @@
+# 首次注册路径 B：OAuth2 Device Flow (RFC 8628)
+# 源: tests/docker/nsd-mock/src/auth.ts + crates/control/src/device_flow.rs
+
+shape: sequence_diagram
+
+NSN: "NSN"
+NSD: "NSD"
+User: "Browser (User)"
+
+NSN -> NSD: "POST /api/v1/device/code { client_id }"
+NSD -> NSN: "{ device_code, user_code, verification_uri, expires_in, interval }"
+NSN -> User: "打印 \"请打开 {verification_uri} 输入 {user_code}\""
+poll: "每 interval 秒轮询" {
+  NSN -> NSD: "POST /api/v1/device/token { device_code, grant_type }"
+  approval: "批准状态" {
+    pending: "未批准" {
+      NSD -> NSN: "428 { error: \"authorization_pending\" }"
+    }
+    approved: "已批准" {
+      NSD -> NSN: "200 { access_token }"
+    }
+  }
+}
+NSN -> NSD: "POST /machine/register (Authorization: Bearer access_token)"
+NSD -> NSN: "201 { machine_id, ... }"

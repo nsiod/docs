@@ -132,23 +132,7 @@ GA 的**必要条件**(在 MVP 之上):
 
 ## 图示约定
 
-```mermaid
-graph LR
-    CUR["当前 (mock)"] --> MVP["MVP (~2 季度)"]
-    MVP --> GA["GA (~4 季度)"]
-    GA --> ENT["企业级 (~8 季度)"]
-    CUR -.->|跳级风险| GA
-    MVP -.->|跳级风险| ENT
-
-    classDef now fill:#fef3c7,stroke:#f59e0b
-    classDef mvp fill:#dbeafe,stroke:#3b82f6
-    classDef ga fill:#dcfce7,stroke:#16a34a
-    classDef ent fill:#f3e8ff,stroke:#9333ea
-    class CUR now
-    class MVP mvp
-    class GA ga
-    class ENT ent
-```
+[落地层级递进 (CUR → MVP → GA → ENT)](./diagrams/tier-progression.d2)
 
 注意:本图中的"季度"是示意性的**相对间距**,不代表真实日历节奏。真实排期以 [roadmap.md](./roadmap.md) 为准。
 

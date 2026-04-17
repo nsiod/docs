@@ -1,0 +1,105 @@
+# NSN/NSC 当前耦合 vs 改进后解耦对比
+
+direction: right
+
+classes: {
+  good: { style: { fill: "#c6e0b4"; stroke: "#000000" } }
+  bad: { style: { fill: "#fa8072"; stroke: "#000000" } }
+  warn: { style: { fill: "#ffd966"; stroke: "#000000" } }
+}
+
+CURRENT: "当前 (问题: 中心化 main + 双 ACL Arc + HTTP 旁路)" {
+  direction: down
+
+  MAIN_NOW: "nsn/main.rs\n1633 行\n30+ tokio::spawn\n装配所有 crate" { class: warn }
+
+  ACL_NOW: "ACL 引擎双 Arc" {
+    ACL1: "nat::ServiceRouter::acl_engine\n(fail-OPEN)" { class: bad }
+    ACL2: "connector::Manager::acl\n共享给 WsTunnel\n(fail-CLOSED)" { class: bad }
+    ACL_LOAD: "load_acl_config_for_runtime\n同时写两份, 无回滚" { class: bad }
+  }
+
+  CTRL_NOW: "control 双通道" {
+    SSE_NOW: "SSE / Noise / QUIC\n加密通道"
+    HTTP_NOW: "HTTP API 旁路\nregister/auth/heartbeat\nto_http_base() → http://" { class: bad }
+  }
+
+  DATA_NOW: "数据面" {
+    WSS_NOW: "tunnel-ws\n单 WSS TCP\nHOL blocking" { class: warn }
+    WG_NOW: "tunnel-wg\nuserspace WG"
+    NAT_NOW: "nat\n无 GC/TTL/cap" { class: bad }
+  }
+
+  CONN_NOW: "connector" {
+    HEALTH_NOW: "health_interval\n#[allow(dead_code)]" { class: bad }
+  }
+
+  NSC_NOW: "NSC" {
+    NSC_RX: "_acl_rx _token_rx\n显式丢弃" { class: bad }
+    NSC_TUN: "--data-plane tun\n仅改 VIP 前缀" { class: bad }
+  }
+
+  MAIN_NOW -> ACL_NOW.ACL1
+  MAIN_NOW -> ACL_NOW.ACL2
+  ACL_NOW.ACL_LOAD -> ACL_NOW.ACL1
+  ACL_NOW.ACL_LOAD -> ACL_NOW.ACL2
+  MAIN_NOW -> CTRL_NOW.SSE_NOW
+  MAIN_NOW -> CTRL_NOW.HTTP_NOW
+  MAIN_NOW -> DATA_NOW.WSS_NOW
+  MAIN_NOW -> DATA_NOW.WG_NOW
+  MAIN_NOW -> DATA_NOW.NAT_NOW
+  MAIN_NOW -> CONN_NOW.HEALTH_NOW
+  DATA_NOW.WSS_NOW -> ACL_NOW.ACL2: "uses" { style.stroke-dash: 3 }
+  DATA_NOW.NAT_NOW -> ACL_NOW.ACL1: "uses" { style.stroke-dash: 3 }
+}
+
+PROPOSED: "改造后 (单 ACL ArcSwap + 统一 transport + 子模块装配)" {
+  direction: down
+
+  BUILDER: "AppBuilder 模式" {
+    BLD_ACL: "startup_acl.rs"
+    BLD_WG: "startup_wg.rs"
+    BLD_PROXY: "startup_proxy.rs"
+    BLD_MON: "startup_monitor.rs"
+  }
+
+  ACL_NEW: "AppState.acl: ArcSwap<AclEngine>\n所有数据面入口共享一份\nfail-CLOSED 默认" { class: good }
+
+  CTRL_NEW: "control 统一" {
+    TRANS_NEW: "ControlTransport trait\n承载 register/auth/heartbeat\n+ SSE config push" { class: good }
+  }
+
+  DATA_NEW: "数据面" {
+    WSS_NEW: "tunnel-ws\n多 TCP 通道\nHOL 缓解" { class: good }
+    WG_NEW: "tunnel-wg\nuserspace WG"
+    NAT_NEW: "nat\nConntrackTable\n+ TTL/GC/cap" { class: good }
+  }
+
+  CONN_NEW: "connector" {
+    HEALTH_NEW: "MultiGatewayManager\nhealth probe 30s 真运行" { class: good }
+  }
+
+  NSC_NEW: "NSC" {
+    NSC_ACL: "nsc::router 接 acl_rx\n消费 ACL" { class: good }
+    NSC_TOKEN: "接 token_rx\nSSE → set_token" { class: good }
+    NSC_TUN_NEW: "--data-plane tun\n真 TUN 或删除" { class: good }
+  }
+
+  OBS_NEW: "统一 OTel meter\n+ histogram + span\n+ MeteredSender" { class: good }
+
+  HTTP_NEW_NOTE: "B.1 短期: https\nB.2 长期: 走 transport"
+
+  BUILDER -> ACL_NEW
+  BUILDER -> CTRL_NEW
+  BUILDER -> DATA_NEW
+  BUILDER -> CONN_NEW
+  BUILDER -> OBS_NEW
+
+  ACL_NEW -- DATA_NEW.WSS_NEW: { style.stroke-dash: 3 }
+  ACL_NEW -- DATA_NEW.NAT_NEW: { style.stroke-dash: 3 }
+  ACL_NEW -- NSC_NEW.NSC_ACL: { style.stroke-dash: 3 }
+
+  CTRL_NEW.TRANS_NEW -- HTTP_NEW_NOTE: { style.stroke-dash: 3 }
+}
+
+CURRENT -> PROPOSED: "7 主题改造\n~69 人日" { style.stroke-width: 3 }

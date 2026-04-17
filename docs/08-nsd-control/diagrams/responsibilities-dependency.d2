@@ -1,0 +1,17 @@
+# 五大职责的依赖顺序
+# 源: NSD 模块依赖拓扑
+
+direction: right
+
+A: "① Registry"
+B: "② Auth"
+C: "③ Policy Engine"
+D: "④ SSE Distribution"
+E: "⑤ Admin UI"
+
+A -> B
+B -> D
+A -> C
+C -> D
+E -> A: "writes"
+E -> C: "writes"

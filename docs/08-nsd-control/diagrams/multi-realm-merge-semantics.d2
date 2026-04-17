@@ -1,0 +1,37 @@
+# 多 NSD 合并语义对比：WG peer / Proxy rule / ACL 的 union + 本地 ACL 保底
+# 源: crates/control/src/merge.rs
+
+direction: down
+
+NSD_A: "NSD-A 下发" {
+  A1: "WG peer: P1, P2"
+  A2: "Proxy rule: web, db"
+  A3: "ACL: allow SSH"
+}
+
+NSD_B: "NSD-B 下发" {
+  B1: "WG peer: P2, P3"
+  B2: "Proxy rule: web, cache"
+  B3: "ACL: allow SSH, deny RDP"
+}
+
+LocalACL: "本地 services.toml ACL（保底）" {
+  L: "allow SSH\nallow RDP from ops-net"
+}
+
+Merged: "NSN 合并结果" {
+  M1: "WG peer: P1, P2, P3 ← union"
+  M2: "Proxy rule: web, db, cache ← union"
+  M3: "ACL: allow SSH, deny RDP ← union (每条标注来源)"
+  M4: "runtime decide = merged ACL ∩ local ACL"
+
+  M3 -> M4
+}
+
+NSD_A.A1 -> Merged.M1
+NSD_B.B1 -> Merged.M1
+NSD_A.A2 -> Merged.M2
+NSD_B.B2 -> Merged.M2
+NSD_A.A3 -> Merged.M3
+NSD_B.B3 -> Merged.M3
+LocalACL.L -> Merged.M4

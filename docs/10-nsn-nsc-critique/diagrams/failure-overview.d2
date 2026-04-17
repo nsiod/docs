@@ -1,0 +1,41 @@
+# 失败模式总览: 故障源 → 放大路径 → 最终影响
+# 源: failure-modes.md 开篇图
+
+direction: down
+
+Inputs: "故障源" {
+  F1: "NSD SSE 流断开"
+  F2: "NSGW WSS 链路断开"
+  F3: "NSGW WG handshake 失败"
+  F4: "本地服务慢/不响应"
+  F5: "大量短连接"
+  F6: "spawned task panic"
+}
+
+Cascades: "放大路径" {
+  C1: "control_plane backoff\n1s→2s→…→60s"
+  C2: "WSS 流单连接 HOL"
+  C3: "conntrack 无界增长"
+  C4: "task panic 静默"
+  C5: "阻塞 mpsc.send.await"
+}
+
+Effects: "最终影响" {
+  E1: "全站点策略陈旧"
+  E2: "所有 WSS 流降速"
+  E3: "内存 OOM" { style.fill: "#fdd" }
+  E4: "主循环幽灵化" { style.fill: "#fdd" }
+  E5: "数据面卡死" { style.fill: "#fdd" }
+}
+
+Inputs.F1 -> Cascades.C1
+Cascades.C1 -> Effects.E1
+Inputs.F2 -> Cascades.C2
+Cascades.C2 -> Effects.E2
+Inputs.F4 -> Cascades.C5
+Cascades.C5 -> Effects.E5
+Inputs.F5 -> Cascades.C3
+Cascades.C3 -> Effects.E3
+Inputs.F6 -> Cascades.C4
+Cascades.C4 -> Effects.E4
+Inputs.F3 -> Cascades.C1

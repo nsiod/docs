@@ -1,0 +1,25 @@
+# nsgw-mock 容器构成
+
+direction: down
+
+Container: "nsgw-mock container" {
+  EP: "entrypoint.sh\n① wg genkey\n② ip link add wg0 + 100.64.0.1/16\n③ ip_forward=1\n④ openssl + tls.yml"
+  TRA: "traefik v3.6.13\n(background)"
+  BUN: "bun run src/index.ts\n(foreground)"
+}
+
+Ports: "EXPOSE" {
+  P443: "443 (traefik websecure)"
+  P8080: "8080 (traefik web)"
+  P9091: "9091 (Bun: /ready + /server-pubkey)"
+  P9443: "9443 (Bun: WSS /relay + /client)"
+  P51820: "51820/udp (kernel wg0)"
+}
+
+Container.EP -> Container.TRA
+Container.EP -> Container.BUN
+Container.TRA -> Ports.P443
+Container.TRA -> Ports.P8080
+Container.BUN -> Ports.P9091
+Container.BUN -> Ports.P9443
+Container.EP -> Ports.P51820

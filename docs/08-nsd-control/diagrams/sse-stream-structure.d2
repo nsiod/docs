@@ -1,0 +1,29 @@
+# SSE 事件流结构：订阅建立 → 冷启动快照 → 增量 push
+# 源: tests/docker/nsd-mock/src/registry.ts
+
+shape: sequence_diagram
+
+Client: "NSN / NSC / NSGW"
+NSD: "NSD"
+
+Client -> NSD: "GET /api/v1/config/stream\nAuthorization: Bearer jwt"
+NSD -> NSD: "解析 sub → machineId\nregisterSubscriber(machineId, controller)"
+
+cold: "订阅刚建立，按 machineId 类型立即 push 当前状态" {
+  have_services: "NSN 已上报 services" {
+    NSD -> Client: "data: {type:\"wg_config\", ...}"
+    NSD -> Client: "data: {type:\"gateway_config\", ...}"
+    NSD -> Client: "data: {type:\"proxy_config\", ...}"
+    NSD -> Client: "data: {type:\"services_ack\", ...}"
+    NSD -> Client: "data: {type:\"dns_config\", ...}"
+  }
+  is_gateway: "是 gateway" {
+    NSD -> Client: "data: {type:\"wg_config\", ...}"
+    NSD -> Client: "data: {type:\"routing_config\", ...}"
+  }
+}
+
+running: "运行中，按事件源增量 push" {
+  NSD -> Client: "data: {type:\"proxy_config\", ...}  (某 NSN 改了 services)"
+  NSD -> Client: "data: {type:\"gateway_config\", ...} (新 NSGW 加入)"
+}

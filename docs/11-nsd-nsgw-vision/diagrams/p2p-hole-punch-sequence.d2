@@ -1,0 +1,24 @@
+# 能力 D1: P2P 直连 (NAT 穿透) 时序
+# 源: data-plane-extensions.md 内联 mermaid
+
+shape: sequence_diagram
+
+A: "NSC-Alice"
+NSD: "NSD"
+NSGW: "NSGW (STUN/signaling)"
+B: "NSN-Bob"
+
+A -> NSD: "请求连接到 B"
+NSD -> NSGW: "signal(A→B) 包含 A 的 pubkey"
+NSGW -> B: "通知 Bob \"Alice 想连接你\""
+B -> NSGW: "我准备好了, 这是我的 STUN 反射地址"
+NSGW -> A: "Bob 在 <ip:port>"
+A -> B: "UDP hole punch (同时发包)"
+B -> A: "UDP hole punch"
+A -> B: "WireGuard handshake 直连"
+
+fallback: "打洞失败" {
+  A -> NSGW: "回落到 TURN 中继"
+  NSGW -> B: "中继通道建立"
+  A -> B: "通过 NSGW 中继 WG 流量"
+}

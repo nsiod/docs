@@ -2,29 +2,7 @@
 
 NSD（Network Service Director）是 NSIO 生态里唯一需要持久化状态的组件。它可以拆分成五条相对独立的职责线——mock 实现把它们全部塞进一个 Bun 进程；生产实现（`tmp/control/`）通过 drizzle ORM + Next.js 把它们分解到若干路由器（router）与服务层中。
 
-```mermaid
-graph TB
-    subgraph NSD["NSD 进程边界"]
-        REG["① 设备注册表<br/>Machine / Gateway 表"]
-        AUTH["② 认证服务<br/>authkey · device flow · signature · JWT"]
-        POL["③ 策略引擎<br/>ProxyConfig · AclConfig · Routing · DNS"]
-        SSE["④ 配置分发<br/>SSE 订阅表 · 差量推送"]
-        UI["⑤ Web UI / API<br/>管理员操作入口"]
-    end
-
-    CLI_NSN[NSN/NSC HTTP] --> AUTH
-    CLI_NSN --> SSE
-    CLI_NSGW[NSGW HTTP] --> AUTH
-    CLI_NSGW --> SSE
-    ADMIN[Admin Browser] --> UI
-
-    AUTH --> REG
-    UI --> REG
-    UI --> POL
-    REG --> POL
-    POL --> SSE
-    REG --> SSE
-```
+[NSD 进程边界与五大职责](./diagrams/responsibilities-boundary.d2)
 
 ## ① 设备注册表（Registry）
 
@@ -96,15 +74,7 @@ UI 功能与 Machine 注册协议并无直接绑定：UI 修改数据库 → 数
 
 ## 五职责的依赖顺序
 
-```mermaid
-flowchart LR
-    A["① Registry"] --> B["② Auth"]
-    B --> D["④ SSE Distribution"]
-    A --> C["③ Policy Engine"]
-    C --> D
-    E["⑤ Admin UI"] -->|"writes"| A
-    E -->|"writes"| C
-```
+[五大职责的依赖顺序](./diagrams/responsibilities-dependency.d2)
 
 - Auth 不能在 Registry 之前存在（验证签名需要存储的 `machine_key_pub`）。
 - SSE 分发依赖 Registry（决定订阅者身份）和 Policy Engine（决定推什么）。

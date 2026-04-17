@@ -1,0 +1,68 @@
+# NSGW 容器内部组件分层
+# 源: tests/docker/nsgw-mock/src/index.ts + entrypoint.sh + tmp/gateway/main.go
+
+direction: down
+
+External: "External connections" {
+  NSC: "NSC / NSN client\nWG or WSS"
+  NSD: "NSD control plane\nHTTPS + SSE"
+}
+
+Container: "NSGW container (single process tree)" {
+  EntryPoint: "entrypoint.sh (PID 1 bootstrap)" {
+    EP1: "wg genkey / pubkey"
+    EP2: "ip link add wg0 + /16\nNET_ADMIN required"
+    EP3: "sysctl ip_forward=1"
+    EP4: "openssl self-signed\n+ tls.yml"
+
+    EP1 -> EP2
+    EP2 -> EP3
+    EP3 -> EP4
+  }
+
+  Traefik: "traefik v3.6.13 (background)" {
+    T_EP_WEB: "entryPoint web:8080"
+    T_EP_TLS: "entryPoint websecure:443"
+    T_FP: "file provider\nwatch /etc/traefik/dynamic"
+    T_RT: "routers + services\n(from routes.yml)"
+    T_TLS_STORE: "TLS store default\n(from tls.yml)"
+  }
+
+  Kernel: "Linux kernel" {
+    WG0: "wg0 interface\nUDP :51820\nallowed-ips table"
+    RT: "IP routing + forward"
+  }
+
+  Bun: "Bun process (PID 1 child, foreground)" {
+    B_CFG: "loadConfig()\nenv -> Config"
+    B_HEALTH: "Bun.serve :9091\n/ready /server-pubkey\n/admin/shutdown"
+    B_WSS: "Bun.serve :9443\n/relay /client /probe-open\n(ENABLE_WSS_RELAY)"
+    B_REG: "registerWithNsd()\n+ subscribeToNsdSse()"
+    B_WG: "wg-setup.ts\naddPeer / removePeer CLI"
+    B_TRA: "traefik-config.ts\natomic write routes.yml"
+  }
+}
+
+Container.EntryPoint.EP4 -> Container.Traefik
+Container.EntryPoint.EP4 -> Container.Bun
+
+External.NSC -> Container.Kernel.WG0: "UDP :51820 WG"
+External.NSC -> Container.Traefik.T_EP_TLS: "HTTPS :443"
+External.NSC -> Container.Bun.B_WSS: "WSS :9443"
+
+Container.Traefik.T_EP_TLS -> Container.Traefik.T_TLS_STORE
+Container.Traefik.T_EP_TLS -> Container.Traefik.T_RT
+Container.Traefik.T_EP_WEB -> Container.Traefik.T_RT
+Container.Traefik.T_RT -> Container.Kernel.RT: "backend http://wg_ip:port"
+Container.Kernel.WG0 <-> Container.Kernel.RT
+
+External.NSD <-> Container.Bun.B_REG: "POST /machine/register\nPOST /gateway/report\nGET /config/stream (SSE)"
+Container.Bun.B_REG -> Container.Bun.B_WG: "wg_config"
+Container.Bun.B_WG -> Container.Kernel.WG0: "wg set wg0 peer"
+Container.Bun.B_REG -> Container.Bun.B_TRA: "routing_config"
+Container.Bun.B_TRA -> Container.Traefik.T_FP: "atomic rename"
+Container.Traefik.T_FP -> Container.Traefik.T_RT: "reload"
+
+Container.Bun.B_CFG -> Container.Bun.B_HEALTH
+Container.Bun.B_CFG -> Container.Bun.B_WSS
+Container.Bun.B_CFG -> Container.Bun.B_REG

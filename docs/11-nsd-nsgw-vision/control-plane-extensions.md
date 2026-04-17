@@ -93,22 +93,7 @@ drop;
 
 ### DSL 在组件间的流动
 
-```mermaid
-sequenceDiagram
-    participant UI as NSD Web UI
-    participant NSD as NSD Server
-    participant DB as Postgres
-    participant SSE as SSE Hub
-    participant NSN as NSN
-
-    UI->>NSD: POST /policy (DSL 源码)
-    NSD->>NSD: 编译 DSL → 内部表示
-    NSD->>DB: 存原始 DSL + 编译产物 + version
-    NSD->>SSE: acl_config + policy_version
-    SSE->>NSN: 推送编译产物
-    NSN->>NSN: merge by resource_id
-    NSN->>NSN: 激活新规则
-```
+[策略 DSL 组件间流动时序](./diagrams/policy-dsl-flow.d2)
 
 **关键点**: NSN 永远只看到编译后的内部表示,不看 DSL。NSD 保留 DSL 源码做版本管理和仿真。
 
@@ -336,33 +321,7 @@ Terraform state 与 NSD 真实状态可能漂移 (有人在 Web UI 改了),provi
 
 ### 架构
 
-```mermaid
-graph LR
-    subgraph Producers["事件源"]
-        NSD[NSD actions]
-        NSGW[NSGW telemetry]
-        NSN[NSN state change]
-    end
-    subgraph Bus["事件总线"]
-        K["Kafka / NATS JetStream"]
-    end
-    subgraph Consumers["消费者"]
-        W[Webhook 分发器]
-        SIEM[SIEM Bridge]
-        OTEL[OTel Collector]
-        BILL[Billing Aggregator]
-        EXT[External Subscribers<br/>via gRPC streaming]
-    end
-
-    NSD --> K
-    NSGW --> K
-    NSN --> K
-    K --> W
-    K --> SIEM
-    K --> OTEL
-    K --> BILL
-    K --> EXT
-```
+[事件总线架构](./diagrams/event-bus-architecture.d2)
 
 ### 关键决策
 
@@ -443,51 +402,7 @@ spec:
 
 ## 跨组件能力总览
 
-```mermaid
-graph TB
-    subgraph NSD
-        P[Policy]
-        A[Authz]
-        B[Billing]
-        E[Events]
-        T[Topology]
-    end
-    subgraph NSN
-        NP[ACL Enforce]
-        NR[Report Posture]
-        NM[Multi-NSD Merge]
-    end
-    subgraph NSC
-        CP[Report Posture]
-        CN[Multi-NSD Merge]
-    end
-    subgraph NSGW
-        GA[Authz Query]
-        GR[Routing]
-        GB[Billing Ingest]
-        GT[Topology Upload]
-    end
-    subgraph External
-        TF[Terraform]
-        SDK[SDKs]
-        K8S[k8s Operator]
-        WH[Webhooks]
-    end
-
-    P -->|"acl_config SSE"| NP
-    P -->|"acl_config SSE"| GR
-    A <-->|"/authz"| GA
-    B <-->|"billing/ingest"| GB
-    T <-->|"gateway/topology"| GT
-    E -->|"Webhook POST"| WH
-    NR -->|"/posture"| P
-    CP -->|"/posture"| P
-    TF --> P
-    SDK --> P
-    K8S --> P
-    NM -.->|"resource_id merge"| NP
-    CN -.->|"resource_id merge"| NP
-```
+[跨组件能力总览](./diagrams/cross-component-capabilities.d2)
 
 ---
 

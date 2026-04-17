@@ -1,0 +1,23 @@
+# 续签路径：Ed25519 签名认证
+# 源: tests/docker/nsd-mock/src/auth.ts:192 + crates/control/src/auth.rs:237
+
+shape: sequence_diagram
+
+NSN: "NSN"
+NSD: "NSD"
+
+NSN -> NSN: "timestamp = unix_secs(now)"
+NSN -> NSN: "msg = \"{machine_id}:{timestamp}\""
+NSN -> NSN: "sig = Ed25519.sign(signing_key, msg)"
+NSN -> NSD: "POST /api/v1/machine/auth\n{ machine_id, machine_key_pub, timestamp, sig }"
+NSD -> NSD: "查 machines[machine_id]"
+NSD -> NSD: "时间戳 skew ≤ 300s"
+NSD -> NSD: "Ed25519.verify(stored machine_key_pub, msg, sig)"
+outcome: "验证结果" {
+  ok: "所有检查通过" {
+    NSD -> NSN: "200 { token: jwt }"
+  }
+  fail: "任一失败" {
+    NSD -> NSN: "401 Unauthorized"
+  }
+}

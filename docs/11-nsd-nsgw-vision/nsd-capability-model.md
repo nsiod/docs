@@ -26,34 +26,7 @@
 
 ## 六大能力轴 · 一览
 
-```mermaid
-graph TB
-    subgraph Core["NSD 核心"]
-        direction TB
-        ID["① 身份与组织<br/>Identity & Org"]
-        POL["② 策略与编排<br/>Policy"]
-        NET["③ 网络编排<br/>Topology"]
-    end
-    subgraph Ops["运维与观测"]
-        direction TB
-        OBS["④ 可观测与审计<br/>Observability"]
-        ECO["⑤ 运营与生态<br/>Ecosystem"]
-        HA["⑥ 高可用与扩展<br/>Reliability"]
-    end
-    ID --> POL
-    POL --> NET
-    NET --> OBS
-    OBS --> ECO
-    ID --> ECO
-    POL --> OBS
-    ID --> HA
-    HA --> NET
-
-    classDef core fill:#dbeafe,stroke:#3b82f6
-    classDef ops fill:#fef3c7,stroke:#f59e0b
-    class ID,POL,NET core
-    class OBS,ECO,HA ops
-```
+[NSD 六大能力轴一览](./diagrams/nsd-six-axes-overview.d2)
 
 ---
 

@@ -1,0 +1,18 @@
+# 能力 C1: 策略 DSL 在组件间的流动时序
+# 源: control-plane-extensions.md 内联 mermaid
+
+shape: sequence_diagram
+
+UI: "NSD Web UI"
+NSD: "NSD Server"
+DB: "Postgres"
+SSE: "SSE Hub"
+NSN: "NSN"
+
+UI -> NSD: "POST /policy (DSL 源码)"
+NSD -> NSD: "编译 DSL → 内部表示"
+NSD -> DB: "存原始 DSL + 编译产物 + version"
+NSD -> SSE: "acl_config + policy_version"
+SSE -> NSN: "推送编译产物"
+NSN -> NSN: "merge by resource_id"
+NSN -> NSN: "激活新规则"

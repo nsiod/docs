@@ -1,0 +1,19 @@
+# mock NSD 三个监听器拓扑
+# 源: tests/docker/nsd-mock/src/index.ts
+
+direction: right
+
+BUN: "Bun Server\n:3000"
+HTTP: "HTTP/SSE Routes"
+NOISE: "Noise listener\n:4001\nRust TLS proxy?"
+QUIC: "QUIC listener\n:4002\nspawn nsd-quic-proxy"
+AUTH: "auth.ts"
+REG: "registry.ts"
+SSE: "SSE stream handler"
+
+BUN -> HTTP
+NOISE -> BUN: "relay"
+QUIC -> BUN: "relay"
+HTTP -> AUTH
+HTTP -> REG
+HTTP -> SSE

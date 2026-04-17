@@ -1,0 +1,88 @@
+# NSN/NSC 典型故障级联路径
+# 展示 5 条"小问题被放大"的级联链, 来自 failure-modes.md / security-concerns.md
+
+direction: down
+
+classes: {
+  bad: { style: { fill: "#fcd5b5"; stroke: "#000000" } }
+  warn: { style: { fill: "#ffd966"; stroke: "#000000" } }
+  critical: { style: { fill: "#fa8072"; stroke: "#000000" } }
+}
+
+TRIGGER: "外部触发" {
+  T1: "NSD 短暂高延迟\n(网络抖动)"
+  T2: "一个 NSD 配置错\n推空 ACL"
+  T3: "上游服务 panic\nWSS 通道断"
+  T4: "客户端连接突增\n瞬时 5000 conn"
+  T5: "攻击者拿到 NSGW 控制权"
+}
+
+CHAIN1: "链 1 · 启动 fail-open" {
+  C1A: "ACL 加载等 NSD 响应"
+  C1B: "10s 超时 → warn! 继续\n(FAIL-002 / SEC-008)" { class: bad }
+  C1C: "数据面 listener 启动\nnat::ServiceRouter::resolve\nacl=None → fail-OPEN\n(SEC-001 / ARCH-001)" { class: bad }
+  C1D: "本地连接全部放行\n无策略保护" { class: critical }
+  C1E: "监控: 无 metric 反映此状态\n(OBS-008 缺位)" { class: bad }
+  C1A -> C1B -> C1C -> C1D -> C1E
+}
+
+CHAIN2: "链 2 · 多 NSD 雪崩" {
+  C2A: "MultiControlPlane 收到 N 份 AclConfig"
+  C2B: "merge() 用交集\n(SEC-005 / FAIL-006)" { class: bad }
+  C2C: "empty ∩ filled = empty\n全局 ACL 清空" { class: critical }
+  C2D: "nat::ServiceRouter acl=None\nSEC-001 fail-open 触发" { class: critical }
+  C2E: "全网策略瓦解\n无任何告警" { class: critical }
+  C2A -> C2B -> C2C -> C2D -> C2E
+}
+
+CHAIN3: "链 3 · WSS 断链 + reconnect 不收敛" {
+  C3A: "WSS 单 TCP 断\n(FAIL-003 单 TCP HOL)" { class: warn }
+  C3B: "proxy_done 容量=1\n已被旧信号占用\n(FAIL-009)" { class: bad }
+  C3C: "新重连信号 try_send 阻塞\n或丢弃" { class: bad }
+  C3D: "所有 in-flight stream abort\n(FAIL-004 upgrade abort)" { class: bad }
+  C3E: "connection_tracker 不清理\nNAT 表条目悬挂\n(FUNC-005)" { class: warn }
+  C3F: "上游主机 reconnect 风暴" { class: critical }
+  C3A -> C3B -> C3C -> C3D -> C3E -> C3F
+}
+
+CHAIN4: "链 4 · 流量突增 + 无 backpressure 信号" {
+  C4A: "WsTunnel.write_tx 容量 256 满"
+  C4B: "所有 write 路径 await 阻塞\n反向施压 NSGW"
+  C4C: "但无 metric 暴露\n(OBS-004 + FAIL-008)" { class: bad }
+  C4D: "NSGW 端 timeout 主动关闭\n触发 CHAIN3" { class: critical }
+  C4E: "NAT 表 active_entries\n线性飙升\n(FUNC-005 无 cap)" { class: critical }
+  C4F: "进程 OOM 被 kernel kill" { class: critical }
+  C4A -> C4B -> C4C -> C4D
+  C4D -> C4E -> C4F
+}
+
+CHAIN5: "链 5 · NSGW 攻陷 → SSRF + 凭据外泄" {
+  C5A: "NSGW 推送恶意 WSS Open\ntarget_ip=169.254.169.254\n(SEC-007)" { class: bad }
+  C5B: "check_target_allowed\n仅 ACL 校验\n无强制黑名单" { class: bad }
+  C5C: "NSN 主动 fetch 云元数据\n泄露 IAM credentials" { class: critical }
+  C5D: "攻击者拿到 IAM 凭据"
+  C5E: "顺手监听 noise:// 部署的\nregister/auth HTTP 流量\n(SEC-002 to_http_base)" { class: bad }
+  C5F: "拿到 auth_key + JWT\n注册任意 machine" { class: critical }
+  C5A -> C5B -> C5C -> C5D
+  C5E -> C5F
+}
+
+CASCADES: "共同特征" {
+  CHAR1: "1. 缺乏可观测性\n(OBS-* 多条) → 故障不可见"
+  CHAR2: "2. fail 语义不一致\n(SEC-001 + ARCH-001) → 安全失守"
+  CHAR3: "3. 单点雪崩\n(SEC-005 + FAIL-006) → 单错误全局放大"
+  CHAR4: "4. 重连不收敛\n(FAIL-004 / FAIL-009) → 故障自激"
+}
+
+TRIGGER.T1 -> CHAIN1.C1A
+TRIGGER.T2 -> CHAIN2.C2A
+TRIGGER.T3 -> CHAIN3.C3A
+TRIGGER.T4 -> CHAIN4.C4A
+TRIGGER.T5 -> CHAIN5.C5A
+TRIGGER.T5 -> CHAIN5.C5E
+
+CHAIN1.C1E -> CASCADES.CHAR1
+CHAIN2.C2E -> CASCADES.CHAR3
+CHAIN3.C3F -> CASCADES.CHAR4
+CHAIN4.C4F -> CASCADES.CHAR1
+CHAIN5.C5F -> CASCADES.CHAR2

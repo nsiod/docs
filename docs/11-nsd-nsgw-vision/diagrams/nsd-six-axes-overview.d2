@@ -1,0 +1,31 @@
+# NSD 六大能力轴一览
+# 源: nsd-capability-model.md 内联 mermaid
+
+direction: down
+
+classes: {
+  core: { style: { fill: "#dbeafe"; stroke: "#3b82f6" } }
+  ops: { style: { fill: "#fef3c7"; stroke: "#f59e0b" } }
+}
+
+Core: "NSD 核心" {
+  direction: down
+  ID: "① 身份与组织\nIdentity & Org" { class: core }
+  POL: "② 策略与编排\nPolicy" { class: core }
+  NET: "③ 网络编排\nTopology" { class: core }
+}
+Ops: "运维与观测" {
+  direction: down
+  OBS: "④ 可观测与审计\nObservability" { class: ops }
+  ECO: "⑤ 运营与生态\nEcosystem" { class: ops }
+  HA: "⑥ 高可用与扩展\nReliability" { class: ops }
+}
+
+Core.ID -> Core.POL
+Core.POL -> Core.NET
+Core.NET -> Ops.OBS
+Ops.OBS -> Ops.ECO
+Core.ID -> Ops.ECO
+Core.POL -> Ops.OBS
+Core.ID -> Ops.HA
+Ops.HA -> Core.NET

@@ -1,0 +1,87 @@
+# 愿景路线图 (Gantt 风格 → d2 以阶段与依赖呈现)
+# 对应 roadmap.md 中的 Phase 0/1/2/3
+# 源: diagrams/roadmap.d2
+
+direction: right
+
+classes: {
+  p0: { style: { fill: "#eeeeee"; stroke: "#757575" } }
+  p1: { style: { fill: "#c8e6c9"; stroke: "#2e7d32" } }
+  p2: { style: { fill: "#90caf9"; stroke: "#1565c0" } }
+  p3: { style: { fill: "#f48fb1"; stroke: "#ad1457" } }
+  ms: { style: { fill: "#ffe082"; stroke: "#f57f17" } }
+}
+
+P0: "Phase 0 当前" {
+  class: p0
+  p0a: "Mock NSD/NSGW\n2025-09 → 2026-03 (done)" { class: p0 }
+  p0b: "文档矩阵 Sub-1-11\n2026-02 → 2026-05 (active)" { class: p0 }
+}
+
+P1: "Phase 1 MVP" {
+  class: p1
+  p1a: "NSD 身份/凭据服务\n90d" { class: p1 }
+  p1b: "NSD 基础 ACL DSL\n60d (after p1a)" { class: p1 }
+  p1c: "NSD 事件总线 + Webhook\n60d (after p1a)" { class: p1 }
+  p1d: "NSGW wgctrl 集成\n75d" { class: p1 }
+  p1e: "NSGW SNI + PROXY v1\n45d (after p1d)" { class: p1 }
+  p1f: "Postgres 主从 + PITR\n60d" { class: p1 }
+  p1g: "E2E 集成测试\n45d (after p1b)" { class: p1 }
+  m1: "MVP 发布" { shape: diamond; class: ms }
+}
+
+P2: "Phase 2 GA" {
+  class: p2
+  p2a: "SCIM + Device Posture\n90d" { class: p2 }
+  p2b: "Policy Rego/CEL 引擎\n75d (after p2a)" { class: p2 }
+  p2c: "多区域 + Anycast 调度\n120d" { class: p2 }
+  p2d: "P2P 打洞 + QUIC\n75d (after p2c)" { class: p2 }
+  p2e: "分布式 Trace + SLA 看板\n90d (after p2a)" { class: p2 }
+  p2f: "Terraform Provider\n60d (after p2b)" { class: p2 }
+  p2g: "K8s Operator\n60d (after p2f)" { class: p2 }
+  p2h: "BBR/FEC + 边缘 NSN\n75d (after p2d)" { class: p2 }
+  p2i: "合规认证 SOC2/ISO\n90d (after p2e)" { class: p2 }
+  m2: "GA 发布" { shape: diamond; class: ms }
+}
+
+P3: "Phase 3 Enterprise" {
+  class: p3
+  p3a: "BYO-CA + HSM\n90d" { class: p3 }
+  p3b: "多 NSD 联邦\n120d" { class: p3 }
+  p3c: "硬件加速 + QoS\n90d" { class: p3 }
+  p3d: "WORM 审计 + SIEM 对接\n75d (after p3a)" { class: p3 }
+  p3e: "air-gapped 私有化\n90d (after p3b)" { class: p3 }
+  p3f: "FedRAMP / 等保合规\n120d (after p3d)" { class: p3 }
+  p3g: "跨区域 BCP 演练\n60d (after p3b)" { class: p3 }
+  m3: "Enterprise 发布" { shape: diamond; class: ms }
+}
+
+P0.p0a -> P1.p1a
+P0.p0b -> P1.p1a
+P1.p1a -> P1.p1b
+P1.p1a -> P1.p1c
+P1.p1d -> P1.p1e
+P1.p1b -> P1.p1g
+P1.p1g -> P1.m1
+P1.p1e -> P1.m1
+P1.p1f -> P1.m1
+
+P1.m1 -> P2.p2a
+P1.m1 -> P2.p2c
+P2.p2a -> P2.p2b
+P2.p2a -> P2.p2e
+P2.p2c -> P2.p2d
+P2.p2d -> P2.p2h
+P2.p2b -> P2.p2f
+P2.p2f -> P2.p2g
+P2.p2e -> P2.p2i
+P2.p2i -> P2.m2
+
+P2.m2 -> P3.p3a
+P2.m2 -> P3.p3b
+P2.m2 -> P3.p3c
+P3.p3a -> P3.p3d
+P3.p3b -> P3.p3e
+P3.p3b -> P3.p3g
+P3.p3d -> P3.p3f
+P3.p3f -> P3.m3

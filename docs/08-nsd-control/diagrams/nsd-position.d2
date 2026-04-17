@@ -1,0 +1,25 @@
+# NSD 在 NSIO 生态中的位置：控制面 vs 数据面
+# 源: 架构总览
+
+direction: right
+
+Control: "控制面 (有状态)" {
+  NSD: "NSD\nRegistry · Auth · Policy · SSE"
+}
+
+DataPlane: "数据面 (无状态)" {
+  NSN: "NSN 站点节点"
+  NSGW: "NSGW 网关"
+  NSC: "NSC 客户端"
+}
+
+DataPlane.NSN -> Control.NSD: "POST /machine/register\n/machine/auth\n/services/report"
+DataPlane.NSGW -> Control.NSD: "POST /machine/register\n/gateway/report"
+DataPlane.NSC -> Control.NSD: "POST /machine/register\n/machine/auth"
+
+Control.NSD -> DataPlane.NSN: "SSE: wg_config · proxy_config\nacl_config · gateway_config\nrouting_config · dns_config" { style.stroke-dash: 3 }
+Control.NSD -> DataPlane.NSGW: "SSE: wg_config · routing_config" { style.stroke-dash: 3 }
+Control.NSD -> DataPlane.NSC: "SSE: gateway_config · dns_config" { style.stroke-dash: 3 }
+
+DataPlane.NSN -> DataPlane.NSGW: "WG / WSS / Noise / QUIC" { style.stroke-width: 3 }
+DataPlane.NSC -> DataPlane.NSGW: "WG / WSS" { style.stroke-width: 3 }

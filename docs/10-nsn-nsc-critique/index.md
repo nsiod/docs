@@ -9,53 +9,7 @@
 
 ## 0. 一图速览
 
-```mermaid
-flowchart TB
-    subgraph IN["输入材料"]
-        OV[01-overview]
-        CP[02-control-plane]
-        DP[03-data-plane]
-        NS[04-network-stack]
-        PA[05-proxy-acl]
-        NSC_D[06-nsc-client]
-        NSN_D[07-nsn-node]
-        NSD_D[08-nsd-control]
-        NSGW_D[09-nsgw-gateway]
-        SRC["crates/* 源码<br/>18037 LoC"]
-    end
-
-    subgraph CRIT["本目录产出 · 70+ 缺陷"]
-        M[methodology.md<br/>评分口径]
-        CS[current-state.md<br/>HEAD 速览]
-        A[architecture-issues.md<br/>10 ARCH-*]
-        F[functional-gaps.md<br/>12 FUNC-*]
-        FA[failure-modes.md<br/>11 FAIL-*]
-        P[performance-concerns.md<br/>10 PERF-*]
-        O[observability-gaps.md<br/>12 OBS-*]
-        S[security-concerns.md<br/>15 SEC-*]
-    end
-
-    subgraph OUT["改造建议"]
-        I[improvements.md<br/>7 主题级 fix]
-        R[roadmap.md<br/>分阶段路线图]
-    end
-
-    subgraph DIAG["可视化"]
-        D1[diagrams/issue-heatmap.mmd]
-        D2[diagrams/coupling-graph.mmd]
-        D3[diagrams/failure-cascade.mmd]
-        D4[diagrams/roadmap-phases.mmd]
-    end
-
-    IN --> CRIT
-    CRIT --> OUT
-    CRIT --> DIAG
-    OUT --> DIAG
-
-    style CRIT fill:#fde
-    style OUT fill:#dfd
-    style DIAG fill:#def
-```
+[输入材料 / 产出章节 / 改造建议 / 可视化 全景](./diagrams/index-inputs-outputs.d2)
 
 ---
 
@@ -121,12 +75,12 @@ flowchart TB
 | `security-concerns.md` | 15 条 SEC-* 缺陷 + 信任边界图 | 700+ | 15 |
 | `improvements.md` | 7 主题级 fix proposals + 缺陷反向索引 | 600+ | — |
 | `roadmap.md` | 分 8 阶段排期 + 跨团队协调点 + 回滚预案 | 500+ | — |
-| `diagrams/issue-heatmap.mmd` | 缺陷热度图（模块 × 严重度） | — | — |
-| `diagrams/coupling-graph.mmd` | 当前耦合 vs 改进后解耦 | — | — |
-| `diagrams/failure-cascade.mmd` | 典型故障级联路径 | — | — |
-| `diagrams/roadmap-phases.mmd` | 改造路线 Gantt | — | — |
+| `diagrams/issue-heatmap.d2` | 缺陷热度图（模块 × 严重度） | — | — |
+| `diagrams/coupling-graph.d2` | 当前耦合 vs 改进后解耦 | — | — |
+| `diagrams/failure-cascade.d2` | 典型故障级联路径 | — | — |
+| `diagrams/roadmap-phases.d2` | 改造路线 Gantt | — | — |
 
-**总计**：70 条缺陷 / ~5000 行文档 / 4 张独立 mermaid 图
+**总计**：70 条缺陷 / ~5000 行文档 / 4 张独立 d2 图
 
 ---
 
@@ -138,7 +92,7 @@ flowchart TB
 2. **结构性 vs 半成品**：方法论第 §3 节明确二者区分；后者只是"还没写完"，前者是"写完了也不对"
 3. **每条缺陷 9 字段**：ID / Severity / Location（精确到 `crates/<x>/src/<f>.rs:<line>`）/ Current / Why-defect / Impact / Fix / Cost-Benefit / Migration-risk
 4. **不写 emoji，不写心灵鸡汤**：符合用户的 CLAUDE.md 要求
-5. **每个 .md 至少一张 mermaid 图**：方便 review
+5. **每个 .md 至少一张 d2 图**：方便 review
 
 ### 范围边界
 
@@ -162,25 +116,11 @@ flowchart TB
 
 ### 按严重度
 
-```mermaid
-pie title 70 条缺陷按严重度分布
-    "P0 (致命)" : 8
-    "P1 (高)" : 24
-    "P2 (中)" : 28
-    "P3 (低)" : 10
-```
+[70 条缺陷按严重度分布](./diagrams/defect-by-severity.d2)
 
 ### 按章节
 
-```mermaid
-pie title 70 条缺陷按章节分布
-    "ARCH (架构)" : 10
-    "FUNC (功能/半成品)" : 12
-    "FAIL (失败模式)" : 11
-    "PERF (性能)" : 10
-    "OBS (可观测性)" : 12
-    "SEC (安全)" : 15
-```
+[70 条缺陷按章节分布](./diagrams/defect-by-section.d2)
 
 ### 按受影响 crate
 

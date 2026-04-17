@@ -1,0 +1,108 @@
+# NSD 核心实体 ER 图（mock 与生产共有的最小子集）
+# 源: tests/docker/nsd-mock/src/ + tmp/control/server/db/pg/schema/schema.ts
+
+direction: right
+
+REALM: "REALM" {
+  shape: sql_table
+  realm_name: "string PK"
+  type: "cloud|selfhosted"
+}
+
+MACHINE: "MACHINE" {
+  shape: sql_table
+  machine_id: "string PK"
+  machine_key_pub: "hex Ed25519"
+  peer_key_pub: "hex X25519"
+  type: "connector|gateway"
+  system_info: "json"
+  last_heartbeat: "int"
+}
+
+GATEWAY: "GATEWAY" {
+  shape: sql_table
+  gateway_id: "string PK"
+  wg_pubkey: "hex"
+  wg_endpoint: "ip:port"
+  wss_endpoint: "string"
+}
+
+SERVICE: "SERVICE" {
+  shape: sql_table
+  machine_id: "string FK"
+  name: "PK (FQID 部分)"
+  protocol: "tcp|udp|both"
+  host: "string"
+  port: "int"
+  enabled: "bool"
+  tunnel: "auto|wg|ws"
+  gateway: "auto|id"
+}
+
+AUTHKEY: "AUTHKEY" {
+  shape: sql_table
+  key: "string PK"
+  realm: "string FK"
+  usage_left: "int"
+  expires_at: "int"
+}
+
+USER: "USER" {
+  shape: sql_table
+  user_id: "string PK"
+  email: "string"
+  type: "internal|oidc"
+  two_factor_enabled: "bool"
+}
+
+USER_ORG: "USER_ORG" {
+  shape: sql_table
+  user_id: "string FK"
+  org_id: "string FK"
+  is_owner: "bool"
+}
+
+ORG: "ORG" {
+  shape: sql_table
+  org_id: "string PK"
+  name: "string"
+  subnet: "string"
+}
+
+SITE: "SITE" {
+  shape: sql_table
+  site_id: "int PK"
+  org_id: "string FK"
+  name: "string"
+  subnet: "string"
+  online: "bool"
+}
+
+RESOURCE: "RESOURCE" {
+  shape: sql_table
+  resource_id: "int PK"
+  org_id: "string FK"
+  full_domain: "string"
+  protocol: "string"
+  enabled: "bool"
+}
+
+TARGET: "TARGET" {
+  shape: sql_table
+  target_id: "int PK"
+  resource_id: "int FK"
+  site_id: "int FK"
+  ip: "string"
+  port: "int"
+}
+
+REALM -> MACHINE: "包含"
+REALM -> GATEWAY: "包含"
+REALM -> AUTHKEY: "作用域"
+MACHINE -> SERVICE: "上报"
+ORG -> SITE: "拥有"
+ORG -> USER_ORG: "成员"
+USER -> USER_ORG: "属于"
+SITE -> RESOURCE: "暴露"
+RESOURCE -> TARGET: "映射到"
+TARGET -> SITE: "位于"

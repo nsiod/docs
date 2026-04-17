@@ -1,0 +1,22 @@
+# 落地层级递进示意 (CUR → MVP → GA → ENT)
+# 源: methodology.md 内联 mermaid
+
+direction: right
+
+classes: {
+  now: { style: { fill: "#fef3c7"; stroke: "#f59e0b" } }
+  mvp: { style: { fill: "#dbeafe"; stroke: "#3b82f6" } }
+  ga: { style: { fill: "#dcfce7"; stroke: "#16a34a" } }
+  ent: { style: { fill: "#f3e8ff"; stroke: "#9333ea" } }
+}
+
+CUR: "当前 (mock)" { class: now }
+MVP: "MVP (~2 季度)" { class: mvp }
+GA: "GA (~4 季度)" { class: ga }
+ENT: "企业级 (~8 季度)" { class: ent }
+
+CUR -> MVP
+MVP -> GA
+GA -> ENT
+CUR -> GA: "跳级风险" { style.stroke-dash: 3 }
+MVP -> ENT: "跳级风险" { style.stroke-dash: 3 }

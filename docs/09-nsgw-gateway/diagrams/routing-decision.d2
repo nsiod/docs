@@ -1,0 +1,56 @@
+# traefik 路由决策树 (SNI / Host / path)
+# 源: tests/docker/nsgw-mock/traefik.yml + traefik-config.ts
+
+direction: down
+
+classes: {
+  decision: {
+    shape: diamond
+    style: { fill: "#fef3c7"; stroke: "#b45309"; font-color: "#111" }
+  }
+  drop: {
+    style: { fill: "#fee2e2"; stroke: "#b91c1c"; font-color: "#111" }
+  }
+  flow: {
+    style: { fill: "#dcfce7"; stroke: "#166534"; font-color: "#111" }
+  }
+}
+
+IN: "Inbound TCP to NSGW"
+PORT: "Listening port?" { class: decision }
+
+H_WEB: "HTTP entryPoint\nno TLS" { class: flow }
+TLS_TERM: "TLS terminate\ndefault cert from tls store" { class: flow }
+WG_IN: "kernel wg0\n(not traefik)" { class: flow }
+BUN_IN: "Bun.serve endpoints\n(not traefik)" { class: flow }
+
+HOST_HDR: "Read HTTP Host header" { class: flow }
+SNI: "SNI extension = hostname" { class: flow }
+RT_MATCH: "routes.yml\nrouter rule\nHost(name) match?" { class: decision }
+
+LB: "service[name].loadBalancer\nservers[0].url = http://wg_ip:virtual_port" { class: flow }
+T404: "traefik 404\n(no default router)" { class: drop }
+
+FWD: "TCP dial wg_ip:virtual_port\nplaintext" { class: flow }
+KERN: "kernel route\ndst in allowed-ips -> wg0 peer" { class: flow }
+OUT: "UDP :51820 to NSN peer\nencrypted tunnel" { class: flow }
+
+IN -> PORT
+PORT -> H_WEB: ":8080 (web)"
+PORT -> TLS_TERM: ":443 (websecure)"
+PORT -> WG_IN: ":51820/udp"
+PORT -> BUN_IN: ":9091 / :9443 (Bun)"
+
+H_WEB -> HOST_HDR
+TLS_TERM -> SNI
+SNI -> HOST_HDR
+HOST_HDR -> RT_MATCH
+
+RT_MATCH -> LB: "exact domain hit"
+RT_MATCH -> T404: "no match"
+
+LB -> FWD
+FWD -> KERN
+KERN -> OUT
+
+WG_IN -> KERN

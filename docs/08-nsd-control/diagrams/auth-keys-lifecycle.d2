@@ -1,0 +1,18 @@
+# 三把密钥的流向：machinekey / peerkey / authkey
+# 源: crates/common/src/state.rs + nsd-mock/src/auth.ts
+
+direction: right
+
+Node: "节点本地" {
+  MKP: "machine_key_priv\nEd25519 0600"
+  PKP: "peer_key_priv\nX25519 0600"
+}
+
+NSD: "NSD" {
+  M: "machines 表\nmachine_key_pub · peer_key_pub" { shape: cylinder }
+  AK: "authKeys 表" { shape: cylinder }
+}
+
+Node -> NSD.M: "register(machine_key_pub, peer_key_pub, auth_key)"
+NSD.M -> Node: "register 201 {machine_id, server_peer_key_pub}"
+NSD.M -> NSD.AK: "auth_key 失效 / 绑定"

@@ -1,0 +1,54 @@
+# 关键依赖关系图 (改造项先后)
+# 源: roadmap.md §2
+
+direction: down
+
+classes: {
+  p0: { style: { fill: "#fdd" } }
+  p1: { style: { fill: "#ffd" } }
+}
+
+P0_SEC001: "P0: SEC-001\nfail-closed" { class: p0 }
+P0_SEC002: "P0: SEC-002\nhttps 强制" { class: p0 }
+P0_SEC008: "P0: SEC-008\n启动 acl_required" { class: p0 }
+
+P1_A1: "P1: A.1\n单一 ACL ArcSwap" { class: p1 }
+P1_A4: "P1: A.4\n空 ACL sentinel"
+P1_A6: "P1: A.6\nNSC ACL"
+P1_A5: "P1: A.5\nACL metric"
+
+P2_C1: "P2: C.1\nOTel 改造"
+P2_C4: "P2: C.4\nMeteredSender"
+P2_C6: "P2: C.6\nspawn_named"
+
+P3_D2: "P3: D.2\nNSGW health"
+P3_D3: "P3: D.3\nWSS upgrade safety"
+P3_D4: "P3: D.4\n多 TCP WSS"
+
+P4_B3: "P4: B.3\nchallenge-resp"
+P4_B4: "P4: B.4\n密钥加密"
+P4_B7: "P4: B.7\naudit log"
+
+P5_F1: "P5: F.1\nmain.rs 拆分"
+P5_G1: "P5: G.1\nArcSwap 全面"
+
+NSD_OPS: "运维: NSD 升级 TLS" { style.fill: "#dfd" }
+
+P0_SEC001 -> P0_SEC008
+P0_SEC001 -> P1_A1
+P1_A1 -> P1_A4
+P1_A1 -> P1_A6
+P1_A1 -> P1_A5
+P1_A1 -> P5_G1
+
+P2_C1 -> P3_D4: "metric 框架前置" { style.stroke-dash: 3 }
+P2_C1 -> P4_B7
+P2_C6 -> P3_D2
+
+P1_A6 -> P3_D3
+P3_D3 -> P3_D4
+
+P4_B4 -> P4_B3
+P4_B3 -> P4_B7
+
+P0_SEC002 -> NSD_OPS: "DOC: NSD 端开 https" { style.stroke-dash: 3 }

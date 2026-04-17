@@ -1,0 +1,15 @@
+# 首次注册路径 A：auth_key
+# 源: tests/docker/nsd-mock/src/auth.ts + crates/control/src/auth.rs
+
+shape: sequence_diagram
+
+NSN: "NSN"
+NSD: "NSD"
+
+NSN -> NSN: "生成 machinekey (Ed25519) + peerkey (X25519)"
+NSN -> NSD: "GET /api/v1/info"
+NSD -> NSN: "auth_methods 包含 \"auth_key\""
+NSN -> NSD: "POST /machine/register\n{ auth_key, machine_id?, machine_key_pub, peer_key_pub }"
+NSD -> NSD: "查 authKeys 表，验证 & 绑定"
+NSD -> NSN: "201 { machine_id, server_peer_key_pub, server_endpoint, domain_base }"
+NSN -> NSN: "写 machinekey.json + registrations/{realm}.json"

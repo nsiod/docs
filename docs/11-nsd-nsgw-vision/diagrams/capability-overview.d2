@@ -1,0 +1,33 @@
+# 能力地图 (一张图看全局)
+# 源: index.md 内联 mermaid
+
+direction: down
+
+NSD: "NSD 控制中心" {
+  ID: "身份与组织\nOrg · Realm · IdP · SCIM · APIKey"
+  POL: "策略与编排\nACL · 路由 · 版本 · 灰度 · 策略测试"
+  NET: "网络编排\n多区网关 · 站点分组 · 流量工程"
+  OBS1: "可观测与审计\n拓扑 · 连接 · 流量 · 审计日志"
+  OPS1: "运营与生态\nWeb UI · CLI · SDK · Webhook · Terraform"
+  HA1: "高可用与扩展\n多 NSD 并行 · 跨区容灾 · 配置 DB"
+}
+
+NSGW: "NSGW 数据网关" {
+  CONN: "连接能力\nWG · WSS · QUIC · Noise · MASQUE"
+  ROUTE: "路由与寻址\nAnycast · GeoDNS · SNI · Host"
+  SEC: "安全能力\nDDoS · 限速 · IP 信誉 · mTLS · WAF"
+  HA2: "容灾与高可用\n多活 · 蓝绿 · 热升级"
+  OBS2: "可观测性\n每连接 tracing · 流量图 · 拓扑图"
+  RES: "资源管理\nQoS · 带宽限额 · 计费埋点"
+}
+
+CROSS: "跨组件扩展" {
+  P2P: "P2P 直连 · NAT 穿透"
+  MPATH: "多路径 · MPTCP"
+  CC: "BBR · FEC · 拥塞控制"
+  EDGE: "边缘 · IoT · 移动端优化"
+}
+
+NSD -> NSGW
+NSD -> CROSS
+NSGW -> CROSS

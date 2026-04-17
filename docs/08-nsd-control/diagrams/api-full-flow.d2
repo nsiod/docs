@@ -1,0 +1,35 @@
+# NSD 完整 API 调用时序：发现 → 注册 → 签名 → 上报 → SSE
+# 源: tests/docker/nsd-mock/src/*, crates/control/src/*
+
+shape: sequence_diagram
+
+NSN: "NSN"
+NSD: "NSD"
+
+NSN -> NSD: "GET /api/v1/info"
+NSD -> NSN: "{ type, realm, auth_methods, nsd_noise_pubkey }"
+
+choice: "首次注册路径" {
+  have_authkey: "有 auth_key" {
+    NSN -> NSD: "POST /api/v1/machine/register { auth_key, keys, machine_id? }"
+    NSD -> NSN: "201 { machine_id, server_peer_key_pub, domain_base }"
+  }
+  device_flow: "device flow" {
+    NSN -> NSD: "POST /api/v1/device/code"
+    NSD -> NSN: "{ user_code, verification_uri, interval }"
+    poll: "每 interval 秒" {
+      NSN -> NSD: "POST /api/v1/device/token { device_code }"
+      NSD -> NSN: "428 authorization_pending"
+    }
+    NSD -> NSN: "200 { access_token }"
+    NSN -> NSD: "POST /machine/register (Bearer access_token)"
+    NSD -> NSN: "201 { machine_id, ... }"
+  }
+}
+
+NSN -> NSD: "POST /api/v1/machine/auth { sig }"
+NSD -> NSN: "{ token: jwt }"
+NSN -> NSD: "POST /api/v1/services/report (Bearer jwt)"
+NSD -> NSN: "204"
+NSN -> NSD: "GET /api/v1/config/stream (Bearer jwt)"
+NSD -> NSN: "SSE: wg_config / proxy_config / ... (长连)"

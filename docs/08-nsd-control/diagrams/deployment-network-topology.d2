@@ -1,0 +1,27 @@
+# NSD 与其他组件的网络拓扑
+# 源: 生产部署最佳实践
+
+direction: right
+
+Internet: "Internet" {
+  ADMIN: "Admin Browser"
+  NSN: "NSN Node"
+  NSC: "NSC Client"
+}
+
+DMZ: "DMZ" {
+  TRAEFIK: "traefik :443"
+}
+
+PrivateNet: "私有网络" {
+  NSD: "NSD"
+  DB: "PG" { shape: cylinder }
+  NSGW: "NSGW"
+}
+
+Internet.ADMIN -> DMZ.TRAEFIK: "HTTPS"
+Internet.NSN -> DMZ.TRAEFIK: "HTTPS / Noise / QUIC"
+Internet.NSC -> DMZ.TRAEFIK: "HTTPS"
+DMZ.TRAEFIK -> PrivateNet.NSD
+PrivateNet.NSD -> PrivateNet.DB
+PrivateNet.NSGW -> PrivateNet.NSD

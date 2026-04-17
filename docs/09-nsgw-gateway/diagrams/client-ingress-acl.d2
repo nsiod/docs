@@ -1,0 +1,34 @@
+# /client ingress 的 ACL 预过滤 (两级信任的前一级)
+
+shape: sequence_diagram
+
+NSC: "NSC"
+NSGW: "NSGW"
+NSN: "NSN"
+
+NSC -> NSGW: "WSS /client + JWT"
+NSGW -> NSGW: "验 JWT -> machine_id"
+NSC -> NSGW: "WsFrame Open(target=db:5432)"
+NSGW -> NSGW: "subject = User{self.gw_id, machine_id}"
+NSGW -> NSGW: "local_acl.is_allowed(subject, target) ?"
+
+choice: "projection 结果" {
+  deny: "projection 命中 deny" {
+    NSGW -> NSC: "Close + reason=acl: denied by projection"
+    note: "不打扰 NSN" {
+    }
+  }
+  allow: "projection allow / 未命中" {
+    NSGW -> NSN: "Open (带 TLV source identity)"
+    NSN -> NSN: "check_target_allowed(subject, target)"
+    inner: "NSN 终决" {
+      ndeny: "NSN 终决 deny" {
+        NSN -> NSGW: "Close"
+        NSGW -> NSC: "Close"
+      }
+      nallow: "NSN allow" {
+        NSN -> NSN: "proxy -> service"
+      }
+    }
+  }
+}

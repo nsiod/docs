@@ -15,30 +15,7 @@ NSIO 仓库里同时存在两套 NSGW 实现,用途不同:
 
 ## mock 的容器构成
 
-```mermaid
-graph TB
-    subgraph Container["nsgw-mock container"]
-        EP["entrypoint.sh<br/>① wg genkey<br/>② ip link add wg0 + 100.64.0.1/16<br/>③ ip_forward=1<br/>④ openssl + tls.yml"]
-        TRA["traefik v3.6.13<br/>(background)"]
-        BUN["bun run src/index.ts<br/>(foreground)"]
-    end
-
-    subgraph Ports["EXPOSE"]
-        P443["443 (traefik websecure)"]
-        P8080["8080 (traefik web)"]
-        P9091["9091 (Bun: /ready + /server-pubkey)"]
-        P9443["9443 (Bun: WSS /relay + /client)"]
-        P51820["51820/udp (kernel wg0)"]
-    end
-
-    EP --> TRA
-    EP --> BUN
-    TRA --> P443
-    TRA --> P8080
-    BUN --> P9091
-    BUN --> P9443
-    EP --> P51820
-```
+[nsgw-mock 容器构成](./diagrams/mock-container-layout.d2)
 
 ## 文件清单
 
@@ -131,42 +108,7 @@ services:
 
 ## 注册+订阅时序(端到端)
 
-```mermaid
-sequenceDiagram
-    participant EP as entrypoint.sh
-    participant BU as bun index.ts
-    participant TR as traefik
-    participant ND as NSD
-    participant NSN as NSN (已在运行)
-
-    EP->>EP: wg genkey
-    EP->>EP: ip link add wg0 + 100.64.0.1/16
-    EP->>EP: openssl self-signed cert
-    EP->>EP: tls.yml → /etc/traefik/dynamic/
-    EP->>TR: traefik --configFile=/etc/traefik/traefik.yml
-    TR->>TR: watch /etc/traefik/dynamic/ (empty routes.yml)
-    EP->>BU: exec bun run src/index.ts
-
-    BU->>BU: loadConfig() + getServerPubkey()
-    BU->>BU: Bun.serve health on :9091
-    BU->>BU: Bun.serve WSS on :9443 (conditional)
-
-    par for each NSD in CONTROL_CENTERS
-        BU->>ND: POST /api/v1/machine/register (type=gateway)
-        ND-->>BU: 200
-        BU->>ND: POST /api/v1/gateway/report (pubkey + endpoints)
-        ND-->>BU: 204
-        ND->>NSN: broadcast gateway_config
-        ND->>NSN: broadcast wg_config (NSN's peer list includes this NSGW)
-        BU->>ND: GET /api/v1/config/stream?machine_id=nsgw-1-gw (SSE)
-        ND-->>BU: immediate wg_config (NSN peer list)
-        ND-->>BU: immediate routing_config (domain → nsn_wg_ip:port)
-    end
-
-    BU->>BU: handleRoutingConfig → write routes.yml
-    TR->>TR: file watcher reload
-    NSN-->>BU: WG handshake (now works; peer just added)
-```
+[注册 + 订阅时序（端到端）](./diagrams/registration-timeline.d2)
 
 ## 配置变量一览
 

@@ -10,48 +10,7 @@
 
 ### 1.1 形态总览
 
-```mermaid
-graph LR
-  subgraph POC[T0 单机 POC]
-    P1[NSD+NSGW 同机 Bun 进程<br/>in-memory 存储]
-  end
-  subgraph MVP[T1 单区域 MVP]
-    M1[NSD Node1]
-    M2[NSD Node2]
-    M3[(Postgres Primary)]
-    M4[(Postgres Replica)]
-    M5[NSGW PoP-A]
-    M6[NSGW PoP-B]
-    M1 --- M3
-    M2 --- M3
-    M3 -.->|streaming| M4
-    M1 --- M5
-    M2 --- M6
-  end
-  subgraph GA[T2 多区域 GA]
-    G1[NSD Region-EU]
-    G2[NSD Region-US]
-    G3[(Postgres Multi-AZ)]
-    G4[NSGW Anycast 边缘 10-30 PoP]
-    G1 --- G3
-    G2 --- G3
-    G1 --- G4
-    G2 --- G4
-  end
-  subgraph ENT[T3 跨云企业]
-    E1[私有化 NSD 主控]
-    E2[私有化 NSD 备份]
-    E3[BYO-CA]
-    E4[客户云 NSGW]
-    E5[SaaS 托管 NSGW]
-    E1 --- E2
-    E1 --- E3
-    E1 --- E4
-    E1 --- E5
-  end
-
-  POC --> MVP --> GA --> ENT
-```
+[部署拓扑演进 (T0→T3)](./diagrams/deployment-topology.d2)
 
 ### 1.2 各形态详细说明
 
@@ -131,21 +90,7 @@ graph LR
 
 ### 2.2 SLA 度量点
 
-```mermaid
-flowchart LR
-  NSC[NSC 客户端] -- T1 --> NSD[NSD 控制面]
-  NSD -- T2 --> DB[(Postgres)]
-  NSD -- T3 --> BUS[事件总线]
-  BUS -- T4 --> NSN[NSN 站点节点]
-  NSC -- T5 --> NSGW[NSGW 数据面]
-  NSGW -- T6 --> NSN
-  NSN -- T7 --> NSN2[NSN 对端]
-
-  classDef ctrl fill:#e1f5fe
-  classDef data fill:#fff3e0
-  class NSD,DB,BUS ctrl
-  class NSGW,NSN,NSN2 data
-```
+[SLA 度量点 T1-T7](./diagrams/sla-measurement-points.d2)
 
 | 度量点 | 含义 | SLO 目标 (GA) |
 |---|---|---|
@@ -177,29 +122,7 @@ flowchart LR
 
 ### 3.2 发布流程
 
-```mermaid
-sequenceDiagram
-  participant Dev as 开发
-  participant CI as CI Pipeline
-  participant Stage as Staging
-  participant Canary as 金丝雀(5%)
-  participant Prod as 生产(全量)
-  participant SRE as SRE
-
-  Dev->>CI: Push PR
-  CI->>CI: 单测 + 集成测试 + 镜像构建
-  CI->>Stage: 自动部署 Staging
-  Stage->>Stage: E2E + 合约测试
-  Stage->>Canary: SRE 批准 → 灰度 5%
-  Canary->>Canary: 观察 30min (无告警 & 错误预算 OK)
-  Canary->>Prod: 自动滚动全量
-  Prod->>SRE: 部署完成通知
-  SRE->>Prod: 监控 24h
-  alt 回归
-    Prod->>Prod: 自动回滚
-    Prod->>SRE: 告警 + 复盘
-  end
-```
+[发布流程时序](./diagrams/release-pipeline.d2)
 
 ### 3.3 变更管理
 
@@ -273,24 +196,7 @@ sequenceDiagram
 
 ### 4.4 业务连续性计划 (BCP)
 
-```mermaid
-flowchart TD
-  INC[事件发生] --> P0{P0 级?}
-  P0 -->|是| ESC[5min 内升级]
-  P0 -->|否| ASS[常规响应]
-  ESC --> WAR[指挥室成立<br/>CTO+SRE+Sec+PM]
-  WAR --> ACT[执行 runbook]
-  ACT --> CHK{SLO 恢复?}
-  CHK -->|否| ESCL[升级灾备预案]
-  CHK -->|是| MON[持续监控 24h]
-  ESCL --> DR[启动异地/冷备]
-  DR --> MON
-  MON --> PM[事后复盘]
-  PM --> KB[沉淀 runbook]
-
-  classDef crit fill:#ffcdd2
-  class ESC,WAR,ESCL,DR crit
-```
+[业务连续性计划流程](./diagrams/bcp-flow.d2)
 
 ---
 

@@ -2,32 +2,7 @@
 
 > 本文档关注吞吐 / 延迟 / 内存 / 锁争用。每条性能主张必须给出**量化路径**（怎么测、用什么工具）。仅凭直觉的描述会标 *"性能直觉，未验证"*。
 
-```mermaid
-flowchart TB
-    subgraph HotPath["WSS 数据热路径（每帧）"]
-        H1["Frame decode<br/>tunnel-ws/lib.rs:183"]
-        H2["check_target_allowed<br/>RwLock<Option<Arc<AclEngine>>>"]
-        H3["DashMap insert/get<br/>conntrack"]
-        H4["mpsc::Sender::send.await"]
-        H5["Vec<u8>::to_vec()"]
-
-        H1 --> H2 --> H3 --> H4
-        H1 --> H5 --> H4
-    end
-
-    subgraph Cost["每帧固定开销"]
-        C1["1 次 RwLock read"]
-        C2["1~2 次 Arc clone"]
-        C3["1~3 次 Vec 深拷贝"]
-        C4["可能阻塞 await"]
-    end
-
-    H2 -.-> C1
-    H2 -.-> C2
-    H1 -.-> C3
-    H5 -.-> C3
-    H4 -.-> C4
-```
+[WSS 数据热路径 · 每帧固定开销](./diagrams/perf-hot-path.d2)
 
 ---
 

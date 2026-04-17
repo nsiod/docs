@@ -73,36 +73,6 @@ docs/01 ~ docs/10 描述的是 NSIO 当下的样子:一个 Rust 数据面 (NSN/N
 
 ## 能力地图(一张图看全局)
 
-```mermaid
-graph TB
-    subgraph NSD["NSD 控制中心"]
-        ID["身份与组织<br/>Org · Realm · IdP · SCIM · APIKey"]
-        POL["策略与编排<br/>ACL · 路由 · 版本 · 灰度 · 策略测试"]
-        NET["网络编排<br/>多区网关 · 站点分组 · 流量工程"]
-        OBS1["可观测与审计<br/>拓扑 · 连接 · 流量 · 审计日志"]
-        OPS1["运营与生态<br/>Web UI · CLI · SDK · Webhook · Terraform"]
-        HA1["高可用与扩展<br/>多 NSD 并行 · 跨区容灾 · 配置 DB"]
-    end
+[能力地图一览](./diagrams/capability-overview.d2)
 
-    subgraph NSGW["NSGW 数据网关"]
-        CONN["连接能力<br/>WG · WSS · QUIC · Noise · MASQUE"]
-        ROUTE["路由与寻址<br/>Anycast · GeoDNS · SNI · Host"]
-        SEC["安全能力<br/>DDoS · 限速 · IP 信誉 · mTLS · WAF"]
-        HA2["容灾与高可用<br/>多活 · 蓝绿 · 热升级"]
-        OBS2["可观测性<br/>每连接 tracing · 流量图 · 拓扑图"]
-        RES["资源管理<br/>QoS · 带宽限额 · 计费埋点"]
-    end
-
-    subgraph CROSS["跨组件扩展"]
-        P2P["P2P 直连 · NAT 穿透"]
-        MPATH["多路径 · MPTCP"]
-        CC["BBR · FEC · 拥塞控制"]
-        EDGE["边缘 · IoT · 移动端优化"]
-    end
-
-    NSD --> NSGW
-    NSD --> CROSS
-    NSGW --> CROSS
-```
-
-完整能力地图: [diagrams/capability-map.mmd](./diagrams/capability-map.mmd)。
+完整能力地图: [diagrams/capability-map.d2](./diagrams/capability-map.d2)。

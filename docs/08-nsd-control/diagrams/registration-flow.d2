@@ -1,0 +1,54 @@
+# 设备注册时序（NSN → NSD）
+# 覆盖 auth_key / device_flow 首次注册 + 签名续签
+# 源: tests/docker/nsd-mock/src/auth.ts + crates/control/src/auth.rs + device_flow.rs
+
+shape: sequence_diagram
+
+NSN: "NSN"
+NSD: "NSD"
+Browser: "User Browser"
+
+NSN -> NSN: "本地生成 machinekey (Ed25519)\n和 peerkey (X25519)"
+NSN -> NSD: "GET /api/v1/info"
+NSD -> NSN: "{ type, realm, auth_methods, nsd_noise_pubkey, nsd_quic_pubkey }"
+
+choice: "首次注册路径" {
+  path_a: "路径 A：auth_key" {
+    NSN -> NSD: "POST /api/v1/machine/register\n{ auth_key, machine_id?, machine_key_pub, peer_key_pub, hostname, os, version, system_info }"
+    NSD -> NSD: "校验 auth_key\n写 machines[machine_id]"
+    NSD -> NSN: "201 { machine_id, server_peer_key_pub, server_endpoint, domain_base, nsd_noise_pubkey, nsd_quic_pubkey }"
+  }
+  path_b: "路径 B：device flow (RFC 8628)" {
+    NSN -> NSD: "POST /api/v1/device/code { client_id }"
+    NSD -> NSN: "{ device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval }"
+    NSN -> Browser: "打印 verification_uri + user_code"
+    Browser -> NSD: "用户在浏览器登录并批准 user_code"
+    poll: "每 interval 秒轮询" {
+      NSN -> NSD: "POST /api/v1/device/token { device_code, grant_type }"
+      approval: "批准状态" {
+        pending: "未批准" {
+          NSD -> NSN: "428 { error: \"authorization_pending\" }"
+        }
+        approved: "批准" {
+          NSD -> NSN: "200 { access_token }"
+        }
+      }
+    }
+    NSN -> NSD: "POST /api/v1/machine/register\nAuthorization: Bearer access_token"
+    NSD -> NSD: "校验 Bearer token\n写 machines[machine_id]"
+    NSD -> NSN: "201 { machine_id, ... }"
+  }
+}
+
+NSN -> NSN: "写 state: machinekey.json +\nregistrations/{realm}.json (0600)"
+
+signature_auth: "之后的每次启动/重连都走签名认证" {
+  NSN -> NSN: "timestamp = unix_secs(now)\nsig = Ed25519.sign(signing_key, \"{machine_id}:{timestamp}\")"
+  NSN -> NSD: "POST /api/v1/machine/auth\n{ machine_id, machine_key_pub, timestamp, signature }"
+  NSD -> NSD: "查 machines[machine_id]\nskew ≤ 300s\nEd25519.verify"
+  NSD -> NSN: "200 { token: jwt }"
+  NSN -> NSD: "POST /api/v1/services/report\nAuthorization: Bearer jwt"
+  NSD -> NSN: "204"
+  NSN -> NSD: "GET /api/v1/config/stream\nAuthorization: Bearer jwt"
+  NSD -> NSN: "SSE: wg_config + gateway_config + proxy_config +\nservices_ack + dns_config (初始快照)"
+}

@@ -34,27 +34,7 @@
 
 ### 协作流程
 
-```mermaid
-sequenceDiagram
-    participant A as NSC-Alice
-    participant NSD as NSD
-    participant NSGW as NSGW (STUN/signaling)
-    participant B as NSN-Bob
-
-    A->>NSD: 请求连接到 B
-    NSD->>NSGW: signal(A→B) 包含 A 的 pubkey
-    NSGW->>B: 通知 Bob "Alice 想连接你"
-    B-->>NSGW: "我准备好了,这是我的 STUN 反射地址"
-    NSGW-->>A: "Bob 在 <ip:port>"
-    A->>B: UDP hole punch (同时发包)
-    B->>A: UDP hole punch
-    A->B: WireGuard handshake 直连 ✅
-    alt 打洞失败
-        A->>NSGW: 回落到 TURN 中继
-        NSGW->>B: 
-        A<->B: 通过 NSGW 中继 WG 流量
-    end
-```
+[P2P 打洞协作时序](./diagrams/p2p-hole-punch-sequence.d2)
 
 ### 现有基础
 
@@ -162,20 +142,7 @@ NSN 跑在 edge node (CDN PoP / IoT gateway / 企业分支),流量先在 edge �
 
 ### 架构
 
-```mermaid
-graph LR
-    U[终端用户]
-    E1[Edge NSN<br/>东京]
-    E2[Edge NSN<br/>首尔]
-    GW[NSGW 中心]
-    BK[Backend]
-
-    U -->|local| E1
-    U -->|local| E2
-    E1 -->|WG backbone| GW
-    E2 -->|WG backbone| GW
-    GW --> BK
-```
+[Edge NSN 架构](./diagrams/edge-nsn-architecture.d2)
 
 ### 关键特性
 
@@ -306,50 +273,7 @@ NSIO 的**127.11.x.x VIP + 本地 DNS**模型非常适合移动端 — 不需要
 
 ## 数据面扩展总览
 
-```mermaid
-graph TB
-    subgraph Protocol["协议层"]
-        P1[WireGuard UDP]
-        P2[WSS TCP]
-        P3[QUIC]
-        P4[MASQUE]
-    end
-    subgraph Path["路径优化"]
-        Q1[P2P Hole Punch]
-        Q2[MPTCP]
-        Q3[WG+WSS 并行]
-        Q4[Anycast]
-    end
-    subgraph Resilience["弹性"]
-        R1[BBR]
-        R2[FEC]
-        R3[断点续连]
-    end
-    subgraph Scale["规模"]
-        S1[边缘计算]
-        S2[跨云]
-        S3[硬件加速]
-    end
-    subgraph Enterprise["企业特性"]
-        E1[BYO-CA]
-        E2[私有 DNS]
-        E3[IoT 优化]
-    end
-
-    P1 --> Q1
-    P1 --> Q3
-    P2 --> Q2
-    P2 --> R1
-    P3 --> R3
-    Q1 --> Q4
-    Q3 --> R2
-    S1 --> Q4
-    S2 --> Q4
-    S3 --> P1
-    E1 --> P1
-    E2 --> Scale
-    E3 --> R3
-```
+[数据面扩展能力总览](./diagrams/data-plane-extensions-overview.d2)
 
 ---
 

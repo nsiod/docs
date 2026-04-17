@@ -1,0 +1,30 @@
+# 可观测性缺陷优先级矩阵 (成本 × 缺位代价)
+# 源: observability-gaps.md §小结
+
+direction: right
+
+title: "可观测性缺陷优先级（成本 vs 收益）" { near: top-center; shape: text; style.font-size: 20 }
+
+Q_LOW_COST_HIGH_GAIN: "左上 · 高 ROI 速做 (成本低, 代价高)" {
+  OBS003: "OBS-003 NAT miss 无指标"
+  OBS008: "OBS-008 ACL deny 无 counter"
+  OBS009: "OBS-009 panic 不可见"
+  OBS006: "OBS-006 无 histogram"
+}
+
+Q_HIGH_COST_HIGH_GAIN: "右上 · 立刻做 (成本高, 代价高)" {
+  OBS001: "OBS-001 OTel 空跑"
+  OBS005: "OBS-005 无 span"
+  OBS004: "OBS-004 channel 占用率"
+}
+
+Q_LOW_COST_LOW_GAIN: "左下 · 可暂缓 (成本低, 代价低)" {
+  OBS002: "OBS-002 TunnelMetrics 双定义"
+  OBS007: "OBS-007 /metrics 字符串拼接"
+  OBS012: "OBS-012 日志无 size 上限"
+}
+
+Q_HIGH_COST_LOW_GAIN: "右下 · 排进 backlog (成本高, 代价低)" {
+  OBS010: "OBS-010 NSC 无指标"
+  OBS011: "OBS-011 无 SLO"
+}

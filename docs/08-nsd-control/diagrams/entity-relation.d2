@@ -1,0 +1,183 @@
+# NSD 核心数据模型 ER 图
+# 源: tests/docker/nsd-mock/src/{auth.ts,registry.ts,types.ts}
+# 生产: tmp/control/server/db/pg/schema/schema.ts
+
+direction: right
+
+REALM: "REALM" {
+  shape: sql_table
+  realm_name: "string PK"
+  type: "string (cloud|selfhosted)"
+  provider: "string"
+}
+
+MACHINE: "MACHINE" {
+  shape: sql_table
+  machine_id: "string PK"
+  realm: "string FK"
+  type: "string (connector|gateway)"
+  system_info: "json"
+  last_heartbeat_ms: "int"
+}
+
+MACHINE_KEYS: "MACHINE_KEYS" {
+  shape: sql_table
+  machine_id: "string PK"
+  machine_key_pub: "hex Ed25519 (32B)"
+  peer_key_pub: "hex X25519 (32B)"
+}
+
+GATEWAY: "GATEWAY" {
+  shape: sql_table
+  gateway_id: "string PK"
+  realm: "string FK"
+  wg_pubkey: "hex"
+  wg_endpoint: "ip:port"
+  wss_endpoint: "wss://..."
+}
+
+AUTHKEY: "AUTHKEY" {
+  shape: sql_table
+  key_hash: "string PK"
+  realm: "string FK"
+  usage_left: "int"
+  expires_at: "int"
+  bound_org_id: "string"
+}
+
+DEVICE_CODE: "DEVICE_CODE" {
+  shape: sql_table
+  device_code: "string PK"
+  user_code: "string"
+  access_token: "string"
+  expires_at: "int"
+  approved_at: "int"
+}
+
+SERVICE: "SERVICE" {
+  shape: sql_table
+  machine_id: "string FK"
+  name: "部分 FQID"
+  protocol: "tcp|udp|both"
+  host: "string"
+  port: "int"
+  enabled: "bool"
+  tunnel: "auto|wg|ws"
+  gateway_pref: "auto|id"
+}
+
+PORT_MAPPING: "PORT_MAPPING" {
+  shape: sql_table
+  fqid: "string PK (name.machine_id.n.ns)"
+  listen_port: "int (≥ 10000)"
+  target_host: "string"
+  target_port: "int"
+  protocol: "string"
+}
+
+SUBNET_RULE: "SUBNET_RULE" {
+  shape: sql_table
+  resource_id: "string PK (= fqid)"
+  source_prefix: "string"
+  dest_prefix: "string"
+  rewrite_type: "ip|cidr|domain"
+  rewrite_value: "string"
+  protocol: "string"
+}
+
+DNS_RECORD: "DNS_RECORD" {
+  shape: sql_table
+  domain: "string PK (name.machine_id.n.ns)"
+  site: "string"
+  service: "string"
+  port: "int"
+}
+
+ROUTE: "ROUTE" {
+  shape: sql_table
+  domain: "string PK"
+  site: "string"
+  service: "string"
+  port: "int"
+  nsn_wg_ip: "mock only"
+  virtual_port: "mock only"
+}
+
+ORG: "ORG" {
+  shape: sql_table
+  org_id: "string PK"
+  name: "string"
+  subnet: "string"
+}
+
+USER: "USER" {
+  shape: sql_table
+  user_id: "string PK"
+  email: "string"
+  type: "internal|oidc"
+}
+
+USER_ORG: "USER_ORG" {
+  shape: sql_table
+  user_id: "string FK"
+  org_id: "string FK"
+  is_owner: "bool"
+}
+
+SITE: "SITE" {
+  shape: sql_table
+  site_id: "int PK"
+  org_id: "string FK"
+  subnet: "string"
+  online: "bool"
+}
+
+RESOURCE: "RESOURCE" {
+  shape: sql_table
+  resource_id: "int PK"
+  org_id: "string FK"
+  full_domain: "string"
+  protocol: "string"
+}
+
+TARGET: "TARGET" {
+  shape: sql_table
+  target_id: "int PK"
+  resource_id: "int FK"
+  site_id: "int FK"
+  ip: "string"
+  port: "int"
+}
+
+SESSION: "SESSION" {
+  shape: sql_table
+  session_id: "string PK"
+  user_id: "string FK"
+  expires_at: "int"
+}
+
+HEARTBEAT: "HEARTBEAT" {
+  shape: sql_table
+  machine_id: "string FK"
+  uptime_secs: "int"
+  local_ips: "JSON array"
+  received_at: "int"
+}
+
+REALM -> MACHINE: "包含"
+REALM -> GATEWAY: "包含"
+REALM -> AUTHKEY: "作用域"
+REALM -> ORG: "可选映射"
+MACHINE -> SERVICE: "上报"
+MACHINE -> HEARTBEAT: "发送"
+MACHINE -> DEVICE_CODE: "审批"
+MACHINE -> MACHINE_KEYS: "固定"
+GATEWAY -> ROUTE: "承载"
+SERVICE -> PORT_MAPPING: "分配虚拟端口"
+SERVICE -> DNS_RECORD: "产出"
+SERVICE -> SUBNET_RULE: "生成 DNAT"
+ORG -> SITE: "拥有"
+SITE -> RESOURCE: "暴露"
+RESOURCE -> TARGET: "映射到"
+USER -> USER_ORG: "属于"
+USER -> SESSION: "登录"

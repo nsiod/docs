@@ -477,83 +477,9 @@ Browser / SSH / any TCP ──→ NSGW[ Envoy + WG ]  ──→ NSN
 
 以下图示以**路线 A**(自研轻 Proxy + 外部入口层)的形态呈现;路线 B 的差异仅是把 `HTTP_FWD` / `L4_MAP` / 中间件节点替换成 **Envoy + xDS**,外围数据面结构一致。
 
-```mermaid
-graph TB
-    subgraph Edge["边缘层 (部署方自选)"]
-        AN[Anycast IP]
-        GEO[GeoDNS]
-        ING[外部入口层<br/>CF / ALB / 前置 Envoy<br/>OIDC · WAF · 全局策略]
-    end
+[NSGW 生产化架构全景 (路线 A)](./diagrams/nsgw-production-architecture.d2)
 
-    subgraph NSGW["NSGW 实例 (轻量数据面)"]
-        subgraph Ingress["入口"]
-            WG[WG :51820/udp]
-            WSS[WSS :443/wss]
-            QUIC[QUIC :443/udp]
-            H3[HTTP/3 :443/udp]
-            SNI[SNI Proxy :443/tcp]
-            L4[L4 端口映射<br/>SSH :2222 等]
-            HTTP_FWD[HTTP 反代<br/>轻量中间件]
-        end
-        subgraph Mid["中间"]
-            DDoS[DDoS 基础过滤]
-            RL[Rate Limit 基础]
-            ACL[ACL 执行点]
-        end
-        subgraph Core["核心"]
-            ROUTE[路由决策]
-            MUX[会话多路复用]
-            QOS[QoS 调度]
-        end
-        subgraph Egress["出口"]
-            PEERS[WG peers 到 NSN]
-            RELAY[WSS relay 到 NSN]
-        end
-        subgraph Obs["观测"]
-            PROM[Prometheus]
-            OTEL[OTel]
-            LOG[Access Log]
-        end
-    end
-
-    subgraph Backend["后端"]
-        NSN[NSN 站点节点]
-        NSD[NSD 控制中心]
-    end
-
-    GEO --> AN
-    AN --> ING
-    ING --> HTTP_FWD
-    AN --> WG
-    AN --> WSS
-    AN --> QUIC
-    AN --> H3
-    AN --> SNI
-    AN --> L4
-    WG --> DDoS
-    WSS --> DDoS
-    QUIC --> DDoS
-    H3 --> DDoS
-    SNI --> DDoS
-    L4 --> DDoS
-    HTTP_FWD --> DDoS
-    DDoS --> RL
-    RL --> ACL
-    ACL --> ROUTE
-    ROUTE --> MUX
-    MUX --> QOS
-    QOS --> PEERS
-    QOS --> RELAY
-    PEERS --> NSN
-    RELAY --> NSN
-    ROUTE -.-> PROM
-    ROUTE -.-> OTEL
-    ROUTE -.-> LOG
-    NSD -. "SSE: wg_config + routing_config + gateway_http_config + gateway_l4_map" .-> ROUTE
-    NSD -. "ACL + billing quota" .-> ACL
-```
-
-完整版本见 [diagrams/nsgw-vision-arch.mmd](./diagrams/nsgw-vision-arch.mmd)。
+完整版本见 [diagrams/nsgw-vision-arch.d2](./diagrams/nsgw-vision-arch.d2)。
 
 ## 功能数量自检
 

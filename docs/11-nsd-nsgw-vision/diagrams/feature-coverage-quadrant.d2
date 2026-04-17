@@ -1,0 +1,40 @@
+# 功能能力覆盖度 (当前 → 愿景)
+# 原 mermaid quadrantChart 改为 d2 四象限分组
+# 源: feature-matrix.md 内联 mermaid
+
+direction: right
+
+classes: {
+  q1: { style: { fill: "#dbeafe"; stroke: "#1d4ed8" } }
+  q2: { style: { fill: "#dcfce7"; stroke: "#16a34a" } }
+  q3: { style: { fill: "#f3f4f6"; stroke: "#6b7280" } }
+  q4: { style: { fill: "#fae8ff"; stroke: "#a21caf" } }
+}
+
+Q2: "MVP 必做 (基础 · 紧迫)" {
+  class: q2
+  F1: "机器身份 Ed25519 (0.15, 0.9)"
+  F2: "ACL 下发 SSE (0.2, 0.85)"
+  F3: "OIDC SSO (0.3, 0.75)"
+  F4: "Web UI (0.25, 0.7)"
+}
+
+Q1: "优先立项 · GA 阶段 (高级 · 紧迫)" {
+  class: q1
+  F5: "Device Posture (0.7, 0.8)"
+  F6: "Policy DSL Rego (0.75, 0.75)"
+  F7: "P2P 打洞 (0.6, 0.65)"
+  F8: "多 NSD 并行 (0.85, 0.7)"
+}
+
+Q3: "可以推后 (基础 · 不紧迫)" {
+  class: q3
+  F9: "i18n 16 种 (0.2, 0.3)"
+}
+
+Q4: "Enterprise 专属 (高级 · 不紧迫)" {
+  class: q4
+  F10: "BYO-CA (0.9, 0.4)"
+  F11: "硬件加速 (0.95, 0.3)"
+  F12: "WORM 审计 (0.8, 0.45)"
+}

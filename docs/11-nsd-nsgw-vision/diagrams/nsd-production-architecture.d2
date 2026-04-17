@@ -1,0 +1,53 @@
+# NSD 生产化架构全景
+# 源: nsd-vision.md 内联 mermaid
+
+direction: down
+
+Clients: "NSN / NSGW / NSC" {
+  NSN: "NSN"
+  NSGW: "NSGW"
+  NSC: "NSC"
+}
+
+LB: "负载均衡层" {
+  L7: "L7 LB\nnginx/envoy"
+  L4: "L4 LB\nAnycast IP"
+}
+
+NSDStack: "NSD 生产集群" {
+  A1: "NSD-1"
+  A2: "NSD-2"
+  A3: "NSD-3"
+}
+
+State: "状态层" {
+  PG: "Postgres\nPrimary" { shape: cylinder }
+  PGR: "Postgres\nReplica" { shape: cylinder }
+  RED: "Redis" { shape: cylinder }
+  KAF: "Kafka/NATS\n事件总线"
+  S3: "S3\n审计日志 + CDN" { shape: cylinder }
+}
+
+Ext: "外部系统" {
+  IDP: "OIDC/SAML/SCIM"
+  SIEM: "SIEM"
+  SLK: "Slack/PagerDuty"
+  STRIPE: "Stripe"
+}
+
+Clients.NSN -> LB.L7: "REST"
+Clients.NSGW -> LB.L7: "REST+SSE"
+Clients.NSC -> LB.L4: "REST+SSE"
+LB.L7 -> NSDStack.A1
+LB.L7 -> NSDStack.A2
+LB.L7 -> NSDStack.A3
+LB.L4 -> NSDStack.A1
+NSDStack.A1 -> State.PG
+NSDStack.A1 -> State.PGR
+NSDStack.A1 -> State.RED
+NSDStack.A1 -> State.KAF
+NSDStack.A1 -> State.S3
+NSDStack.A1 -> Ext.IDP
+NSDStack.A1 -> Ext.STRIPE
+State.KAF -> Ext.SIEM
+State.KAF -> Ext.SLK

@@ -1,0 +1,50 @@
+# 跨组件能力总览
+# 源: control-plane-extensions.md 内联 mermaid
+
+direction: down
+
+NSD: "NSD" {
+  P: "Policy"
+  A: "Authz"
+  B: "Billing"
+  E: "Events"
+  T: "Topology"
+}
+NSN: "NSN" {
+  NP: "ACL Enforce"
+  NR: "Report Posture"
+  NM: "Multi-NSD Merge"
+}
+NSC: "NSC" {
+  CP: "Report Posture"
+  CN: "Multi-NSD Merge"
+}
+NSGW: "NSGW" {
+  GA: "Authz Query"
+  GR: "Routing"
+  GB: "Billing Ingest"
+  GT: "Topology Upload"
+}
+External: "External" {
+  TF: "Terraform"
+  SDK: "SDKs"
+  K8S: "k8s Operator"
+  WH: "Webhooks"
+}
+
+NSD.P -> NSN.NP: "acl_config SSE"
+NSD.P -> NSGW.GR: "acl_config SSE"
+NSD.A -> NSGW.GA: "/authz"
+NSGW.GA -> NSD.A: "/authz"
+NSD.B -> NSGW.GB: "billing/ingest"
+NSGW.GB -> NSD.B: "billing/ingest"
+NSD.T -> NSGW.GT: "gateway/topology"
+NSGW.GT -> NSD.T: "gateway/topology"
+NSD.E -> External.WH: "Webhook POST"
+NSN.NR -> NSD.P: "/posture"
+NSC.CP -> NSD.P: "/posture"
+External.TF -> NSD.P
+External.SDK -> NSD.P
+External.K8S -> NSD.P
+NSN.NM -> NSN.NP: "resource_id merge" { style.stroke-dash: 3 }
+NSC.CN -> NSN.NP: "resource_id merge" { style.stroke-dash: 3 }

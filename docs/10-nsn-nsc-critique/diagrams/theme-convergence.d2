@@ -1,0 +1,72 @@
+# 缺陷 → 主题收敛图
+# 源: improvements.md §0
+
+direction: right
+
+classes: {
+  t_a: { style: { fill: "#fdd"; stroke: "#000000" } }
+  t_b: { style: { fill: "#fdd"; stroke: "#000000" } }
+  t_c: { style: { fill: "#fde"; stroke: "#000000" } }
+  t_d: { style: { fill: "#ffd"; stroke: "#000000" } }
+  t_e: { style: { fill: "#dfe"; stroke: "#000000" } }
+  t_f: { style: { fill: "#dfe"; stroke: "#000000" } }
+  t_g: { style: { fill: "#def"; stroke: "#000000" } }
+}
+
+T1: "Theme A · ACL/Policy 重整" {
+  class: t_a
+  A1: "SEC-001 + ARCH-001\nfail-open/closed 不对称"
+  A2: "SEC-005 + ARCH-002\n多 NSD 交集合并"
+  A3: "SEC-008 + FAIL-002\n10s 超时 fail-open"
+  A4: "SEC-014 + PERF-007\nACL 双 Arc 写入"
+  A5: "SEC-006 + FUNC-012\nNSC 无 ACL"
+}
+
+T2: "Theme B · 控制面安全" {
+  class: t_b
+  B1: "SEC-002 + ARCH-008\nHTTP 旁路 transport"
+  B2: "SEC-003\nauth 无 nonce"
+  B3: "SEC-004\n密钥明文落盘"
+  B4: "SEC-009 + SEC-013\ntoken/source 审计"
+  B5: "SEC-015\n无 audit log"
+}
+
+T3: "Theme C · 可观测性栈" {
+  class: t_c
+  C1: "OBS-001 + OBS-007\nOTel 空跑"
+  C2: "OBS-006\n无 histogram"
+  C3: "OBS-005\n无 span"
+  C4: "OBS-003 + OBS-004 + OBS-008\n关键 metric 缺失"
+  C5: "OBS-009 + FAIL-001\npanic 不可见"
+}
+
+T4: "Theme D · 数据面健壮性" {
+  class: t_d
+  D1: "FUNC-005 + FAIL-005\nNAT 无 GC, miss 无指标"
+  D2: "FAIL-003 + ARCH-009\nWSS 单 TCP HOL"
+  D3: "FAIL-009 + FAIL-004\nWSS 重连不收敛"
+  D4: "ARCH-004 + FUNC-007\nNSGW health 未运行"
+}
+
+T5: "Theme E · 半成品收尾" {
+  class: t_e
+  E1: "FUNC-001\nNSC TUN mode 假"
+  E2: "FUNC-002 + FUNC-003\nNSC --device-flow / status"
+  E3: "FUNC-004 + SEC-010\nNSC token_rx"
+  E4: "ARCH-007\nAclFilteredSend 死代码"
+}
+
+T6: "Theme F · 入口与解耦" {
+  class: t_f
+  F1: "ARCH-006\nnsn/main.rs 1633 行装配"
+  F2: "ARCH-003 + FUNC-011\n双 TCP relay"
+  F3: "ARCH-010\nServices/AclConfig 缺一致性"
+}
+
+T7: "Theme G · 性能优化" {
+  class: t_g
+  G1: "PERF-001 + PERF-007\nArcSwap"
+  G2: "PERF-002\nBytes 零拷贝"
+  G3: "PERF-008\nDNS 缓存"
+  G4: "PERF-003 + ARCH-009\n多通道 TCP"
+}

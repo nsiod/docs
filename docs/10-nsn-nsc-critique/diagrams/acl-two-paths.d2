@@ -1,0 +1,26 @@
+# ACL 评估点: 两条独立链路 (WSS vs 本地服务路由)
+# 源: current-state.md §4
+
+direction: right
+
+WSS: "WSS Open frame" {
+  WS_OPEN: "dispatch_frame\ntunnel-ws/lib.rs:486"
+  WS_CHECK: "check_target_allowed\ntunnel-ws/lib.rs:434"
+  DENY1: "Deny" { shape: circle; style.fill: "#fdd" }
+  ALLOW1: "Allow" { shape: circle }
+
+  WS_OPEN -> WS_CHECK
+  WS_CHECK -> DENY1: "acl=None → fail-CLOSED\n(line 461-463)"
+  WS_CHECK -> ALLOW1: "subject = User{gw_id, machine_id}\nfrom Open TLV"
+}
+
+LOCAL: "本地服务路由" {
+  LOC_RES: "ServiceRouter::resolve\nnat/router.rs:71"
+  LOC_CHECK: "acl_engine.read()\nnat/router.rs:88"
+  ALLOW2: "Allow" { shape: circle; style.fill: "#fdd" }
+  ALLOW3: "Allow" { shape: circle }
+
+  LOC_RES -> LOC_CHECK
+  LOC_CHECK -> ALLOW2: "acl=None → fail-OPEN\n(if let Some skipped)"
+  LOC_CHECK -> ALLOW3: "subject = Cidr(src_ip)\nfrom decrypted packet"
+}

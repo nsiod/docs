@@ -1,0 +1,33 @@
+# NSGW 四条核心职责总览
+
+direction: down
+
+NSD: "NSD 控制面" {
+  SSE: "SSE /api/v1/config/stream\nwg_config · routing_config"
+}
+
+NSGW: "NSGW" {
+  R1: "① WG endpoint · :51820/udp" {
+    WG: "kernel wg0\npeer table"
+  }
+  R2: "② WSS relay · :9443" {
+    WSS: "Bun.serve<WsDataTagged>\n/relay · /client"
+  }
+  R3: "③ HTTPS reverse proxy · :443" {
+    TRA: "traefik v3.6.13\nroutes.yml + tls.yml"
+  }
+  R4: "④ Registry sync" {
+    REG: "subscribeToNsdSse()\naddPeer · handleRoutingConfig"
+  }
+}
+
+NSN: "NSN" {
+  N: "gotatun WG peer\n(用户态)"
+}
+
+NSD.SSE -> NSGW.R4.REG
+NSGW.R4.REG -> NSGW.R1.WG: "addPeer(pubkey, allowed-ips)"
+NSGW.R4.REG -> NSGW.R3.TRA: "routes.yml atomic write"
+NSGW.R3.TRA -> NSGW.R1.WG: "http://nsn_wg_ip:virtual_port"
+NSGW.R1.WG -> NSN.N: "WG"
+NSGW.R2.WSS -> NSN.N: "WSS"

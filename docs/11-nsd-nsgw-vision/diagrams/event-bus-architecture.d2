@@ -1,0 +1,29 @@
+# 能力 C7: 事件总线架构
+# 源: control-plane-extensions.md 内联 mermaid
+
+direction: right
+
+Producers: "事件源" {
+  NSD: "NSD actions"
+  NSGW: "NSGW telemetry"
+  NSN: "NSN state change"
+}
+Bus: "事件总线" {
+  K: "Kafka / NATS JetStream"
+}
+Consumers: "消费者" {
+  W: "Webhook 分发器"
+  SIEM: "SIEM Bridge"
+  OTEL: "OTel Collector"
+  BILL: "Billing Aggregator"
+  EXT: "External Subscribers\nvia gRPC streaming"
+}
+
+Producers.NSD -> Bus.K
+Producers.NSGW -> Bus.K
+Producers.NSN -> Bus.K
+Bus.K -> Consumers.W
+Bus.K -> Consumers.SIEM
+Bus.K -> Consumers.OTEL
+Bus.K -> Consumers.BILL
+Bus.K -> Consumers.EXT

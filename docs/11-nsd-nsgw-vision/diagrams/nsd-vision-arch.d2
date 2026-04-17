@@ -1,0 +1,99 @@
+# NSD 生产态架构图 (目标状态)
+# 对照 nsd-vision.md 中 F1-F6 六大能力簇
+# 源: diagrams/nsd-vision-arch.d2
+
+direction: down
+
+classes: {
+  ext: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+  edge: { style: { fill: "#e3f2fd"; stroke: "#1976d2" } }
+  api: { style: { fill: "#e8f5e9"; stroke: "#388e3c" } }
+  core: { style: { fill: "#f3e5f5"; stroke: "#7b1fa2" } }
+  data: { style: { fill: "#fce4ec"; stroke: "#c2185b" } }
+  obs: { style: { fill: "#e0f2f1"; stroke: "#00796b" } }
+  fed: { style: { fill: "#ffebee"; stroke: "#c62828" } }
+}
+
+EXT: "外部系统" {
+  IDP: "IdP\nOIDC/SAML/SCIM" { class: ext }
+  MDM: "MDM/EDR\n设备态势" { class: ext }
+  SIEM: "SIEM\nSplunk/Elastic" { class: ext }
+  BILLING: "计费系统" { class: ext }
+  TF: "Terraform\nK8s Operator" { class: ext }
+}
+
+EDGE: "边缘入口" {
+  LB: "L7 负载均衡\nTraefik/Envoy" { class: edge }
+  RL: "API Rate Limit" { class: edge }
+}
+
+NSD: "NSD 控制面集群" {
+  API: "API 层" {
+    REST: "REST/gRPC API" { class: api }
+    GQL: "GraphQL Admin" { class: api }
+    WH: "Webhook 发布器" { class: api }
+  }
+  CORE: "核心服务" {
+    AUTH: "身份/凭据服务" { class: core }
+    POL: "Policy Engine\nRego/CEL" { class: core }
+    TOPO: "拓扑服务" { class: core }
+    EVT: "事件总线\nNATS/Kafka" { class: core }
+    AUDIT: "审计服务" { class: core }
+    BP: "Blueprint 编排" { class: core }
+  }
+  DATA: "数据层" {
+    PG: "Postgres\n主从" { shape: cylinder; class: data }
+    CACHE: "Redis\nCache" { shape: cylinder; class: data }
+    OBJ: "对象存储\nWORM 审计" { shape: cylinder; class: data }
+    VAULT: "Vault/KMS\n密钥管理" { class: data }
+  }
+  OBS: "观测栈" {
+    PROM: "Prometheus" { class: obs }
+    LOKI: "Loki 日志" { class: obs }
+    OTEL: "OTel Collector" { class: obs }
+  }
+}
+
+CP: "可选联邦" {
+  NSD2: "NSD 联邦节点\nmulti.rs MultiControlPlane" { class: fed }
+}
+
+DOWN: "下游" {
+  NSGW: "NSGW 数据面"
+  NSN: "NSN 站点"
+  NSC: "NSC 客户端"
+}
+
+EXT.IDP -> NSD.CORE.AUTH
+EXT.MDM -> NSD.CORE.POL
+EXT.TF -> NSD.API.REST
+EXT.BILLING -> NSD.API.WH
+NSD.API.WH -> EXT.SIEM
+
+DOWN.NSC -> EDGE.LB
+DOWN.NSN -> EDGE.LB
+DOWN.NSGW -> EDGE.LB
+EDGE.LB -> EDGE.RL
+EDGE.RL -> NSD.API.REST
+EDGE.LB -> NSD.API.GQL
+
+NSD.API.REST -> NSD.CORE.AUTH
+NSD.API.REST -> NSD.CORE.POL
+NSD.API.REST -> NSD.CORE.TOPO
+NSD.API.REST -> NSD.CORE.BP
+NSD.CORE.POL -> NSD.CORE.AUDIT
+NSD.CORE.AUTH -> NSD.DATA.VAULT
+NSD.CORE.AUTH -> NSD.DATA.PG
+NSD.CORE.POL -> NSD.DATA.PG
+NSD.CORE.TOPO -> NSD.DATA.PG
+NSD.CORE.EVT -> NSD.DATA.CACHE
+NSD.CORE.AUDIT -> NSD.DATA.OBJ
+NSD.CORE.EVT -> NSD.API.WH
+NSD.CORE.EVT -> DOWN.NSGW
+NSD.CORE.EVT -> DOWN.NSN
+
+NSD.CORE.AUTH -> NSD.OBS.PROM
+NSD.CORE.AUTH -> NSD.OBS.LOKI
+NSD.CORE.AUTH -> NSD.OBS.OTEL
+
+NSD -> CP.NSD2: "联邦同步" { style.stroke-dash: 3 }

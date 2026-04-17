@@ -1,0 +1,33 @@
+# 安全缺陷优先级矩阵 (影响 × 修复成本)
+# 源: security-concerns.md §优先级矩阵
+
+direction: right
+
+title: "安全缺陷优先级（影响 vs 修复成本）" { near: top-center; shape: text; style.font-size: 20 }
+
+Q_LOW_COST_HIGH_IMPACT: "左上 · 立刻封堵 (成本低, 影响大)" {
+  SEC001: "SEC-001 ACL 不对称"
+  SEC007: "SEC-007 WSS SSRF"
+  SEC008: "SEC-008 启动 fail-open"
+  SEC002: "SEC-002 to_http_base 降级"
+  SEC010: "SEC-010 NSC token 不刷新"
+}
+
+Q_HIGH_COST_HIGH_IMPACT: "右上 · 战略性投入 (成本高, 影响大)" {
+  SEC005: "SEC-005 ACL 交集清空"
+  SEC003: "SEC-003 重放窗口"
+  SEC004: "SEC-004 私钥明文落盘"
+  SEC006: "SEC-006 NSC 无 ACL"
+  SEC015: "SEC-015 无 audit log"
+}
+
+Q_LOW_COST_LOW_IMPACT: "左下 · 排进 backlog (成本低, 影响小)" {
+  SEC009: "SEC-009 token 进日志"
+  SEC011: "SEC-011 device flow 不持久化"
+  SEC014: "SEC-014 ACL 双写无回滚"
+}
+
+Q_HIGH_COST_LOW_IMPACT: "右下 · 高 ROI 速做 (成本高, 影响中)" {
+  SEC012: "SEC-012 QUIC fingerprint"
+  SEC013: "SEC-013 frame 缺 source"
+}

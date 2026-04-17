@@ -1,0 +1,48 @@
+# 本目录输入材料 / 产出章节 / 改造建议 / 可视化 全景
+# 源: index.md §0
+
+direction: down
+
+IN: "输入材料" {
+  OV: "01-overview"
+  CP: "02-control-plane"
+  DP: "03-data-plane"
+  NS: "04-network-stack"
+  PA: "05-proxy-acl"
+  NSC_D: "06-nsc-client"
+  NSN_D: "07-nsn-node"
+  NSD_D: "08-nsd-control"
+  NSGW_D: "09-nsgw-gateway"
+  SRC: "crates/* 源码\n18037 LoC"
+}
+
+CRIT: "本目录产出 · 70+ 缺陷" {
+  style.fill: "#fde"
+  M: "methodology.md\n评分口径"
+  CS: "current-state.md\nHEAD 速览"
+  A: "architecture-issues.md\n10 ARCH-*"
+  F: "functional-gaps.md\n12 FUNC-*"
+  FA: "failure-modes.md\n11 FAIL-*"
+  P: "performance-concerns.md\n10 PERF-*"
+  O: "observability-gaps.md\n12 OBS-*"
+  S: "security-concerns.md\n15 SEC-*"
+}
+
+OUT: "改造建议" {
+  style.fill: "#dfd"
+  I: "improvements.md\n7 主题级 fix"
+  R: "roadmap.md\n分阶段路线图"
+}
+
+DIAG: "可视化" {
+  style.fill: "#def"
+  D1: "diagrams/issue-heatmap.d2"
+  D2: "diagrams/coupling-graph.d2"
+  D3: "diagrams/failure-cascade.d2"
+  D4: "diagrams/roadmap-phases.d2"
+}
+
+IN -> CRIT
+CRIT -> OUT
+CRIT -> DIAG
+OUT -> DIAG

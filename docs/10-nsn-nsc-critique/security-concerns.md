@@ -6,28 +6,7 @@
 
 ## 0. 信任边界全景与失守点
 
-```mermaid
-flowchart LR
-    USER[用户/操作者] -->|"auth_key 或<br/>OAuth2 device_code"| NSN
-    NSN -->|"register/auth/heartbeat<br/>HTTP plaintext (SEC-002)"| NSD
-    NSN -->|"SSE config push<br/>JWT Bearer"| NSD
-    NSN -->|"WSS data + Open frame<br/>ACL gated (SEC-001)"| NSGW
-    NSC -->|"WSS / WG"| NSGW
-    NSC -. "无 outbound ACL<br/>(SEC-006)" .-> NSGW
-
-    NSD -->|"empty ACL → 交集清空<br/>(SEC-005)"| NSN
-
-    subgraph DISK["NSN 本地磁盘"]
-        IDFILE["machinekey.json<br/>plain hex (SEC-004)"]
-    end
-    NSN --- DISK
-
-    style NSN fill:#cfe
-    style NSC fill:#cfe
-    style IDFILE fill:#fdd
-    style NSGW fill:#ffd
-    style NSD fill:#ffd
-```
+[信任边界全景与失守点](./diagrams/sec-trust-boundaries.d2)
 
 **核心观察**：NSN 与 NSD/NSGW 之间名义上有 SSE/Noise/QUIC 三种"加密"传输；但 register / authenticate / heartbeat 这 3 个最敏感的 HTTP API **总是被 `to_http_base()` 改写为 `http://`**，使得在 noise:// 或 quic:// 部署下，初始信任建立反而走明文 — 见 SEC-002。
 
@@ -394,31 +373,7 @@ flowchart LR
 
 ## 优先级矩阵（仅本章）
 
-```mermaid
-quadrantChart
-    title 安全缺陷优先级（影响 vs 修复成本）
-    x-axis "修复成本低" --> "修复成本高"
-    y-axis "影响小" --> "影响大"
-    quadrant-1 "战略性投入"
-    quadrant-2 "立刻封堵"
-    quadrant-3 "排进 backlog"
-    quadrant-4 "高 ROI 速做"
-    "SEC-001 ACL 不对称": [0.2, 0.95]
-    "SEC-002 to_http_base 降级": [0.3, 0.95]
-    "SEC-003 重放窗口": [0.45, 0.7]
-    "SEC-004 私钥明文落盘": [0.4, 0.8]
-    "SEC-005 ACL 交集清空": [0.5, 0.9]
-    "SEC-006 NSC 无 ACL": [0.4, 0.7]
-    "SEC-007 WSS SSRF": [0.2, 0.85]
-    "SEC-008 启动 fail-open": [0.2, 0.85]
-    "SEC-009 token 进日志": [0.1, 0.45]
-    "SEC-010 NSC token 不刷新": [0.1, 0.7]
-    "SEC-014 ACL 双写无回滚": [0.3, 0.6]
-    "SEC-011 device flow 不持久化": [0.2, 0.2]
-    "SEC-012 QUIC fingerprint": [0.4, 0.5]
-    "SEC-013 frame 缺 source": [0.4, 0.5]
-    "SEC-015 无 audit log": [0.6, 0.55]
-```
+[安全缺陷优先级 · 四象限](./diagrams/sec-priority-matrix.d2)
 
 ---
 

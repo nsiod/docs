@@ -1,0 +1,16 @@
+# 能力 D5: 边缘计算 NSN 架构
+# 源: data-plane-extensions.md 内联 mermaid
+
+direction: right
+
+U: "终端用户"
+E1: "Edge NSN\n东京"
+E2: "Edge NSN\n首尔"
+GW: "NSGW 中心"
+BK: "Backend"
+
+U -> E1: "local"
+U -> E2: "local"
+E1 -> GW: "WG backbone"
+E2 -> GW: "WG backbone"
+GW -> BK

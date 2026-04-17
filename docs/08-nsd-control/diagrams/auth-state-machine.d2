@@ -1,0 +1,39 @@
+# 认证状态机（NSN 本地视角）
+# 源: crates/common/src/state.rs + crates/control/src/auth.rs + device_flow.rs
+
+direction: down
+
+Start: "●" { shape: circle }
+End: "●" { shape: circle }
+
+Unregistered: "Unregistered" { shape: circle }
+AwaitAuthKey: "AwaitAuthKey" { shape: circle }
+AwaitDeviceCode: "AwaitDeviceCode" { shape: circle }
+Polling: "Polling" { shape: circle }
+AwaitAuthKey2: "AwaitAuthKey2" { shape: circle }
+Registered: "Registered" { shape: circle }
+Authenticated: "Authenticated" { shape: circle }
+Failed: "Failed" { shape: circle }
+
+Start -> Unregistered
+Unregistered -> AwaitAuthKey: "有 auth_key"
+Unregistered -> AwaitDeviceCode: "无 auth_key + device_flow 支持"
+Unregistered -> Failed: "无可用方法"
+
+AwaitAuthKey -> Registered: "POST /machine/register 201"
+AwaitAuthKey -> Failed: "401"
+
+AwaitDeviceCode -> Polling: "/device/code 返回"
+Polling -> Polling: "428 authorization_pending"
+Polling -> AwaitAuthKey2: "200 { access_token }"
+Polling -> Failed: "expired_token / access_denied"
+
+AwaitAuthKey2 -> Registered: "register (Bearer) 201"
+
+Registered -> Authenticated: "/machine/auth 200 { jwt }"
+Authenticated -> Authenticated: "TokenRefresh"
+Authenticated -> Authenticated: "重连 → /machine/auth"
+Authenticated -> Registered: "jwt 过期"
+Registered -> Unregistered: "state 文件被删"
+
+Failed -> End

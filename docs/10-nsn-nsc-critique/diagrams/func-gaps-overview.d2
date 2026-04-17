@@ -1,0 +1,31 @@
+# FUNC-* 缺陷概览: NSN / NSC 模块实现状态
+# 源: functional-gaps.md
+
+direction: right
+
+classes: {
+  impl: { style: { fill: "#cfc"; stroke: "#3a3" } }
+  stub: { style: { fill: "#fec"; stroke: "#e90" } }
+  todo: { style: { fill: "#fcc"; stroke: "#c33" } }
+}
+
+NSN: "nsn" {
+  N1: "wg/wss/auto transport" { class: impl }
+  N2: "proxy 80/443/raw" { class: impl }
+  N3: "ACL engine + reload" { class: impl }
+  N4: "AclFilteredSend (IP-layer)" { class: stub }
+  N5: "conntrack GC / TTL" { class: todo }
+  N6: "IPv6 NAT / NetStack" { class: todo }
+  N7: "MultiGW health probe" { class: todo }
+}
+
+NSC: "nsc" {
+  C1: "UserSpace + WSS proxy" { class: impl }
+  C2: "Local DNS *.n.ns" { class: impl }
+  C3: "HTTP CONNECT proxy" { class: impl }
+  C4: "TUN data plane" { class: stub }
+  C5: "--device-flow" { class: todo }
+  C6: "Status subcommand" { class: todo }
+  C7: "token refresh consumer" { class: todo }
+  C8: "NSC ACL" { class: todo }
+}

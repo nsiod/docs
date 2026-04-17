@@ -40,36 +40,7 @@
 
 ## 六大能力轴 · 一览
 
-```mermaid
-graph TB
-    subgraph Core["核心能力"]
-        CONN["① 连接<br/>WG · WSS · QUIC · Noise"]
-        ROUTE["② 路由<br/>Anycast · GeoDNS · SNI · Host"]
-    end
-    subgraph Defense["防御与可靠性"]
-        SEC["③ 安全<br/>DDoS · 限速 · WAF · mTLS"]
-        HA["④ 容灾与高可用<br/>多活 · 蓝绿 · 热升级"]
-    end
-    subgraph Ops["运维"]
-        OBS["⑤ 可观测<br/>tracing · 流量图 · 拓扑图"]
-        RES["⑥ 资源管理<br/>QoS · 带宽限额 · 计费埋点"]
-    end
-
-    CONN --> ROUTE
-    ROUTE --> SEC
-    SEC --> HA
-    CONN --> HA
-    HA --> OBS
-    CONN --> RES
-    SEC --> RES
-
-    classDef core fill:#dbeafe,stroke:#3b82f6
-    classDef defense fill:#fee2e2,stroke:#ef4444
-    classDef ops fill:#fef3c7,stroke:#f59e0b
-    class CONN,ROUTE core
-    class SEC,HA defense
-    class OBS,RES ops
-```
+[NSGW 六大能力轴一览](./diagrams/nsgw-six-axes-overview.d2)
 
 ---
 

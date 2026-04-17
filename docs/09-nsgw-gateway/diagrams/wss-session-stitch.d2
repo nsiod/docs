@@ -1,0 +1,28 @@
+# WSS 中继会话缝合结构
+
+direction: right
+
+A: "NSC (client session)" {
+  AC: "NSC app"
+}
+
+G: "NSGW WSS relay" {
+  GP1: "/client endpoint\nclientSessions Map"
+  GP2: "/relay endpoint\nactiveSessions Map"
+  GX: "connectorStreamToClient\n(reverse lookup)"
+}
+
+N: "NSN (connector session)" {
+  NC: "NSN connector"
+  NS: "real service :80"
+}
+
+A.AC -> G.GP1: "WSS /client\nWsFrame" { style.stroke-width: 3 }
+G.GP1 -> G.GP2: "client.Open -> allocate connectorStreamId\nthen forward"
+G.GP2 -> N.NC: "WSS /relay\nWsFrame" { style.stroke-width: 3 }
+N.NC -> N.NS
+
+N.NC -> G.GP2: "Data/Close reverse" { style.stroke-dash: 3 }
+G.GP2 -> G.GX: "connectorStreamToClient lookup" { style.stroke-dash: 3 }
+G.GX -> G.GP1: { style.stroke-dash: 3 }
+G.GP1 -> A.AC: { style.stroke-dash: 3 }

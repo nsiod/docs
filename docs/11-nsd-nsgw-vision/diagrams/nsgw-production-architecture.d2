@@ -1,0 +1,81 @@
+# 生产化 NSGW 架构全景 (路线 A: 自研轻 Proxy + 外部入口层)
+# 源: nsgw-vision.md 内联 mermaid
+
+direction: down
+
+Edge: "边缘层 (部署方自选)" {
+  AN: "Anycast IP"
+  GEO: "GeoDNS"
+  ING: "外部入口层\nCF / ALB / 前置 Envoy\nOIDC · WAF · 全局策略"
+}
+
+NSGW: "NSGW 实例 (轻量数据面)" {
+  Ingress: "入口" {
+    WG: "WG :51820/udp"
+    WSS: "WSS :443/wss"
+    QUIC: "QUIC :443/udp"
+    H3: "HTTP/3 :443/udp"
+    SNI: "SNI Proxy :443/tcp"
+    L4: "L4 端口映射\nSSH :2222 等"
+    HTTP_FWD: "HTTP 反代\n轻量中间件"
+  }
+  Mid: "中间" {
+    DDoS: "DDoS 基础过滤"
+    RL: "Rate Limit 基础"
+    ACL: "ACL 执行点"
+  }
+  Core: "核心" {
+    ROUTE: "路由决策"
+    MUX: "会话多路复用"
+    QOS: "QoS 调度"
+  }
+  Egress: "出口" {
+    PEERS: "WG peers 到 NSN"
+    RELAY: "WSS relay 到 NSN"
+  }
+  Obs: "观测" {
+    PROM: "Prometheus"
+    OTEL: "OTel"
+    LOG: "Access Log"
+  }
+}
+
+Backend: "后端" {
+  NSN: "NSN 站点节点"
+  NSD: "NSD 控制中心"
+}
+
+Edge.GEO -> Edge.AN
+Edge.AN -> NSGW.Ingress.HTTP_FWD
+Edge.AN -> NSGW.Ingress.WG
+Edge.AN -> NSGW.Ingress.WSS
+Edge.AN -> NSGW.Ingress.QUIC
+Edge.AN -> NSGW.Ingress.H3
+Edge.AN -> NSGW.Ingress.SNI
+Edge.AN -> NSGW.Ingress.L4
+Edge.ING -> NSGW.Ingress.HTTP_FWD
+
+NSGW.Ingress.WG -> NSGW.Mid.DDoS
+NSGW.Ingress.WSS -> NSGW.Mid.DDoS
+NSGW.Ingress.QUIC -> NSGW.Mid.DDoS
+NSGW.Ingress.H3 -> NSGW.Mid.DDoS
+NSGW.Ingress.SNI -> NSGW.Mid.DDoS
+NSGW.Ingress.L4 -> NSGW.Mid.DDoS
+NSGW.Ingress.HTTP_FWD -> NSGW.Mid.DDoS
+
+NSGW.Mid.DDoS -> NSGW.Mid.RL
+NSGW.Mid.RL -> NSGW.Mid.ACL
+NSGW.Mid.ACL -> NSGW.Core.ROUTE
+NSGW.Core.ROUTE -> NSGW.Core.MUX
+NSGW.Core.MUX -> NSGW.Core.QOS
+NSGW.Core.QOS -> NSGW.Egress.PEERS
+NSGW.Core.QOS -> NSGW.Egress.RELAY
+NSGW.Egress.PEERS -> Backend.NSN
+NSGW.Egress.RELAY -> Backend.NSN
+
+NSGW.Core.ROUTE -> NSGW.Obs.PROM { style.stroke-dash: 3 }
+NSGW.Core.ROUTE -> NSGW.Obs.OTEL { style.stroke-dash: 3 }
+NSGW.Core.ROUTE -> NSGW.Obs.LOG { style.stroke-dash: 3 }
+
+Backend.NSD -> NSGW.Core.ROUTE: "SSE: wg_config + routing_config + gateway_http_config + gateway_l4_map" { style.stroke-dash: 3 }
+Backend.NSD -> NSGW.Mid.ACL: "ACL + billing quota" { style.stroke-dash: 3 }

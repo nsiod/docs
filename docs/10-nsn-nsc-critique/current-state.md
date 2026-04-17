@@ -4,38 +4,7 @@
 
 ## 1. 二进制视角
 
-```mermaid
-flowchart TB
-    subgraph NSN["nsn (站点节点)"]
-        NSN_MAIN["main.rs<br/>1633 行<br/>spawn 30+ tasks"]
-        NSN_STATE["state.rs<br/>660 行<br/>AppState 全局"]
-        NSN_MON["monitor.rs<br/>430 行<br/>11 条 HTTP API"]
-    end
-
-    subgraph NSC["nsc (用户客户端)"]
-        NSC_MAIN["main.rs<br/>337 行<br/>4 个 select 分支"]
-        NSC_PROXY["proxy / router / dns<br/>HTTP 代理 + 127.11/16 VIP"]
-    end
-
-    NSN_MAIN -->|consumes| CONNECTOR
-    NSN_MAIN -->|consumes| TUNWG
-    NSN_MAIN -->|consumes| NETSTACK
-    NSN_MAIN -->|consumes| NAT
-    NSN_MAIN -->|consumes| PROXY
-    NSN_MAIN -->|consumes| ACL
-    NSN_MAIN -->|consumes| CONTROL
-    NSC_MAIN -->|consumes| CONTROL
-    NSC_MAIN -. "discards: wg/proxy/acl/token rx" .-> CONTROL
-
-    CONNECTOR["connector<br/>522+397"]
-    TUNWG["tunnel-wg<br/>629"]
-    TUNWS["tunnel-ws<br/>1138"]
-    NETSTACK["netstack<br/>705+204"]
-    NAT["nat<br/>678+...+..."]
-    PROXY["proxy<br/>tcp+udp"]
-    ACL["acl<br/>542+matcher+policy"]
-    CONTROL["control<br/>545+566+397+374+367+...."]
-```
+[NSN / NSC 二进制与内部 crate 装配](./diagrams/binaries-crates.d2)
 
 | 二进制 | 入口 | 接收的 SSE config | 实际消费 |
 |--------|------|------------------|---------|
@@ -64,23 +33,7 @@ QUIC             ── pubkey-pinned QUIC over UDP，内层仍是 SSE
 
 ## 4. ACL 评估点（两条独立链路）
 
-```mermaid
-flowchart LR
-    subgraph WSS["WSS Open frame"]
-        WS_OPEN["dispatch_frame<br/>tunnel-ws/lib.rs:486"] --> WS_CHECK["check_target_allowed<br/>tunnel-ws/lib.rs:434"]
-        WS_CHECK -->|"acl=None → fail-CLOSED<br/>(line 461-463)"| DENY1((Deny))
-        WS_CHECK -->|"subject = User{gw_id, machine_id}<br/>from Open TLV"| ALLOW1((Allow))
-    end
-
-    subgraph LOCAL["本地服务路由"]
-        LOC_RES["ServiceRouter::resolve<br/>nat/router.rs:71"] --> LOC_CHECK["acl_engine.read()<br/>nat/router.rs:88"]
-        LOC_CHECK -->|"acl=None → fail-OPEN<br/>(if let Some skipped)"| ALLOW2((Allow))
-        LOC_CHECK -->|"subject = Cidr(src_ip)<br/>from decrypted packet"| ALLOW3((Allow))
-    end
-
-    style DENY1 fill:#fdd
-    style ALLOW2 fill:#fdd
-```
+[ACL 评估点 · 两条独立链路](./diagrams/acl-two-paths.d2)
 
 两条链路的分歧体现在两个维度：
 1. **ACL 未加载时行为**：WSS fail-closed, 本地 fail-open——是 [SEC-001](./security-concerns.md) 的核心。

@@ -2,44 +2,7 @@
 
 > 本文档关注 *"出错时系统如何坏"* — 错误传播、降级路径、雪崩半径、数据一致性。每条缺陷不只问 "会不会出错"，更问 "出错后影响范围多大、运维能否止血"。
 
-```mermaid
-flowchart TB
-    subgraph Inputs["故障源"]
-        F1["NSD SSE 流断开"]
-        F2["NSGW WSS 链路断开"]
-        F3["NSGW WG handshake 失败"]
-        F4["本地服务慢/不响应"]
-        F5["大量短连接"]
-        F6["spawned task panic"]
-    end
-
-    subgraph Cascades["放大路径"]
-        C1["control_plane backoff<br/>1s→2s→…→60s"]
-        C2["WSS 流单连接 HOL"]
-        C3["conntrack 无界增长"]
-        C4["task panic 静默"]
-        C5["阻塞 mpsc.send.await"]
-    end
-
-    subgraph Effects["最终影响"]
-        E1["全站点策略陈旧"]
-        E2["所有 WSS 流降速"]
-        E3["内存 OOM"]
-        E4["主循环幽灵化"]
-        E5["数据面卡死"]
-    end
-
-    F1 --> C1 --> E1
-    F2 --> C2 --> E2
-    F4 --> C5 --> E5
-    F5 --> C3 --> E3
-    F6 --> C4 --> E4
-    F3 --> C1
-
-    style E3 fill:#fdd
-    style E4 fill:#fdd
-    style E5 fill:#fdd
-```
+[失败模式总览 · 故障源 → 放大路径 → 最终影响](./diagrams/failure-overview.d2)
 
 ---
 

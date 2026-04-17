@@ -1,0 +1,28 @@
+# 可观测性栈: 声明 vs 实际差距
+# 源: observability-gaps.md §0
+
+direction: right
+
+EXPECT: "仓库声明的能力" {
+  EXP_OTEL: "OpenTelemetry 全局 meter"
+  EXP_PROM: "Prometheus /api/metrics"
+  EXP_TRACING: "tracing crate 结构化日志"
+}
+
+REALITY: "实际暴露" {
+  R_REG: "init_telemetry()\n仅注册 exporter, 无 meter 调用"
+  R_HAND: "monitor.rs 手写\nformat!() 拼接 7 条 gauge/counter"
+  R_LOG: "info!/warn! 散布\n无 span / 无 trace_id"
+}
+
+GAP1: "OBS-001\nMeter 全局空" { style.fill: "#fdd" }
+GAP2: "OBS-007\n字符串拼接, 易错" { style.fill: "#fdd" }
+GAP3: "OBS-005\n无追踪上下文" { style.fill: "#fdd" }
+
+EXPECT.EXP_OTEL -> REALITY.R_REG: "声明但 0 个 instrument 注册" { style.stroke-dash: 3 }
+EXPECT.EXP_PROM -> REALITY.R_HAND: "OTel registry 为空, 真正数据来自手写" { style.stroke-dash: 3 }
+EXPECT.EXP_TRACING -> REALITY.R_LOG: "缺少 span 上下文" { style.stroke-dash: 3 }
+
+REALITY.R_REG -> GAP1
+REALITY.R_HAND -> GAP2
+REALITY.R_LOG -> GAP3

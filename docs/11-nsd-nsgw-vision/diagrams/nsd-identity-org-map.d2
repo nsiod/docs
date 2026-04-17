@@ -1,0 +1,24 @@
+# NSD ① 身份与组织 功能图
+# 源: nsd-vision.md 内联 mermaid
+
+direction: right
+
+Identity: "身份轴" {
+  M: "机器身份\nEd25519 + Curve25519"
+  U: "用户身份\nOIDC + SAML + Local"
+  S: "Service Account"
+  A: "API Key / PAT"
+}
+Org: "组织轴" {
+  O: "Org / Tenant"
+  R: "Realm\ncloud / self-hosted"
+  G: "Group"
+  I: "Invitation / Approval"
+}
+
+Identity.M -> Identity.S
+Identity.U -> Identity.A
+Org.O -> Org.R
+Identity.U -> Org.G
+Identity.U -> Org.I
+Identity.S -> Org.O

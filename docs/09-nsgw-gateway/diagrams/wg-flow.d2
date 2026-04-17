@@ -1,0 +1,37 @@
+# WG 包流: NSC -> NSGW UDP:51820 -> NSN
+# 源: tests/docker/nsgw-mock/entrypoint.sh + traefik-config.ts + crates/tunnel-wg/
+
+shape: sequence_diagram
+
+NSC: "NSC (gotatun user-space)"
+NSGW_WG: "NSGW wg0 (kernel)"
+NSGW_TRA: "NSGW traefik :443"
+NSGW_FWD: "NSGW kernel forward"
+NSN_WG: "NSN gotatun (user-space)"
+NSN_SR: "NSN ServiceRouter"
+SVC: "Real service :80"
+
+caseA: "Case A - Direct WG (NSC sends to NSN virtual IP via wg0)" {
+  NSC -> NSGW_WG: "UDP :51820 WG packet\n(peer=NSC pubkey, payload dst=10.0.0.2)"
+  NSGW_WG -> NSGW_WG: "decrypt + verify\nallowed-ips check (src)"
+  NSGW_WG -> NSGW_FWD: "plaintext IP (dst=10.0.0.2)"
+  NSGW_FWD -> NSGW_FWD: "route lookup\n10.0.0.2 -> wg0 peer=NSN"
+  NSGW_FWD -> NSGW_WG: "encap to NSN peer"
+  NSGW_WG -> NSN_WG: "UDP :51820 WG packet"
+  NSN_WG -> NSN_SR: "decap + dispatch virtual_port"
+  NSN_SR -> SVC: "TCP connect 127.0.0.1:80"
+}
+
+caseB: "Case B - HTTPS via traefik (browser -> Host app.example.com)" {
+  NSC -> NSGW_TRA: "TCP :443 TLS ClientHello\nSNI app.example.com"
+  NSGW_TRA -> NSGW_TRA: "TLS terminate (default cert)"
+  NSGW_TRA -> NSGW_TRA: "router match Host()\nservice -> http://10.0.0.2:10000"
+  NSGW_TRA -> NSGW_FWD: "TCP connect 10.0.0.2:10000 (plaintext)"
+  NSGW_FWD -> NSGW_WG: "encap (dst in NSN allowed-ips)"
+  NSGW_WG -> NSN_WG: "UDP :51820 WG packet"
+  NSN_WG -> NSN_SR: "decap + dispatch virtual_port 10000"
+  NSN_SR -> SVC: "TCP connect 127.0.0.1:80"
+  SVC -> NSN_SR: "HTTP response"
+  NSN_SR -> NSGW_TRA: "(encrypted path reversed)"
+  NSGW_TRA -> NSC: "HTTPS response"
+}

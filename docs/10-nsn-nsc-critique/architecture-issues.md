@@ -2,30 +2,7 @@
 
 > 这里记录的是**结构性**问题：把所有 TODO 写完、把所有 unimplemented 实现，问题仍然存在。判别规则见 [methodology.md §5](./methodology.md#5-结构性缺陷-vs-未完成实现-判别)。
 
-```mermaid
-flowchart TB
-    subgraph Sources["真理源（同一份配置的不同载体）"]
-        A1["nat::ServiceRouter::acl_engine<br/>RwLock&lt;Option&lt;Arc&lt;AclEngine&gt;&gt;&gt;"]
-        A2["connector::ConnectorManager::acl<br/>Arc&lt;RwLock&lt;Option&lt;Arc&lt;AclEngine&gt;&gt;&gt;&gt;"]
-    end
-
-    subgraph Loaders["加载器（双写）"]
-        L1["load_acl_config_for_runtime()<br/>nsn/src/main.rs:1464"]
-    end
-
-    subgraph Readers["消费者"]
-        R1["TCP/UDP 本地路由<br/>nat/router.rs:88"]
-        R2["WSS Open frame<br/>tunnel-ws/lib.rs:486"]
-    end
-
-    L1 -->|write| A1
-    L1 -->|write| A2
-    A1 --> R1
-    A2 --> R2
-
-    style A1 fill:#fdd
-    style A2 fill:#fdd
-```
+[ACL 引擎多份持有 · 同一份配置的不同载体](./diagrams/arch-acl-dual-arc.d2)
 
 > 上图：同一份 `AclConfig` 在 NSN 内有**两个独立 Arc**，分别供本地路由和 WSS 路径消费。结构性问题不是"两份"本身，而是它们**对同一种状态采用相反语义**（fail-open vs fail-closed），见 [SEC-001](./security-concerns.md)。
 

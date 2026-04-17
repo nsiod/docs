@@ -14,33 +14,7 @@ WireGuard 基于 UDP。但很多用户网络(酒店 WiFi、企业代理、移动
 
 NSIO 的对策是让 NSN / NSC 都能 **fallback 到 WSS**(`wss://<gw>/relay`)。WSS 是 WebSocket over TLS,跟普通 HTTPS 在网络上看起来完全一样,穿透能力最强。NSGW 在 WSS 上**终结并转发** WsFrame 帧。
 
-```mermaid
-graph LR
-    subgraph A["NSC (client session)"]
-        AC["NSC app"]
-    end
-
-    subgraph G["NSGW WSS relay"]
-        GP1["/client endpoint<br/>clientSessions Map"]
-        GP2["/relay endpoint<br/>activeSessions Map"]
-        GX["connectorStreamToClient<br/>(reverse lookup)"]
-    end
-
-    subgraph N["NSN (connector session)"]
-        NC["NSN connector"]
-        NS["real service :80"]
-    end
-
-    AC ==>|"WSS /client<br/>WsFrame"| GP1
-    GP1 -->|"client.Open → allocate connectorStreamId<br/>then forward"| GP2
-    GP2 ==>|"WSS /relay<br/>WsFrame"| NC
-    NC --> NS
-
-    NC -.->|"Data/Close reverse"| GP2
-    GP2 -.->|"connectorStreamToClient lookup"| GX
-    GX -.-> GP1
-    GP1 -.-> AC
-```
+[WSS 中继会话缝合结构](./diagrams/wss-session-stitch.d2)
 
 ## 会话模型
 
@@ -90,33 +64,7 @@ NSN 走 `/relay` 并被认为是"能触达服务的那一端";NSC 走 `/client` 
 
 > **为什么 NSGW 偏宽、NSN 偏严**:NSGW 的 projection 只是 NSD 推送的 ACL 子集,*没有* NSN 本机 `services.toml` 的"只允许显式服务"地板。如果 NSGW 过严,可能误拒 NSN 本应该允许的流量;而 NSN 是终决者,它有全量 ACL + 本地白名单,拒了的一定拒。所以 **NSGW 只做早拒(kick 掉 99% 明确违规),NSN 永远做最后一次判定**。
 
-```mermaid
-sequenceDiagram
-    participant C as NSC /client<br/>sid=client-1
-    participant G as NSGW relay
-    participant N as NSN /relay<br/>sid=relay-1
-    participant S as service
-
-    C->>G: Open s_id=42 → 1.2.3.4:80/tcp
-    Note right of G: connectorStreamId = 0x10000001
-    G->>G: acl_projection.is_allowed(<br/>Subject::User{gw_id, machine_id},<br/>1.2.3.4:80/tcp)
-    alt deny 命中
-        G-->>C: Close s_id=42<br/>reason="policy denied by gateway"
-    else allow / 未匹配 / projection 未加载
-        G->>G: clientSessions[client-1].connectorStreams[42]<br/>= {0x10000001, relay-1}
-        G->>G: connectorStreamToClient[0x10000001]<br/>= {client-1, 42}
-        G->>N: Open s_id=0x10000001 → 1.2.3.4:80/tcp<br/>TLV: gw_id, machine_id, user_id
-    end
-    N->>S: TCP connect
-    S-->>N: data
-    N-->>G: Data s_id=0x10000001, payload
-    G->>G: lookup connectorStreamToClient[0x10000001]<br/>→ {client-1, 42}
-    G-->>C: Data s_id=42, payload
-    C->>G: Close s_id=42
-    G->>N: Close s_id=0x10000001
-    N-->>G: CloseAck s_id=0x10000001
-    G-->>C: CloseAck s_id=42
-```
+[client Open → connector 会话缝合时序（含 ACL 预检）](./diagrams/wss-open-stitch-flow.d2)
 
 ## Fallback:NSN 未接入时的直连
 

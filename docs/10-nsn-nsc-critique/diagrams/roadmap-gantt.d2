@@ -1,0 +1,87 @@
+# 改造路线图 (按主题分阶段, Gantt 线性视图)
+# 源: roadmap.md §0
+
+direction: down
+
+title: "NSN/NSC 改造路线图（按主题分阶段）" { near: top-center; shape: text; style.font-size: 22 }
+
+PHASE0: "Phase 0 · 紧急止血 (1 周内)" {
+  style.fill: "#fdd"
+  p0a: "SEC-001 fail-closed (A.2) · 2d"
+  p0b: "SEC-002 to_https (B.1) · 1d"
+  p0c: "SEC-008 启动 acl_required (A.3) · 1d"
+  p0d: "OBS-009 spawn_named (C.6) · 2d"
+  p0e: "FUNC-005 conntrack GC (D.1) · 2d"
+}
+
+PHASE1: "Phase 1 · ACL 统一 (2-3 周)" {
+  style.fill: "#ffd"
+  p1a: "A.1 单一 ACL ArcSwap · 3d"
+  p1b: "A.4 空 ACL sentinel (SEC-005) · 2d"
+  p1c: "A.5 ACL metric · 1d"
+  p1d: "A.7 WSS Open 黑名单 (SEC-007) · 1d"
+  p1e: "A.6 NSC ACL (SEC-006) · 3d"
+}
+
+PHASE2: "Phase 2 · 可观测性 (并行 2-4 周)" {
+  style.fill: "#fde"
+  p2a: "C.1 OTel 改造 · 5d"
+  p2b: "C.3 关键 histogram · 2d"
+  p2c: "C.4 MeteredSender · 3d"
+  p2d: "C.5 NAT miss metric · 1d"
+  p2e: "C.7 tracing span · 3d"
+  p2f: "C.8 NSC /metrics · 2d"
+}
+
+PHASE3: "Phase 3 · 数据面健壮 (3-4 周)" {
+  style.fill: "#def"
+  p3a: "D.2 NSGW health probe · 2d"
+  p3b: "D.3 WSS upgrade safety · 3d"
+  p3c: "D.5 relay idle timeout · 1d"
+  p3d: "D.6 proxy_done channel · 1d"
+  p3e: "D.4 多 TCP WSS · 5d"
+}
+
+PHASE4: "Phase 4 · 安全深化 (3-4 周)" {
+  style.fill: "#fde"
+  p4a: "B.4 私钥加密落盘 (SEC-004) · 3d"
+  p4b: "B.3 challenge-response auth · 3d"
+  p4c: "B.6 frame source identity · 2d"
+  p4d: "B.7 audit log · 4d"
+  p4e: "B.5 token redaction · 1d"
+}
+
+PHASE5: "Phase 5 · 入口/性能 (并行)" {
+  style.fill: "#dfe"
+  p5a: "G.1 ArcSwap 全面 · 1d"
+  p5b: "G.2 Bytes 零拷贝 · 2d"
+  p5c: "G.3 DNS cache · 2d"
+  p5d: "F.1 main.rs 拆分 · 8d"
+}
+
+PHASE6: "Phase 6 · 半成品收尾" {
+  style.fill: "#dfe"
+  p6a: "E.4 删 acl_ip_adapter · 1d"
+  p6b: "E.5 services_ack 暴露 · 1d"
+  p6c: "E.2 NSC --device-flow/status · 2d"
+  p6d: "E.3 NSC token_rx (SEC-010) · 1d"
+  p6e: "E.1 NSC TUN 决策与实现 · 7d"
+}
+
+PHASE7: "Phase 7 · 控制面长期" {
+  style.fill: "#def"
+  p7a: "B.2 HTTP→Transport (ARCH-008) · 7d"
+  p7b: "F.2 双 TCP relay 合并 · 3d"
+  p7c: "F.3 cross-config 校验 · 2d"
+}
+
+PHASE0 -> PHASE1
+PHASE0 -> PHASE2
+PHASE1 -> PHASE3
+PHASE2 -> PHASE3
+PHASE3 -> PHASE4
+PHASE1 -> PHASE5
+PHASE3 -> PHASE5
+PHASE0 -> PHASE6
+PHASE3 -> PHASE6
+PHASE3 -> PHASE7

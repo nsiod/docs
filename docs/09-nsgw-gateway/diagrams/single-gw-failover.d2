@@ -1,0 +1,37 @@
+# 单网关失联的 failover 时序
+
+shape: sequence_diagram
+
+NSN: "NSN connector"
+G1: "NSGW-1"
+G2: "NSGW-2"
+ND: "NSD"
+
+normal: "正常期: NSN 通过 NSGW-1 转发业务流量" {
+  NSN -> G1: "WG handshake (keepalive)"
+  G1 -> NSN: "handshake response"
+}
+
+crash: "NSGW-1 宿主宕机" {
+  NSN -> G1: "WG data (no reply)"
+  NSN -> NSN: "TunnelManager 探测无响应"
+  NSN -> NSN: "mark G1 Reconnecting(attempt=1)"
+  NSN -> NSN: "emit GatewayEvent::Reconnecting"
+
+  NSN -> NSN: "select_gateway() -> G2 (next lowest latency)"
+  NSN -> G2: "WG handshake (already connected)"
+  G2 -> NSN: "data continues via G2"
+}
+
+detect: "NSD 独立 detect (健康探针)" {
+  ND -> G1: "(health probe fails)"
+  ND -> ND: "NSD 在一段后清掉 NSGW-1 peer 项"
+  ND -> NSN: "gateway_config without NSGW-1"
+  NSN -> NSN: "mark G1 Disabled until re-register"
+}
+
+recover: "NSGW-1 恢复" {
+  G1 -> ND: "POST /gateway/report"
+  ND -> NSN: "gateway_config with NSGW-1 again"
+  NSN -> NSN: "mark G1 Pending -> 重试连接"
+}

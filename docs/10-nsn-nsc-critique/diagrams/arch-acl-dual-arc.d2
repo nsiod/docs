@@ -1,0 +1,23 @@
+# ACL 引擎多份持有: 同一份配置的不同载体
+# 源: architecture-issues.md 开篇图
+
+direction: down
+
+Sources: "真理源（同一份配置的不同载体）" {
+  A1: "nat::ServiceRouter::acl_engine\nRwLock<Option<Arc<AclEngine>>>" { style.fill: "#fdd" }
+  A2: "connector::ConnectorManager::acl\nArc<RwLock<Option<Arc<AclEngine>>>>" { style.fill: "#fdd" }
+}
+
+Loaders: "加载器（双写）" {
+  L1: "load_acl_config_for_runtime()\nnsn/src/main.rs:1464"
+}
+
+Readers: "消费者" {
+  R1: "TCP/UDP 本地路由\nnat/router.rs:88"
+  R2: "WSS Open frame\ntunnel-ws/lib.rs:486"
+}
+
+Loaders.L1 -> Sources.A1: "write"
+Loaders.L1 -> Sources.A2: "write"
+Sources.A1 -> Readers.R1
+Sources.A2 -> Readers.R2

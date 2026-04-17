@@ -1,0 +1,28 @@
+# NSGW 与 NSD 的注册表同步时序
+
+shape: sequence_diagram
+
+GW: "NSGW"
+ND: "NSD"
+NSN: "NSN connectors"
+
+GW -> ND: "POST /api/v1/machine/register (type=gateway)"
+ND -> GW: "200 OK"
+GW -> ND: "POST /api/v1/gateway/report (wg_pubkey, wg_endpoint)"
+ND -> ND: "gateways.set(id, { pubkey, endpoint })"
+ND -> NSN: "broadcast gateway_config (all NSN/NSC)"
+ND -> NSN: "broadcast wg_config (NSN with services)"
+
+GW -> ND: "GET /api/v1/config/stream?machine_id=<gw>"
+ND -> GW: "immediate wg_config (NSN peer list)"
+ND -> GW: "immediate routing_config (domain -> nsn_wg_ip)"
+
+nsn_register_loop: "随 NSN 注册/注销" {
+  ND -> GW: "wg_config event"
+  GW -> GW: "diff -> wg set wg0 peer ..."
+}
+
+admin_loop: "随 admin 修改路由" {
+  ND -> GW: "routing_config event"
+  GW -> GW: "write /etc/traefik/dynamic/routes.yml"
+}

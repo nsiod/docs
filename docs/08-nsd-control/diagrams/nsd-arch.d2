@@ -1,0 +1,56 @@
+# NSD 内部分层架构
+# 源: tests/docker/nsd-mock/src/{index.ts,auth.ts,registry.ts,noise-listener.ts,quic-listener.ts}
+# 生产: tmp/control/server/*
+
+direction: down
+
+Transport: "传输适配层" {
+  HTTP: "HTTP /api/*\nBun.serve :3000"
+  NOISE: "Noise IK :4001\nTCP TLV 帧"
+  QUIC: "QUIC :4002\n子进程 nsd-quic-proxy"
+}
+
+API: "API 层" {
+  DISCOVERY: "GET /api/v1/info"
+  REG_AUTH: "POST /machine/register\nPOST /machine/auth\nPOST /device/code\nPOST /device/token\nPOST /machine/heartbeat"
+  REPORT: "POST /services/report\nPOST /gateway/report"
+  SSE_EP: "GET /api/v1/config/stream"
+  ADMIN: "GET /api/v1/machines\nGET /api/v1/services\nGET /ready"
+}
+
+Business: "业务层" {
+  AUTH_SVC: "Auth Service\nauth.ts"
+  REGISTRY: "Device Registry\nregistry.ts"
+  POLICY: "Policy Composer\nbuildNsnWgConfig\nbuildProxyConfig\nbuildRoutingConfig\nbuildDnsConfig"
+  SSE_HUB: "SSE Hub\nsubscribers Map\nbroadcast* helpers"
+}
+
+Storage: "存储层 (mock: 进程内 Map; 生产: PG/SQLite)" {
+  MACHINES: "machines\n(machine_id ↔ keys)" { shape: cylinder }
+  GATEWAYS: "gateways\n(gateway_id ↔ WG/WSS)" { shape: cylinder }
+  SERVICES: "nsnServices\n(machine_id ↔ services)" { shape: cylinder }
+  DEVICE_CODES: "deviceCodes\n(device_code ↔ token)" { shape: cylinder }
+}
+
+Transport.NOISE -> Transport.HTTP: "解密为 HTTP" { style.stroke-dash: 3 }
+Transport.QUIC -> Transport.HTTP: "解密为 HTTP" { style.stroke-dash: 3 }
+Transport.HTTP -> API.DISCOVERY
+Transport.HTTP -> API.REG_AUTH
+Transport.HTTP -> API.REPORT
+Transport.HTTP -> API.SSE_EP
+Transport.HTTP -> API.ADMIN
+
+API.DISCOVERY -> Business.AUTH_SVC
+API.REG_AUTH -> Business.AUTH_SVC
+API.REPORT -> Business.REGISTRY
+API.SSE_EP -> Business.SSE_HUB
+API.ADMIN -> Business.REGISTRY
+
+Business.AUTH_SVC -> Storage.MACHINES
+Business.AUTH_SVC -> Storage.DEVICE_CODES
+Business.REGISTRY -> Storage.MACHINES
+Business.REGISTRY -> Storage.GATEWAYS
+Business.REGISTRY -> Storage.SERVICES
+Business.REGISTRY -> Business.POLICY
+Business.POLICY -> Business.SSE_HUB
+Business.SSE_HUB -> API.SSE_EP

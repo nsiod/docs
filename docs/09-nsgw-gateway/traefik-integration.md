@@ -149,30 +149,7 @@ export interface RouteConfig {
 
 ## 端到端数据流
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant T as traefik :443
-    participant W as NSGW wg0<br/>(kernel WG)
-    participant N as NSN gotatun<br/>+ ServiceRouter
-    participant S as Real service<br/>127.0.0.1:80
-
-    B->>T: GET https://app.example.com/<br/>SNI: app.example.com
-    T->>T: TLS 终结 (default cert)
-    T->>T: router match Host(`app.example.com`)
-    T->>T: service → http://10.0.0.2:10000
-    T->>W: TCP connect 10.0.0.2:10000<br/>(plain HTTP)
-    W->>W: kernel WG encap<br/>(allowed-ips 10.0.0.2/32 → NSN peer)
-    W->>N: UDP :51820 WG packet
-    N->>N: gotatun decap<br/>→ smoltcp or HybridNatSend
-    N->>N: ServiceRouter lookup virtual_port 10000
-    N->>N: ACL check (allow)
-    N->>S: TCP connect 127.0.0.1:80
-    S-->>N: HTTP response
-    N-->>W: WG encap
-    W-->>T: TCP bytes
-    T-->>B: HTTPS response
-```
+[traefik → NSGW wg0 → NSN ServiceRouter 端到端数据流](./diagrams/traefik-e2e-flow.d2)
 
 注意 NSGW 在这条链路上**不碰 HTTP**——它只做:① TLS 终结 → ② Host 路由 → ③ plain HTTP 转发。HTTP body、header 解析都交给 backend;ACL 在 NSN 上做。
 

@@ -2,41 +2,7 @@
 
 > NSGW 只做四件事:**终结 WG**、**中继 WSS**、**反代 HTTPS**、**跟 NSD 对表**。本文把每一条的输入、输出、代码位置摊开讲清楚。
 
-```mermaid
-graph TB
-    subgraph NSD["NSD 控制面"]
-        SSE["SSE /api/v1/config/stream<br/>wg_config · routing_config"]
-    end
-
-    subgraph NSGW["NSGW"]
-        subgraph R1["① WG endpoint · :51820/udp"]
-            WG["kernel wg0<br/>peer table"]
-        end
-
-        subgraph R2["② WSS relay · :9443"]
-            WSS["Bun.serve&lt;WsDataTagged&gt;<br/>/relay · /client"]
-        end
-
-        subgraph R3["③ HTTPS reverse proxy · :443"]
-            TRA["traefik v3.6.13<br/>routes.yml + tls.yml"]
-        end
-
-        subgraph R4["④ Registry sync"]
-            REG["subscribeToNsdSse()<br/>addPeer · handleRoutingConfig"]
-        end
-    end
-
-    subgraph NSN["NSN"]
-        N["gotatun WG peer<br/>(user-space)"]
-    end
-
-    SSE --> REG
-    REG -->|addPeer(pubkey, allowed-ips)| WG
-    REG -->|routes.yml atomic write| TRA
-    TRA -->|"http://nsn_wg_ip:virtual_port"| WG
-    WG ==> N
-    WSS ==> N
-```
+[NSGW 四条核心职责总览](./diagrams/responsibilities-overview.d2)
 
 ## ① WireGuard UDP 端点(Mode 3: 重 NSC / NSN)
 
@@ -100,33 +66,7 @@ NSGW 启动时要让 NSD 知道"我是谁",并订阅 peer 变更:
    - `wg_config` → diff-apply `wg set peer` (`nsgw-mock/src/index.ts:248-278`)
    - `routing_config` → `handleRoutingConfig()` 写 `routes.yml` (`nsgw-mock/src/index.ts:236-247`)
 
-```mermaid
-sequenceDiagram
-    participant GW as NSGW
-    participant ND as NSD
-    participant NSN as NSN connectors
-
-    GW->>ND: POST /api/v1/machine/register (type=gateway)
-    ND-->>GW: 200 OK
-    GW->>ND: POST /api/v1/gateway/report (wg_pubkey, wg_endpoint)
-    ND-->>ND: gateways.set(id, { pubkey, endpoint })
-    ND-->>NSN: broadcast gateway_config (all NSN/NSC)
-    ND-->>NSN: broadcast wg_config (NSN with services)
-
-    GW->>ND: GET /api/v1/config/stream?machine_id=<gw>
-    ND-->>GW: immediate wg_config (NSN peer list)
-    ND-->>GW: immediate routing_config (domain → nsn_wg_ip)
-
-    loop 随 NSN 注册/注销
-        ND-->>GW: wg_config event
-        GW->>GW: diff → wg set wg0 peer ...
-    end
-
-    loop 随 admin 修改路由
-        ND-->>GW: routing_config event
-        GW->>GW: write /etc/traefik/dynamic/routes.yml
-    end
-```
+[NSGW 与 NSD 的注册表同步时序](./diagrams/nsgw-nsd-registration.d2)
 
 **SSE 事件对照表**(来自 `tests/docker/nsd-mock/src/types.ts:144-153`):
 
@@ -141,31 +81,7 @@ sequenceDiagram
 
 NSGW 既然在 `/client` 握手阶段已验过 NSC 的 JWT（拿到 `machine_id`），并在 `handleClientFrame()` 中已经持有 `{gateway_id=self, machine_id}`，就可以在 WsFrame `Open` 转发给 NSN **之前**先查一遍本地 ACL projection。这是 [NSN 信任 NSGW，NSGW 信任用户] 两级信任模型的"前一级"——把大部分越权访问**挡在 NSGW 的入口**，不浪费一次跨节点 RTT 把它送到 NSN 再被拒。
 
-```mermaid
-sequenceDiagram
-    participant NSC
-    participant NSGW
-    participant NSN
-
-    NSC->>NSGW: WSS /client + JWT
-    NSGW->>NSGW: 验 JWT → machine_id
-    NSC->>NSGW: WsFrame Open(target=db:5432)
-    NSGW->>NSGW: subject = User{self.gw_id, machine_id}
-    NSGW->>NSGW: local_acl.is_allowed(subject, target) ?
-    alt projection 命中 deny
-        NSGW-->>NSC: Close + reason="acl: denied by projection"
-        Note over NSGW,NSN: 不打扰 NSN
-    else projection allow / 未命中
-        NSGW->>NSN: Open (带 TLV source identity)
-        NSN->>NSN: check_target_allowed(subject, target)
-        alt NSN 终决 deny
-            NSN-->>NSGW: Close
-            NSGW-->>NSC: Close
-        else NSN allow
-            NSN->>NSN: proxy → service
-        end
-    end
-```
+[/client ingress 的 ACL 预过滤（两级信任的前一级）](./diagrams/client-ingress-acl.d2)
 
 **职责分工**：
 

@@ -4,36 +4,7 @@
 
 ## 1. 事件流的结构
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as NSN / NSC / NSGW
-    participant NSD
-
-    Client->>NSD: GET /api/v1/config/stream<br/>Authorization: Bearer jwt
-    NSD->>NSD: 解析 sub → machineId<br/>registerSubscriber(machineId, controller)
-
-    rect rgb(240, 248, 255)
-        note over NSD,Client: 订阅刚建立，按 machineId 类型立即 push 当前状态
-        opt NSN 已上报 services
-            NSD-->>Client: data: {type:"wg_config", ...}
-            NSD-->>Client: data: {type:"gateway_config", ...}
-            NSD-->>Client: data: {type:"proxy_config", ...}
-            NSD-->>Client: data: {type:"services_ack", ...}
-            NSD-->>Client: data: {type:"dns_config", ...}
-        end
-        opt 是 gateway
-            NSD-->>Client: data: {type:"wg_config", ...}
-            NSD-->>Client: data: {type:"routing_config", ...}
-        end
-    end
-
-    rect rgb(255, 248, 240)
-        note over NSD,Client: 运行中，按事件源增量 push
-        NSD-->>Client: data: {type:"proxy_config", ...}  (某 NSN 改了 services)
-        NSD-->>Client: data: {type:"gateway_config", ...} (新 NSGW 加入)
-    end
-```
+[SSE 事件流结构](./diagrams/sse-stream-structure.d2)
 
 消费者解码：`crates/control/src/messages.rs:207-228` 定义 `ControlMessage` 枚举，使用 `#[serde(tag = "type", rename_all = "snake_case")]`，所以 JSON 里的 `type` 字段对应枚举变体名的 snake_case 形式。
 
@@ -183,16 +154,7 @@ NSC 的本地 DNS 服务器读取这份 records 表生成 A 记录（虚拟 IP�
 
 不同 machine 类型得到的初始事件集合不同。以下规则来自 `tests/docker/nsd-mock/src/registry.ts:317-347`：
 
-```mermaid
-flowchart TD
-    A[SSE 订阅建立] --> B{machine_id 是否已上报 services?}
-    B -- 是 --> C[push wg_config + gateway_config + proxy_config + services_ack + dns_config]
-    B -- 否 --> D{是否 type=gateway?}
-    D -- 是 --> E[push wg_config<br/>+ routing_config 若有 NSN]
-    D -- 否 --> F{gateways.size > 0?}
-    F -- 是 --> G[push gateway_config]
-    F -- 否 --> H[不 push 任何事件]
-```
+[订阅建立时的初始推送决策](./diagrams/sse-initial-push-decision.d2)
 
 这让"先订阅后上报"和"先上报后订阅"两种启动顺序都能得到一致的最终状态。
 

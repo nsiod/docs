@@ -7,67 +7,7 @@
 
 70+ 条缺陷天然聚成 7 个主题（themes），每个主题用一个或一组改造可同时解决多个缺陷：
 
-```mermaid
-flowchart LR
-    subgraph T1["Theme A · ACL/Policy 重整"]
-        A1["SEC-001 + ARCH-001<br/>fail-open/closed 不对称"]
-        A2["SEC-005 + ARCH-002<br/>多 NSD 交集合并"]
-        A3["SEC-008 + FAIL-002<br/>10s 超时 fail-open"]
-        A4["SEC-014 + PERF-007<br/>ACL 双 Arc 写入"]
-        A5["SEC-006 + FUNC-012<br/>NSC 无 ACL"]
-    end
-
-    subgraph T2["Theme B · 控制面安全"]
-        B1["SEC-002 + ARCH-008<br/>HTTP 旁路 transport"]
-        B2["SEC-003<br/>auth 无 nonce"]
-        B3["SEC-004<br/>密钥明文落盘"]
-        B4["SEC-009 + SEC-013<br/>token/source 审计"]
-        B5["SEC-015<br/>无 audit log"]
-    end
-
-    subgraph T3["Theme C · 可观测性栈"]
-        C1["OBS-001 + OBS-007<br/>OTel 空跑"]
-        C2["OBS-006<br/>无 histogram"]
-        C3["OBS-005<br/>无 span"]
-        C4["OBS-003 + OBS-004 + OBS-008<br/>关键 metric 缺失"]
-        C5["OBS-009 + FAIL-001<br/>panic 不可见"]
-    end
-
-    subgraph T4["Theme D · 数据面健壮性"]
-        D1["FUNC-005 + FAIL-005<br/>NAT 无 GC, miss 无指标"]
-        D2["FAIL-003 + ARCH-009<br/>WSS 单 TCP HOL"]
-        D3["FAIL-009 + FAIL-004<br/>WSS 重连不收敛"]
-        D4["ARCH-004 + FUNC-007<br/>NSGW health 未运行"]
-    end
-
-    subgraph T5["Theme E · 半成品收尾"]
-        E1["FUNC-001<br/>NSC TUN mode 假"]
-        E2["FUNC-002 + FUNC-003<br/>NSC --device-flow / status"]
-        E3["FUNC-004 + SEC-010<br/>NSC token_rx"]
-        E4["ARCH-007<br/>AclFilteredSend 死代码"]
-    end
-
-    subgraph T6["Theme F · 入口与解耦"]
-        F1["ARCH-006<br/>nsn/main.rs 1633 行装配"]
-        F2["ARCH-003 + FUNC-011<br/>双 TCP relay"]
-        F3["ARCH-010<br/>Services/AclConfig 缺一致性"]
-    end
-
-    subgraph T7["Theme G · 性能优化"]
-        G1["PERF-001 + PERF-007<br/>ArcSwap"]
-        G2["PERF-002<br/>Bytes 零拷贝"]
-        G3["PERF-008<br/>DNS 缓存"]
-        G4["PERF-003 + ARCH-009<br/>多通道 TCP"]
-    end
-
-    style T1 fill:#fdd
-    style T2 fill:#fdd
-    style T3 fill:#fde
-    style T4 fill:#ffd
-    style T5 fill:#dfe
-    style T6 fill:#dfe
-    style T7 fill:#def
-```
+[缺陷 → 7 主题收敛图](./diagrams/theme-convergence.d2)
 
 ---
 

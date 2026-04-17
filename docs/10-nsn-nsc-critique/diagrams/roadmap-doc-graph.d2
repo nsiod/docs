@@ -1,0 +1,37 @@
+# 本目录文档关系图
+# 源: roadmap.md §8
+
+direction: right
+
+M: "methodology.md\n评分口径"
+CS: "current-state.md\nHEAD 速览"
+A: "architecture-issues.md\n10 ARCH-*"
+F: "functional-gaps.md\n12 FUNC-*"
+FA: "failure-modes.md\n11 FAIL-*"
+P: "performance-concerns.md\n10 PERF-*"
+O: "observability-gaps.md\n12 OBS-*"
+S: "security-concerns.md\n15 SEC-*"
+I: "improvements.md\n主题级 fix"
+R: "roadmap.md\n本文" { style.fill: "#dfd" }
+
+M -> A
+M -> F
+M -> FA
+M -> P
+M -> O
+M -> S
+CS -> A
+CS -> F
+CS -> FA
+CS -> P
+CS -> O
+CS -> S
+
+A -> I
+F -> I
+FA -> I
+P -> I
+O -> I
+S -> I
+
+I -> R

@@ -1,0 +1,31 @@
+# WSS 数据热路径 (每帧) + 每帧固定开销
+# 源: performance-concerns.md 开篇图
+
+direction: down
+
+HotPath: "WSS 数据热路径（每帧）" {
+  H1: "Frame decode\ntunnel-ws/lib.rs:183"
+  H2: "check_target_allowed\nRwLock<Option<Arc<AclEngine>>>"
+  H3: "DashMap insert/get\nconntrack"
+  H4: "mpsc::Sender::send.await"
+  H5: "Vec<u8>::to_vec()"
+
+  H1 -> H2
+  H2 -> H3
+  H3 -> H4
+  H1 -> H5
+  H5 -> H4
+}
+
+Cost: "每帧固定开销" {
+  C1: "1 次 RwLock read"
+  C2: "1~2 次 Arc clone"
+  C3: "1~3 次 Vec 深拷贝"
+  C4: "可能阻塞 await"
+}
+
+HotPath.H2 -> Cost.C1: { style.stroke-dash: 3 }
+HotPath.H2 -> Cost.C2: { style.stroke-dash: 3 }
+HotPath.H1 -> Cost.C3: { style.stroke-dash: 3 }
+HotPath.H5 -> Cost.C3: { style.stroke-dash: 3 }
+HotPath.H4 -> Cost.C4: { style.stroke-dash: 3 }

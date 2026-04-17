@@ -1,0 +1,25 @@
+# SLA 度量点 (T1-T7)
+# 源: operational-model.md 内联 mermaid
+
+direction: right
+
+classes: {
+  ctrl: { style: { fill: "#e1f5fe"; stroke: "#0277bd" } }
+  data: { style: { fill: "#fff3e0"; stroke: "#f57c00" } }
+}
+
+NSC: "NSC 客户端"
+NSD: "NSD 控制面" { class: ctrl }
+DB: "Postgres" { shape: cylinder; class: ctrl }
+BUS: "事件总线" { class: ctrl }
+NSN: "NSN 站点节点" { class: data }
+NSGW: "NSGW 数据面" { class: data }
+NSN2: "NSN 对端" { class: data }
+
+NSC -> NSD: "T1"
+NSD -> DB: "T2"
+NSD -> BUS: "T3"
+BUS -> NSN: "T4"
+NSC -> NSGW: "T5"
+NSGW -> NSN: "T6"
+NSN -> NSN2: "T7"

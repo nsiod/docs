@@ -1,0 +1,55 @@
+# NSD 认证状态机（单节点 MachineState 视角）
+# 源: crates/common/src/state.rs + crates/control/src/auth.rs + device_flow.rs
+
+direction: down
+
+Start: "●" { shape: circle }
+End: "●" { shape: circle }
+
+Unregistered: "Unregistered" {
+  DetectAuthMethod: "DetectAuthMethod" { shape: circle }
+  HasAuthKey: "HasAuthKey" { shape: circle }
+  NeedsDeviceFlow: "NeedsDeviceFlow" { shape: circle }
+
+  DetectAuthMethod -> HasAuthKey: "auth_key 已配置"
+  DetectAuthMethod -> NeedsDeviceFlow: "无 auth_key + auth_methods ∋ device_flow"
+}
+
+AwaitDeviceCode: "AwaitDeviceCode" { shape: circle }
+PollingToken: "PollingToken" { shape: circle }
+Registering: "Registering" { shape: circle }
+Failed: "Failed" { shape: circle }
+
+Registered: "Registered" {
+  NeedsJwt: "NeedsJwt" { shape: circle }
+  Authenticated: "Authenticated" { shape: circle }
+
+  NeedsJwt -> Authenticated: "POST /machine/auth 200 { jwt }"
+  Authenticated -> Authenticated: "SSE: TokenRefresh\nset_token(new_jwt)"
+  Authenticated -> NeedsJwt: "jwt 过期 / SSE 断开"
+}
+
+Start -> Unregistered
+Unregistered.DetectAuthMethod -> Failed: "无可用方法"
+Unregistered.HasAuthKey -> Registering: "POST /machine/register (auth_key)"
+Unregistered.NeedsDeviceFlow -> AwaitDeviceCode: "POST /device/code"
+AwaitDeviceCode -> PollingToken: "获得 device_code / user_code"
+PollingToken -> PollingToken: "428 authorization_pending / slow_down"
+PollingToken -> Registering: "200 access_token → register(Bearer)"
+PollingToken -> Failed: "expired_token / access_denied"
+Registering -> Registered: "201 { machine_id, ... }\n写 state 文件"
+Registering -> Failed: "401 / 400"
+Registered -> Unregistered: "state 文件被删"
+Failed -> End: "退出 / 人工介入"
+
+NoteAuth: "已连接 SSE /api/v1/config/stream\n每条消息都通过 rate limiter\n与 max_message_size 过滤" {
+  shape: text
+  style.italic: true
+}
+Registered.Authenticated -> NoteAuth { style.stroke-dash: 3 }
+
+NotePoll: "使用服务端建议的 interval\n遇 slow_down 建议放大间隔\ndeadline = expires_in + 5s" {
+  shape: text
+  style.italic: true
+}
+PollingToken -> NotePoll { style.stroke-dash: 3 }

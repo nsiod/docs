@@ -1,0 +1,34 @@
+# 业务连续性计划 (BCP) 流程
+# 源: operational-model.md 内联 mermaid
+
+direction: down
+
+classes: {
+  crit: { style: { fill: "#ffcdd2"; stroke: "#c62828" } }
+}
+
+INC: "事件发生"
+P0: "P0 级?" { shape: diamond }
+ESC: "5min 内升级" { class: crit }
+ASS: "常规响应"
+WAR: "指挥室成立\nCTO+SRE+Sec+PM" { class: crit }
+ACT: "执行 runbook"
+CHK: "SLO 恢复?" { shape: diamond }
+ESCL: "升级灾备预案" { class: crit }
+MON: "持续监控 24h"
+DR: "启动异地/冷备" { class: crit }
+PM: "事后复盘"
+KB: "沉淀 runbook"
+
+INC -> P0
+P0 -> ESC: "是"
+P0 -> ASS: "否"
+ESC -> WAR
+WAR -> ACT
+ACT -> CHK
+CHK -> ESCL: "否"
+CHK -> MON: "是"
+ESCL -> DR
+DR -> MON
+MON -> PM
+PM -> KB

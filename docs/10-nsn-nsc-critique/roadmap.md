@@ -5,67 +5,7 @@
 
 ## 0. 路线图总览
 
-```mermaid
-gantt
-    title NSN/NSC 改造路线图（按主题分阶段）
-    dateFormat YYYY-MM-DD
-    axisFormat %m-%d
-    excludes weekends
-
-    section Phase 0 · 紧急止血 (1 周内)
-    SEC-001 fail-closed (A.2)     :crit, p0a, 2026-04-20, 2d
-    SEC-002 to_https (B.1)        :crit, p0b, 2026-04-20, 1d
-    SEC-008 启动 acl_required (A.3) :crit, p0c, after p0a, 1d
-    OBS-009 spawn_named (C.6)     :p0d, 2026-04-20, 2d
-    FUNC-005 conntrack GC (D.1)   :p0e, 2026-04-22, 2d
-
-    section Phase 1 · ACL 统一 (2-3 周)
-    A.1 单一 ACL ArcSwap          :p1a, after p0a, 3d
-    A.4 空 ACL sentinel (SEC-005) :p1b, after p1a, 2d
-    A.5 ACL metric                :p1c, after p1a, 1d
-    A.7 WSS Open 黑名单 (SEC-007) :p1d, after p0a, 1d
-    A.6 NSC ACL (SEC-006)         :p1e, after p1a, 3d
-
-    section Phase 2 · 可观测性 (并行 2-4 周)
-    C.1 OTel 改造                  :p2a, 2026-04-27, 5d
-    C.3 关键 histogram             :p2b, after p2a, 2d
-    C.4 MeteredSender              :p2c, 2026-04-27, 3d
-    C.5 NAT miss metric            :p2d, after p0e, 1d
-    C.7 tracing span               :p2e, after p2a, 3d
-    C.8 NSC /metrics               :p2f, after p1e, 2d
-
-    section Phase 3 · 数据面健壮 (3-4 周)
-    D.2 NSGW health probe         :p3a, 2026-05-04, 2d
-    D.3 WSS upgrade safety         :p3b, after p3a, 3d
-    D.5 relay idle timeout         :p3c, after p3a, 1d
-    D.6 proxy_done channel         :p3d, after p3b, 1d
-    D.4 多 TCP WSS                 :p3e, after p3b, 5d
-
-    section Phase 4 · 安全深化 (3-4 周)
-    B.4 私钥加密落盘 (SEC-004)     :p4a, 2026-05-11, 3d
-    B.3 challenge-response auth    :p4b, after p4a, 3d
-    B.6 frame source identity      :p4c, after p3e, 2d
-    B.7 audit log                  :p4d, after p4a, 4d
-    B.5 token redaction            :p4e, 2026-05-11, 1d
-
-    section Phase 5 · 入口/性能 (并行)
-    G.1 ArcSwap 全面             :p5a, after p1a, 1d
-    G.2 Bytes 零拷贝              :p5b, after p3e, 2d
-    G.3 DNS cache                 :p5c, after p1a, 2d
-    F.1 main.rs 拆分              :p5d, 2026-05-18, 8d
-
-    section Phase 6 · 半成品收尾
-    E.4 删 acl_ip_adapter         :p6a, 2026-04-22, 1d
-    E.5 services_ack 暴露         :p6b, 2026-04-22, 1d
-    E.2 NSC --device-flow/status   :p6c, 2026-04-29, 2d
-    E.3 NSC token_rx (SEC-010)     :p6d, after p1e, 1d
-    E.1 NSC TUN 决策与实现        :p6e, after p3e, 7d
-
-    section Phase 7 · 控制面长期
-    B.2 HTTP→Transport (ARCH-008) :p7a, 2026-06-01, 7d
-    F.2 双 TCP relay 合并         :p7b, after p3e, 3d
-    F.3 cross-config 校验          :p7c, after p1a, 2d
-```
+[NSN/NSC 改造路线图 · 按主题分阶段](./diagrams/roadmap-gantt.d2)
 
 > 上图日期是相对锚点（以 2026-04-20 为 Phase 0 起点）；实际上线时间取决于团队规模与并行度。
 
@@ -202,57 +142,7 @@ gantt
 
 ## 2. 关键依赖关系
 
-```mermaid
-flowchart TB
-    P0_SEC001["P0: SEC-001<br/>fail-closed"]
-    P0_SEC002["P0: SEC-002<br/>https 强制"]
-    P0_SEC008["P0: SEC-008<br/>启动 acl_required"]
-
-    P1_A1["P1: A.1<br/>单一 ACL ArcSwap"]
-    P1_A4["P1: A.4<br/>空 ACL sentinel"]
-    P1_A6["P1: A.6<br/>NSC ACL"]
-    P1_A5["P1: A.5<br/>ACL metric"]
-
-    P2_C1["P2: C.1<br/>OTel 改造"]
-    P2_C4["P2: C.4<br/>MeteredSender"]
-    P2_C6["P2: C.6<br/>spawn_named"]
-
-    P3_D2["P3: D.2<br/>NSGW health"]
-    P3_D3["P3: D.3<br/>WSS upgrade safety"]
-    P3_D4["P3: D.4<br/>多 TCP WSS"]
-
-    P4_B3["P4: B.3<br/>challenge-resp"]
-    P4_B4["P4: B.4<br/>密钥加密"]
-    P4_B7["P4: B.7<br/>audit log"]
-
-    P5_F1["P5: F.1<br/>main.rs 拆分"]
-    P5_G1["P5: G.1<br/>ArcSwap 全面"]
-
-    P0_SEC001 --> P0_SEC008
-    P0_SEC001 --> P1_A1
-    P1_A1 --> P1_A4
-    P1_A1 --> P1_A6
-    P1_A1 --> P1_A5
-    P1_A1 --> P5_G1
-
-    P2_C1 -. "metric 框架前置" .-> P3_D4
-    P2_C1 --> P4_B7
-    P2_C6 --> P3_D2
-
-    P1_A6 --> P3_D3
-    P3_D3 --> P3_D4
-
-    P4_B4 --> P4_B3
-    P4_B3 --> P4_B7
-
-    P0_SEC002 -. "DOC: NSD 端开 https" .-> NSD_OPS[运维: NSD 升级 TLS]
-
-    style P0_SEC001 fill:#fdd
-    style P0_SEC002 fill:#fdd
-    style P0_SEC008 fill:#fdd
-    style P1_A1 fill:#ffd
-    style NSD_OPS fill:#dfd
-```
+[关键依赖关系图 · 改造项先后](./diagrams/roadmap-dependencies.d2)
 
 ---
 
@@ -328,42 +218,6 @@ flowchart TB
 
 ## 8. 与本目录其他文档的关系
 
-```mermaid
-flowchart LR
-    M[methodology.md<br/>评分口径]
-    CS[current-state.md<br/>HEAD 速览]
-    A[architecture-issues.md<br/>10 ARCH-*]
-    F[functional-gaps.md<br/>12 FUNC-*]
-    FA[failure-modes.md<br/>11 FAIL-*]
-    P[performance-concerns.md<br/>10 PERF-*]
-    O[observability-gaps.md<br/>12 OBS-*]
-    S[security-concerns.md<br/>15 SEC-*]
-    I[improvements.md<br/>主题级 fix]
-    R[roadmap.md<br/>本文]
-
-    M --> A
-    M --> F
-    M --> FA
-    M --> P
-    M --> O
-    M --> S
-    CS --> A
-    CS --> F
-    CS --> FA
-    CS --> P
-    CS --> O
-    CS --> S
-
-    A --> I
-    F --> I
-    FA --> I
-    P --> I
-    O --> I
-    S --> I
-
-    I --> R
-
-    style R fill:#dfd
-```
+[本目录文档关系图](./diagrams/roadmap-doc-graph.d2)
 
 读 README → methodology → current-state → 各分章节 → improvements → roadmap，是推荐的全量阅读路径。

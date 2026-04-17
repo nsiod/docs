@@ -1,0 +1,98 @@
+# NSN/NSC 改造路线图阶段视图
+# 基于 roadmap.md 的 7 个阶段
+
+direction: down
+
+title: "NSN/NSC 改造路线图 (7 阶段)" { near: top-center; shape: text; style.font-size: 24 }
+
+P0: "Phase 0 紧急止血 (1 周)" {
+  D12: "Day 1-2"
+  D12_items: "SEC-001 fail-closed (A.2)\nSEC-002 强制 https (B.1)\nOBS-009 spawn_named (C.6)"
+  D3: "Day 3"
+  D3_items: "SEC-008 启动 acl_required (A.3)\nE.4 删 acl_ip_adapter\nE.5 services_ack 暴露"
+  D45: "Day 4-5"
+  D45_items: "FUNC-005 conntrack GC (D.1)\nE2E 验证 fail-closed"
+  D12 -> D12_items
+  D3 -> D3_items
+  D45 -> D45_items
+}
+
+P1: "Phase 1 ACL 统一 (2-3 周)" {
+  W1: "Week 1"
+  W1_items: "A.1 单一 ACL ArcSwap\nA.5 ACL metric\nA.7 WSS Open 黑名单"
+  W2: "Week 2"
+  W2_items: "A.4 空 ACL sentinel (SEC-005)\nA.6 NSC ACL (SEC-006)\nE.3 NSC token_rx (SEC-010)"
+  W1 -> W1_items
+  W2 -> W2_items
+}
+
+P2: "Phase 2 可观测性 (并行 2-4 周)" {
+  W1: "Week 1"
+  W1_items: "C.1 OTel 改造\nC.4 MeteredSender\nC.5 NAT miss metric"
+  W2: "Week 2"
+  W2_items: "C.3 关键 histogram\nC.7 tracing span"
+  W3: "Week 3"
+  W3_items: "C.8 NSC /metrics\nC.9 SLI/SLO 文档\nC.10 日志 size 限制"
+  W1 -> W1_items
+  W2 -> W2_items
+  W3 -> W3_items
+}
+
+P3: "Phase 3 数据面健壮 (3-4 周)" {
+  W1: "Week 1"
+  W1_items: "D.2 NSGW health probe\nD.5 relay idle timeout"
+  W2: "Week 2"
+  W2_items: "D.3 WSS upgrade safety\nD.6 proxy_done channel cap"
+  W34: "Week 3-4"
+  W34_items: "D.4 多 TCP WSS\nG.7 perf bench 验证"
+  W1 -> W1_items
+  W2 -> W2_items
+  W34 -> W34_items
+}
+
+P4: "Phase 4 安全深化 (3-4 周)" {
+  W1: "Week 1"
+  W1_items: "B.4 私钥加密落盘 (SEC-004)\nB.5 token redaction"
+  W2: "Week 2"
+  W2_items: "B.3 challenge-response auth"
+  W3: "Week 3"
+  W3_items: "B.6 frame source identity\nB.7 audit log"
+  W1 -> W1_items
+  W2 -> W2_items
+  W3 -> W3_items
+}
+
+P5: "Phase 5 入口性能 (并行)" {
+  W1: "Week 1"
+  W1_items: "G.1 ArcSwap 全面\nG.3 DNS cache"
+  W2: "Week 2"
+  W2_items: "G.2 Bytes 零拷贝\nG.4 READ_BUF 调参"
+  W34: "Week 3-4"
+  W34_items: "F.1 main.rs 拆分\nF.3 cross-config 校验"
+  W1 -> W1_items
+  W2 -> W2_items
+  W34 -> W34_items
+}
+
+P6: "Phase 6 半成品收尾 (贯穿)" {
+  PH01: "Phase 0-1"
+  PH01_items: "E.4 / E.5 / E.2 / E.3 (顺手做)"
+  PH3: "Phase 3"
+  PH3_items: "E.1 NSC TUN 决策与实现"
+  PH01 -> PH01_items
+  PH3 -> PH3_items
+}
+
+P7: "Phase 7 控制面长期" {
+  M23: "Month 2-3"
+  M23_items: "B.2 HTTP→Transport (ARCH-008)\nF.2 双 TCP relay 合并"
+  M23 -> M23_items
+}
+
+SKIP: "不在路线图内" {
+  LATER: "延后/放弃"
+  LATER_items: "FUNC-006 IPv6 (单独 milestone)\nOPA/Cedar 替换 ACL\nWG2 协议升级\n完整 chaos framework"
+  LATER -> LATER_items
+}
+
+P0 -> P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7 -> SKIP

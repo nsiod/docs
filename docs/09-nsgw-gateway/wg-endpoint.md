@@ -23,26 +23,7 @@
 - NSGW mock Dockerfile:`RUN apt-get install ... wireguard-tools iproute2 ...` + compose `cap_add: [NET_ADMIN]`。
 - NSN 侧的 WG 接入走 `crates/tunnel-wg/` + `gotatun`(见 [../03-data-plane/tunnel-wg.md](../03-data-plane/tunnel-wg.md))。
 
-```mermaid
-graph LR
-    subgraph NSC_side["NSC 侧"]
-        NSCuser["NSC<br/>gotatun (用户态)"]
-    end
-
-    subgraph NSGW_box["NSGW (kernel WG)"]
-        WG0["wg0 interface<br/>kernel wireguard"]
-        IPRT["kernel IP routing"]
-    end
-
-    subgraph NSN_side["NSN 侧"]
-        NSNuser["NSN<br/>gotatun (用户态)"]
-    end
-
-    NSCuser ==>|"UDP :51820<br/>WG handshake + data"| WG0
-    WG0 -->|"解密后投入<br/>netns"| IPRT
-    IPRT -->|"match allowed-ips<br/>100.64.x.x/24"| WG0
-    WG0 ==>|"UDP<br/>WG encrypt"| NSNuser
-```
+[NSGW kernel WG 与 NSN 用户态 gotatun 路径对比](./diagrams/wg-kernel-vs-gotatun.d2)
 
 中间的"内核 IP routing"是 kernel WG 的核心价值:同一条加密包可以在**不离开内核**的情况下选路,对比用户态实现需要在应用层再决策一次。
 

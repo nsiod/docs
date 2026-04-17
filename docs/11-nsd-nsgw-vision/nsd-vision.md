@@ -10,27 +10,7 @@
 
 ## ① 身份与组织 · 功能清单
 
-```mermaid
-graph LR
-    subgraph Identity["身份轴"]
-        M["机器身份<br/>Ed25519 + Curve25519"]
-        U["用户身份<br/>OIDC + SAML + Local"]
-        S["Service Account"]
-        A["API Key / PAT"]
-    end
-    subgraph Org["组织轴"]
-        O["Org / Tenant"]
-        R["Realm<br/>cloud / self-hosted"]
-        G["Group"]
-        I["Invitation / Approval"]
-    end
-    M --> S
-    U --> A
-    O --> R
-    U --> G
-    U --> I
-    S --> O
-```
+[NSD 身份与组织功能图](./diagrams/nsd-identity-org-map.d2)
 
 ### F1.1 机器身份 PKI 根 (Machine PKI)
 
@@ -541,59 +521,9 @@ graph LR
 
 ## 生产化架构全景
 
-```mermaid
-graph TB
-    subgraph Clients["NSN / NSGW / NSC"]
-        NSN[NSN]
-        NSGW[NSGW]
-        NSC[NSC]
-    end
+[NSD 生产化架构全景](./diagrams/nsd-production-architecture.d2)
 
-    subgraph LB["负载均衡层"]
-        L7[L7 LB<br/>nginx/envoy]
-        L4[L4 LB<br/>Anycast IP]
-    end
-
-    subgraph NSDStack["NSD 生产集群"]
-        A1[NSD-1]
-        A2[NSD-2]
-        A3[NSD-3]
-    end
-
-    subgraph State["状态层"]
-        PG[(Postgres<br/>Primary)]
-        PGR[(Postgres<br/>Replica)]
-        RED[(Redis)]
-        KAF[Kafka/NATS<br/>事件总线]
-        S3[(S3<br/>审计日志 + CDN)]
-    end
-
-    subgraph Ext["外部系统"]
-        IDP[OIDC/SAML/SCIM]
-        SIEM[SIEM]
-        SLK[Slack/PagerDuty]
-        STRIPE[Stripe]
-    end
-
-    NSN -->|REST| L7
-    NSGW -->|REST+SSE| L7
-    NSC -->|REST+SSE| L4
-    L7 --> A1
-    L7 --> A2
-    L7 --> A3
-    L4 --> A1
-    A1 --> PG
-    A1 --> PGR
-    A1 --> RED
-    A1 --> KAF
-    A1 --> S3
-    A1 --> IDP
-    A1 --> STRIPE
-    KAF --> SIEM
-    KAF --> SLK
-```
-
-完整版本见 [diagrams/nsd-vision-arch.mmd](./diagrams/nsd-vision-arch.mmd)。
+完整版本见 [diagrams/nsd-vision-arch.d2](./diagrams/nsd-vision-arch.d2)。
 
 ## 功能数量自检
 

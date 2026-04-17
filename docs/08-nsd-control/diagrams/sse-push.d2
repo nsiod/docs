@@ -1,0 +1,54 @@
+# SSE 推送：NSN/NSGW 状态变化 → NSD 向订阅者广播
+# 源: tests/docker/nsd-mock/src/registry.ts (handleServicesReport / handleGatewayReport)
+
+shape: sequence_diagram
+
+NSN_A: "NSN-A"
+NSGW: "NSGW"
+NSD: "NSD"
+NSN_B: "NSN-B (其他订阅者)"
+NSC: "NSC (订阅者)"
+
+pre: "已建立 SSE 订阅的状态"
+
+src1: "事件源 1：NSN 上报 services" {
+  NSN_A -> NSD: "POST /api/v1/services/report { services, strict_mode }"
+  NSD -> NSD: "nsnServices[NSN_A] = services\n重算 wg/proxy/routing/dns"
+  NSD -> NSN_A: "SSE: wg_config"
+  NSD -> NSN_A: "SSE: gateway_config"
+  NSD -> NSN_A: "SSE: proxy_config"
+  NSD -> NSN_A: "SSE: services_ack"
+  NSD -> NSN_A: "SSE: dns_config"
+  NSD -> NSGW: "SSE: wg_config (NSN 全量 peer 列表)"
+  NSD -> NSGW: "SSE: routing_config"
+  NSD -> NSN_B: "SSE: dns_config"
+  NSD -> NSC: "SSE: dns_config"
+  NSD -> NSN_A: "204"
+}
+
+src2: "事件源 2：NSGW 注册 / 地址变化" {
+  NSGW -> NSD: "POST /api/v1/gateway/report { gateway_id, wg_pubkey, wg_endpoint, wss_endpoint }"
+  NSD -> NSD: "DNS 解析 wg_endpoint\ngateways[gateway_id] = record"
+  NSD -> NSN_A: "SSE: wg_config (更新的 NSGW peer 列表)"
+  NSD -> NSN_B: "SSE: wg_config"
+  NSD -> NSN_A: "SSE: gateway_config"
+  NSD -> NSN_B: "SSE: gateway_config"
+  NSD -> NSC: "SSE: gateway_config"
+  NSD -> NSGW: "204"
+}
+
+src3: "事件源 3：订阅建立（冷启动快照）" {
+  NSN_A -> NSD: "GET /api/v1/config/stream (Bearer jwt)"
+  NSD -> NSD: "addSubscriber(machineId)\n查 registry 现状"
+  choice: "订阅者类型" {
+    has_services: "该 NSN 已上报 services" {
+      NSD -> NSN_A: "立即 push wg/gateway/proxy/services_ack/dns"
+    }
+    gateway_only: "仅 gateway" {
+      NSD -> NSN_A: "立即 push wg (NSN 全量) + routing"
+    }
+    other: "其他" {
+      NSD -> NSN_A: "立即 push gateway_config (若存在 NSGW)"
+    }
+  }
+}

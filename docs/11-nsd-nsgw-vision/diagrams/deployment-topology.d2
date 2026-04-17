@@ -1,0 +1,46 @@
+# 部署拓扑形态总览 (T0 → T1 → T2 → T3)
+# 源: operational-model.md 内联 mermaid
+
+direction: right
+
+POC: "T0 单机 POC" {
+  P1: "NSD+NSGW 同机 Bun 进程\nin-memory 存储"
+}
+MVP: "T1 单区域 MVP" {
+  M1: "NSD Node1"
+  M2: "NSD Node2"
+  M3: "Postgres Primary" { shape: cylinder }
+  M4: "Postgres Replica" { shape: cylinder }
+  M5: "NSGW PoP-A"
+  M6: "NSGW PoP-B"
+  M1 -- M3
+  M2 -- M3
+  M3 -> M4: "streaming" { style.stroke-dash: 3 }
+  M1 -- M5
+  M2 -- M6
+}
+GA: "T2 多区域 GA" {
+  G1: "NSD Region-EU"
+  G2: "NSD Region-US"
+  G3: "Postgres Multi-AZ" { shape: cylinder }
+  G4: "NSGW Anycast 边缘 10-30 PoP"
+  G1 -- G3
+  G2 -- G3
+  G1 -- G4
+  G2 -- G4
+}
+ENT: "T3 跨云企业" {
+  E1: "私有化 NSD 主控"
+  E2: "私有化 NSD 备份"
+  E3: "BYO-CA"
+  E4: "客户云 NSGW"
+  E5: "SaaS 托管 NSGW"
+  E1 -- E2
+  E1 -- E3
+  E1 -- E4
+  E1 -- E5
+}
+
+POC -> MVP
+MVP -> GA
+GA -> ENT

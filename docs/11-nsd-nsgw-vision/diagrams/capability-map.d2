@@ -1,0 +1,88 @@
+# NSD + NSGW 能力模型总览图
+# 6 + 6 = 12 条能力轴, 对应 nsd-capability-model.md 与 nsgw-capability-model.md
+# 源: diagrams/capability-map.d2
+
+direction: right
+
+ROOT: "NSD + NSGW\n能力模型"
+
+NSD_CP: "NSD 控制面" {
+  Identity: "Identity\n身份与凭据" {
+    I1: "节点生命周期"
+    I2: "用户/服务身份"
+    I3: "凭据轮换"
+    I4: "多租户隔离"
+  }
+  Policy: "Policy\n策略与授权" {
+    P1: "ACL DSL"
+    P2: "Allow-only 模型"
+    P3: "Device Posture"
+    P4: "审计回放"
+  }
+  Topology: "Topology\n拓扑与路由" {
+    T1: "站点注册"
+    T2: "多 Region"
+    T3: "子网/路由宣告"
+    T4: "中继策略"
+  }
+  Observability: "Observability\n观测与审计" {
+    O1: "指标/日志/追踪"
+    O2: "事件总线"
+    O3: "审计 WORM"
+    O4: "SLA 看板"
+  }
+  Ecosystem: "Ecosystem\n生态集成" {
+    E1: "IdP / OIDC / SCIM"
+    E2: "Webhook / API"
+    E3: "Terraform / K8s Operator"
+    E4: "多 NSD 联邦"
+  }
+  Reliability: "Reliability\n可靠性" {
+    R1: "HA / 容灾"
+    R2: "备份/PITR"
+    R3: "限流/熔断"
+    R4: "灰度/回滚"
+  }
+}
+
+NSGW_DP: "NSGW 数据面" {
+  Connect: "Connect\n接入与连接" {
+    C1: "WG 隧道"
+    C2: "WSS 中继"
+    C3: "QUIC/HTTP3"
+    C4: "P2P 打洞"
+  }
+  Routing: "Routing\n路由与转发" {
+    R1: "SNI/Subdomain"
+    R2: "L4/UDP/TCP"
+    R3: "L7/HTTP"
+    R4: "Anycast 调度"
+  }
+  Security: "Security\n安全与密钥" {
+    S1: "TLS/mTLS"
+    S2: "证书自动化"
+    S3: "BYO-CA"
+    S4: "速率限制"
+  }
+  Resilience: "Resilience\n韧性与恢复" {
+    RS1: "健康检查"
+    RS2: "优雅关闭"
+    RS3: "PROXY protocol"
+    RS4: "多通道 Failover"
+  }
+  Telemetry: "Telemetry\n观测" {
+    T1: "带宽/连接指标"
+    T2: "pprof/flamegraph"
+    T3: "分布式追踪"
+    T4: "流量镜像"
+  }
+  Resource: "Resource\n资源与容量" {
+    RE1: "内存水位"
+    RE2: "连接池"
+    RE3: "CPU/带宽 quota"
+    RE4: "边缘计算"
+  }
+}
+
+ROOT -> NSD_CP
+ROOT -> NSGW_DP

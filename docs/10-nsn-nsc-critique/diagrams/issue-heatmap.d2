@@ -1,0 +1,76 @@
+# NSN/NSC 缺陷热度图: 模块 × 严重度
+# 数据基于本目录 6 章节缺陷统计 (70+ 条)
+
+direction: down
+
+classes: {
+  p0: { style: { fill: "#fa8072"; stroke: "#000000"; bold: true } }
+  p0d: { style: { fill: "#fcd5b5"; stroke: "#000000" } }
+  p1: { style: { fill: "#ffd966"; stroke: "#000000" } }
+  p2: { style: { fill: "#bdd7ee"; stroke: "#000000" } }
+  p3: { style: { fill: "#c6e0b4"; stroke: "#000000" } }
+}
+
+LEGEND: "图例" {
+  L0: "P0 致命" { class: p0 }
+  L1: "P1 高" { class: p1 }
+  L2: "P2 中" { class: p2 }
+  L3: "P3 低" { class: p3 }
+}
+
+NSN_ROW: "nsn 二进制" {
+  NSN_P0: "2 P0:\nFUNC-005 (conntrack OOM 来源)\nSEC-008 (启动 fail-open)" { class: p0 }
+  NSN_P1: "4 P1:\nFAIL-001 panic / FAIL-002 ACL timeout\nARCH-006 main 1633行 / SEC-014 ACL 双写" { class: p1 }
+  NSN_P23: "8 P2/P3:\nOBS-007 / OBS-009 / OBS-012\nFAIL-007 / FAIL-010 / FUNC-010 / FAIL-011 / PERF-009" { class: p2 }
+}
+
+NSC_ROW: "nsc 二进制" {
+  NSC_P0: "1 P0:\n(无独立 P0, SEC-001 由 nsn 共享)" { class: p0d }
+  NSC_P1: "5 P1:\nFUNC-001 假 TUN / FUNC-004 token_rx\nFUNC-007 health 链接 / SEC-006 无ACL / SEC-010" { class: p1 }
+  NSC_P23: "4 P2/P3:\nFUNC-002 device-flow / FUNC-003 status\nOBS-010 无 metrics / FUNC-009" { class: p2 }
+}
+
+CONTROL_ROW: "control crate" {
+  CTRL_P0: "2 P0:\nSEC-002 to_http_base 降级\nSEC-005 多 NSD 交集" { class: p0 }
+  CTRL_P1: "3 P1:\nARCH-008 HTTP 旁路 / SEC-003 重放\nFAIL-006 空 ACL 雪崩" { class: p1 }
+  CTRL_P23: "6 P2/P3:\nSEC-009 token 入日志 / SEC-012 fingerprint pin\nSEC-011 device-flow 不持久化 / OBS-005 无 span\nFAIL-007 backoff / SEC-013 source" { class: p2 }
+}
+
+WS_ROW: "tunnel-ws" {
+  WS_P1: "3 P1:\nFAIL-003 单 TCP HOL\nSEC-007 Open SSRF / SEC-013 frame 缺 source" { class: p1 }
+  WS_P23: "5 P2/P3:\nARCH-009 单 TCP / FAIL-004 upgrade abort\nPERF-002 Vec copy / PERF-001 RwLock\nPERF-008 DNS 未缓存" { class: p2 }
+}
+
+WG_ROW: "tunnel-wg" {
+  WG_P23: "3 P2/P3:\nARCH-007 AclFilteredSend 死代码\nFUNC-008 misnomer / PERF-004 单线程 crypto 待验证" { class: p2 }
+}
+
+NAT_ROW: "nat" {
+  NAT_P0: "1 P0:\nFUNC-005 ConntrackTable 无 GC" { class: p0 }
+  NAT_P1: "2 P1:\nARCH-001 ServiceRouter fail-open\nSEC-001 ACL 不对称" { class: p1 }
+  NAT_P23: "4 P2/P3:\nFAIL-005 NAT miss 静默 / OBS-003 无 miss metric\nPERF-007 4 层嵌套 / FUNC-006 IPv4 only" { class: p2 }
+}
+
+CONN_ROW: "connector" {
+  CONN_P0: "1 P0:\n(共享 SEC-005 影响)" { class: p0d }
+  CONN_P1: "2 P1:\nARCH-004 health_interval 死代码\nFUNC-007 NSGW 健康未运行" { class: p1 }
+  CONN_P23: "4 P2/P3:\nFAIL-009 proxy_done=1\nPERF-010 O(N) 选路 / OBS-004 channel 无 metric\nFAIL-008 backpressure 缺指标" { class: p2 }
+}
+
+ACL_ROW: "acl" {
+  ACL_P1: "1 P1:\nOBS-008 ACL deny 无 counter" { class: p1 }
+  ACL_P23: "2 P2:\n(评估时序细节 / 见 SEC-014 双写)" { class: p2 }
+}
+
+TELE_ROW: "telemetry" {
+  TELE_P23: "3 P2/P3:\nOBS-001 OTel 空跑 / OBS-002 双 struct\nOBS-007 format 拼接" { class: p2 }
+}
+
+COMMON_ROW: "common" {
+  COM_P1: "1 P1:\nSEC-004 私钥明文落盘" { class: p1 }
+  COM_P23: "1 P3:\nOBS-012 日志无大小限制" { class: p3 }
+}
+
+PROXY_ROW: "proxy" {
+  PROXY_P23: "2 P3:\nFUNC-011 生产未使用 / ARCH-003 双 relay" { class: p3 }
+}

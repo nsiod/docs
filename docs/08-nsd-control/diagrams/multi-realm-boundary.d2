@@ -1,0 +1,35 @@
+# Realm 边界：cloud shared realm vs self-hosted realm，同一机器多 realm 注册
+# 源: docs/task/AUTH-002.md + crates/common/src/state.rs
+
+direction: down
+
+Cloud: "realm: nsio.cloud (shared)" {
+  NSD_C1: "NSD cloud-1"
+  NSD_C2: "NSD cloud-2"
+  NSD_C3: "NSD cloud-3"
+}
+
+SelfA: "realm: company.internal" {
+  NSD_A: "NSD self-A"
+}
+
+SelfB: "realm: homelab.local" {
+  NSD_B: "NSD self-B"
+}
+
+Node: "单台 NSN 节点" {
+  REG_C: "registrations/cloud.nsio.json"
+  REG_A: "registrations/company.internal.json"
+  REG_B: "registrations/homelab.local.json"
+  MKEY: "machinekey.json\n共享 Ed25519 + X25519"
+
+  REG_C -> MKEY
+  REG_A -> MKEY
+  REG_B -> MKEY
+}
+
+Cloud.NSD_C1 -- Node.REG_C
+Cloud.NSD_C2 -- Node.REG_C
+Cloud.NSD_C3 -- Node.REG_C
+SelfA.NSD_A -- Node.REG_A
+SelfB.NSD_B -- Node.REG_B

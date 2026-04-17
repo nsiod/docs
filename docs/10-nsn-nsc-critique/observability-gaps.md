@@ -5,32 +5,7 @@
 
 ## 0. 一图速览：当前可观测性栈与现实差距
 
-```mermaid
-flowchart LR
-    subgraph EXPECT["仓库声明的能力"]
-        EXP_OTEL["OpenTelemetry 全局 meter"]
-        EXP_PROM["Prometheus /api/metrics"]
-        EXP_TRACING["tracing crate 结构化日志"]
-    end
-
-    subgraph REALITY["实际暴露"]
-        R_REG["init_telemetry()<br/>仅注册 exporter,无 meter 调用"]
-        R_HAND["monitor.rs 手写<br/>format!() 拼接 7 条 gauge/counter"]
-        R_LOG["info!/warn! 散布<br/>无 span / 无 trace_id"]
-    end
-
-    EXP_OTEL -. "声明但 0 个 instrument 注册" .-> R_REG
-    EXP_PROM -. "OTel registry 为空,真正数据来自手写" .-> R_HAND
-    EXP_TRACING -. "缺少 span 上下文" .-> R_LOG
-
-    R_REG --> GAP1["OBS-001<br/>Meter 全局空"]
-    R_HAND --> GAP2["OBS-007<br/>字符串拼接,易错"]
-    R_LOG --> GAP3["OBS-005<br/>无追踪上下文"]
-
-    style GAP1 fill:#fdd
-    style GAP2 fill:#fdd
-    style GAP3 fill:#fdd
-```
+[可观测性栈 · 声明 vs 实际差距](./diagrams/obs-stack-gap.d2)
 
 **核心矛盾**：仓库引入了 `opentelemetry`、`opentelemetry_sdk`、`opentelemetry-prometheus` 三个依赖，但**没有任何 crate 调用 `opentelemetry::global::meter("...")` 来创建 instrument**。Prometheus 暴露的指标全部走 `format!()` 字符串路径——而不是 OTel pipeline。
 
@@ -303,28 +278,7 @@ flowchart LR
 
 ## 小结：可观测性"缺位"的等级地图
 
-```mermaid
-quadrantChart
-    title 可观测性缺陷优先级（成本-收益）
-    x-axis "实现成本" --> "高"
-    y-axis "缺位代价" --> "高"
-    quadrant-1 "立刻做"
-    quadrant-2 "排进 backlog"
-    quadrant-3 "可暂缓"
-    quadrant-4 "高 ROI 速做"
-    "OBS-001 OTel 空跑": [0.6, 0.55]
-    "OBS-003 NAT miss 无指标": [0.15, 0.85]
-    "OBS-004 channel 占用率": [0.3, 0.7]
-    "OBS-005 无 span": [0.65, 0.6]
-    "OBS-006 无 histogram": [0.45, 0.85]
-    "OBS-008 ACL deny 无 counter": [0.2, 0.7]
-    "OBS-009 panic 不可见": [0.55, 0.85]
-    "OBS-010 NSC 无指标": [0.4, 0.5]
-    "OBS-002 TunnelMetrics 双定义": [0.1, 0.2]
-    "OBS-007 /metrics 字符串拼接": [0.25, 0.3]
-    "OBS-011 无 SLO": [0.3, 0.35]
-    "OBS-012 日志无 size 上限": [0.15, 0.4]
-```
+[可观测性缺陷优先级 · 四象限](./diagrams/obs-priority-matrix.d2)
 
 ---
 

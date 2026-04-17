@@ -1,0 +1,70 @@
+# NSIO NSD+NSGW 生产化路线图 (Phase 0-3 相对季度)
+# 源: roadmap.md 内联 mermaid
+
+direction: right
+
+classes: {
+  p0: { style: { fill: "#eeeeee"; stroke: "#757575" } }
+  p1: { style: { fill: "#c8e6c9"; stroke: "#2e7d32" } }
+  p2: { style: { fill: "#90caf9"; stroke: "#1565c0" } }
+  p3: { style: { fill: "#f48fb1"; stroke: "#ad1457" } }
+  ms: { style: { fill: "#ffe082"; stroke: "#f57f17" } }
+}
+
+P0: "Phase 0 当前" {
+  class: p0
+  p0a: "Mock + tmp/ 参考工程就绪 (Q0)" { class: p0 }
+}
+
+P1: "Phase 1 MVP (Q1-Q3)" {
+  class: p1
+  p1a: "M1 控制面生产化\nDB+UI+SSO (Q1-Q2)" { class: p1 }
+  p1b: "M1 网关生产化\ngerbil 对接 NSD (Q1-Q2)" { class: p1 }
+  p1c: "M1 CLI + 初始运维工具 (Q2)" { class: p1 }
+  m1: "M1 Beta 发布 / 内部试点 (Q3)" { shape: diamond; class: ms }
+}
+
+P2: "Phase 2 GA (Q3-Q7)" {
+  class: p2
+  p2a: "M2 多区域 NSGW + GeoDNS (Q3-Q4)" { class: p2 }
+  p2b: "M2 NSD 多实例 + Postgres HA (Q3-Q4)" { class: p2 }
+  p2c: "M2 策略版本化 + 灰度 (Q4-Q5)" { class: p2 }
+  p2d: "M2 Terraform + SDK + Webhook (Q5-Q6)" { class: p2 }
+  p2e: "M2 连接日志 + 拓扑图 + 告警 (Q5-Q6)" { class: p2 }
+  p2f: "M2 P2P 直连 + 打洞 (Q6-Q7)" { class: p2 }
+  m2: "M2 GA 发布 (Q7)" { shape: diamond; class: ms }
+}
+
+P3: "Phase 3 企业级 (Q7-Q12)" {
+  class: p3
+  p3a: "M3 多 NSD 并行产品化 (差异化) (Q7-Q9)" { class: p3 }
+  p3b: "M3 策略 DSL + 仿真 (Q8-Q10)" { class: p3 }
+  p3c: "M3 零信任 Authz Proxy + Posture (Q8-Q10)" { class: p3 }
+  p3d: "M3 Anycast + BGP + L7 DDoS (Q9-Q11)" { class: p3 }
+  p3e: "M3 跨云统一 + k8s Operator (Q9-Q11)" { class: p3 }
+  p3f: "M3 BYO-CA + 离线 license + 合规导出 (Q10-Q12)" { class: p3 }
+  m3: "M3 企业版发布 (Q12)" { shape: diamond; class: ms }
+}
+
+P0.p0a -> P1.p1a
+P0.p0a -> P1.p1b
+P1.p1a -> P1.p1c
+P1.p1b -> P1.m1
+P1.p1c -> P1.m1
+P1.m1 -> P2.p2a
+P1.m1 -> P2.p2b
+P2.p2b -> P2.p2c
+P2.p2a -> P2.p2f
+P2.p2c -> P2.p2d
+P2.p2c -> P2.p2e
+P2.p2f -> P2.m2
+P2.p2d -> P2.m2
+P2.p2e -> P2.m2
+P2.m2 -> P3.p3a
+P2.m2 -> P3.p3b
+P3.p3a -> P3.p3c
+P3.p3b -> P3.p3d
+P3.p3c -> P3.p3e
+P3.p3d -> P3.p3f
+P3.p3e -> P3.m3
+P3.p3f -> P3.m3

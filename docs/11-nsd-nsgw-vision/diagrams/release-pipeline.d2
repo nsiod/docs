@@ -1,0 +1,26 @@
+# 发布流程时序
+# 源: operational-model.md 内联 mermaid
+
+shape: sequence_diagram
+
+Dev: "开发"
+CI: "CI Pipeline"
+Stage: "Staging"
+Canary: "金丝雀(5%)"
+Prod: "生产(全量)"
+SRE: "SRE"
+
+Dev -> CI: "Push PR"
+CI -> CI: "单测 + 集成测试 + 镜像构建"
+CI -> Stage: "自动部署 Staging"
+Stage -> Stage: "E2E + 合约测试"
+Stage -> Canary: "SRE 批准 → 灰度 5%"
+Canary -> Canary: "观察 30min (无告警 & 错误预算 OK)"
+Canary -> Prod: "自动滚动全量"
+Prod -> SRE: "部署完成通知"
+SRE -> Prod: "监控 24h"
+
+rollback: "如回归" {
+  Prod -> Prod: "自动回滚"
+  Prod -> SRE: "告警 + 复盘"
+}

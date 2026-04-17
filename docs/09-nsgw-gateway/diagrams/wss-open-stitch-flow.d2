@@ -1,0 +1,33 @@
+# client Open -> connector 会话 缝合时序 (含 ACL 预检)
+
+shape: sequence_diagram
+
+C: "NSC /client\nsid=client-1"
+G: "NSGW relay"
+N: "NSN /relay\nsid=relay-1"
+S: "service"
+
+C -> G: "Open s_id=42 -> 1.2.3.4:80/tcp"
+G -> G: "connectorStreamId = 0x10000001"
+G -> G: "acl_projection.is_allowed(\nSubject::User{gw_id, machine_id},\n1.2.3.4:80/tcp)"
+
+choice: "ACL 结果" {
+  deny: "deny 命中" {
+    G -> C: "Close s_id=42\nreason=policy denied by gateway"
+  }
+  allow: "allow / 未匹配 / projection 未加载" {
+    G -> G: "clientSessions[client-1].connectorStreams[42]\n= {0x10000001, relay-1}"
+    G -> G: "connectorStreamToClient[0x10000001]\n= {client-1, 42}"
+    G -> N: "Open s_id=0x10000001 -> 1.2.3.4:80/tcp\nTLV: gw_id, machine_id, user_id"
+  }
+}
+
+N -> S: "TCP connect"
+S -> N: "data"
+N -> G: "Data s_id=0x10000001, payload"
+G -> G: "lookup connectorStreamToClient[0x10000001]\n-> {client-1, 42}"
+G -> C: "Data s_id=42, payload"
+C -> G: "Close s_id=42"
+G -> N: "Close s_id=0x10000001"
+N -> G: "CloseAck s_id=0x10000001"
+G -> C: "CloseAck s_id=42"

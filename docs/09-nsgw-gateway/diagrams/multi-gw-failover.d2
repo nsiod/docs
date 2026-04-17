@@ -1,0 +1,54 @@
+# NSN 侧多 NSGW failover 时序
+# 源: crates/connector/src/multi.rs + lib.rs + tests/docker/nsd-mock/src/registry.ts
+
+shape: sequence_diagram
+
+NSN: "NSN MultiGatewayManager"
+G1: "NSGW-1 (primary)"
+G2: "NSGW-2 (fallback)"
+ND: "NSD"
+
+steady: "Steady state: both gateways in gateway_config, strategy=LowestLatency" {
+  NSN -> G1: "WG handshake + data (active)"
+  NSN -> G2: "WG handshake (standby, Connected)"
+  NSN -> NSN: "health loop every 30s (multi.rs:176)"
+}
+
+crash: "G1 host crashes (UDP stops responding)" {
+  NSN -> G1: "WG keepalive"
+  NSN -> NSN: "probe timeout 5s (probe_udp, lib.rs:241)"
+  NSN -> NSN: "mark G1 Reconnecting(attempt=1)\nemit GatewayEvent::Reconnecting"
+  NSN -> NSN: "select_gateway() -> G2\n(multi.rs:270-277)"
+  NSN -> NSN: "emit GatewayEvent::Connected{id=G2, transport=UDP}"
+  NSN -> G2: "data flow cut over (no re-handshake, already Connected)"
+}
+
+parallel: "并行: NSD 独立探测 + NSN 退避重试" {
+  nsd_path: "NSD independent detection" {
+    ND -> G1: "health probe fails"
+    ND -> ND: "remove G1 from gateways map"
+    ND -> NSN: "SSE gateway_config (without G1)"
+    NSN -> NSN: "mark G1 Disabled"
+  }
+  nsn_path: "NSN backoff retry (if still in config)" {
+    NSN -> G1: "reconnect attempt (backoff)"
+    choice: "retry 结果" {
+      ok: "retry OK" {
+        G1 -> NSN: "handshake ok"
+        NSN -> NSN: "mark G1 Connected\n(stays on G2 unless strategy says switch back)"
+      }
+      exhausted: "retry exhausted" {
+        NSN -> NSN: "mark G1 Failed"
+      }
+    }
+  }
+}
+
+recover: "Operator restarts G1 (new keypair)" {
+  G1 -> ND: "POST /api/v1/gateway/report (new pubkey)"
+  ND -> NSN: "SSE gateway_config with G1 again"
+  NSN -> NSN: "mark G1 Pending -> connect()"
+  NSN -> G1: "WG handshake (new peer entry)"
+  G1 -> NSN: "ok -> Connected"
+  NSN -> NSN: "LowestLatency re-evaluates on next LatencyUpdate"
+}

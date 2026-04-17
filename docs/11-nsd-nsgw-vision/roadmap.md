@@ -6,41 +6,9 @@
 
 ## 四个阶段
 
-```mermaid
-gantt
-    title NSIO NSD+NSGW 生产化路线图 (相对季度)
-    dateFormat X
-    axisFormat Q%L
+[NSIO NSD+NSGW 生产化路线图 (相对季度)](./diagrams/roadmap-phases.d2)
 
-    section Phase 0 当前
-    Mock + tmp/ 参考工程就绪           :done, p0, 0, 1
-
-    section Phase 1 MVP
-    M1 控制面生产化 (DB+UI+SSO)           :p1a, 1, 2
-    M1 网关生产化 (gerbil 对接 NSD)        :p1b, 1, 2
-    M1 CLI + 初始运维工具                  :p1c, 2, 1
-    M1 Beta 发布 / 内部试点               :milestone, m1, 3, 0
-
-    section Phase 2 GA
-    M2 多区域 NSGW + GeoDNS               :p2a, 3, 2
-    M2 NSD 多实例 + Postgres HA           :p2b, 3, 2
-    M2 策略版本化 + 灰度                   :p2c, 4, 2
-    M2 Terraform + SDK + Webhook          :p2d, 5, 2
-    M2 连接日志 + 拓扑图 + 告警            :p2e, 5, 2
-    M2 P2P 直连 + 打洞                     :p2f, 6, 2
-    M2 GA 发布                             :milestone, m2, 7, 0
-
-    section Phase 3 企业级
-    M3 多 NSD 并行产品化 (差异化)          :p3a, 7, 3
-    M3 策略 DSL + 仿真                     :p3b, 8, 3
-    M3 零信任 Authz Proxy + Posture        :p3c, 8, 3
-    M3 Anycast + BGP + L7 DDoS             :p3d, 9, 3
-    M3 跨云统一 + k8s Operator             :p3e, 9, 3
-    M3 BYO-CA + 离线 license + 合规导出     :p3f, 10, 3
-    M3 企业版发布                          :milestone, m3, 12, 0
-```
-
-完整 Mermaid 源: [diagrams/roadmap.mmd](./diagrams/roadmap.mmd)。
+完整 d2 源: [diagrams/roadmap.d2](./diagrams/roadmap.d2)。
 
 ---
 
