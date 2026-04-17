@@ -28,7 +28,9 @@ export default defineConfig({
       message: 'NSIO Architecture Docs · MIT License',
     },
     hideNavbar: 'auto',
-    enableContentAnimation: true,
+    // Content animation intercepts layout during route transitions and, combined
+    // with TOC anchor jumps, causes the page to over-scroll past the target. Off.
+    enableContentAnimation: false,
     enableScrollToTop: true,
     lastUpdated: true,
     outlineTitle: 'On this page',

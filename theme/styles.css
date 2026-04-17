@@ -5,3 +5,38 @@
   margin: 1rem auto;
   max-width: 100%;
 }
+
+/* Scroll containment.
+   Prevent two classes of scroll bugs:
+   1. Scroll chaining: when the inner doc hits top/bottom the browser forwards
+      the remaining delta to <html>, pulling the page past its own boundary.
+   2. Momentum over-scroll on trackpads & touch devices, which visually jumps
+      the page past the footer / before the header. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* Kill hidden horizontal scroll caused by wide mermaid SVGs or long code
+   blocks — horizontal wheel events sometimes get remapped to vertical by
+   the OS, producing phantom vertical jumps. */
+html,
+body,
+.rspress-doc {
+  overflow-x: hidden;
+}
+
+/* Tame anchor-jump overshoot: when clicking a TOC link the browser computes
+   the target from layout that may still be shifting (fonts, mermaid render).
+   Adding scroll-margin keeps the heading clearly below the sticky navbar
+   after the layout settles. */
+.rspress-doc :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 5rem;
+}
+
+/* Mermaid diagrams sometimes grow taller after hydration. Reserving
+   min-height prevents the scroll position from snapping when the SVG
+   replaces the source <pre> block. */
+.rspress-doc .mermaid {
+  min-height: 1rem;
+}
