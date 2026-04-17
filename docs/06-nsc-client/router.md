@@ -96,26 +96,7 @@ async fn open_stream(&self, site: &str, host: &str, port: u16) -> Result<WssStre
 
 ## 分流决策图
 
-```mermaid
-flowchart TD
-  App[应用发起 TCP 到 127.11.x.x:port] --> LOOKUP
-
-  subgraph NscRouter
-    LOOKUP{sites_by_vip[vip]?}
-    LOOKUP -->|命中| SITE[取 site_name]
-    LOOKUP -->|未命中| DROP1[返回 None]
-    SITE --> ROUTE{routes[(site, port)]?}
-    ROUTE -->|未命中| DROP2[返回 None]
-    ROUTE -->|命中| GW{gateway_wss 非空?}
-    GW -->|空| DROP3[冷启动/未收到 gateway_config]
-    GW -->|非空| RELAY[返回 NscRoute]
-  end
-
-  RELAY --> PROXY[proxy.rs: WSS 到 gateway_wss + CMD_OPEN_V4]
-  DROP1 --> LOG1[debug: proxy connection closed]
-  DROP2 --> LOG2[warn: no route found]
-  DROP3 --> LOG3[warn: no gateway configured yet]
-```
+[VIP listener 分流](./diagrams/router-dispatch.d2)
 
 路径在 `crates/nsc/src/proxy.rs:142`：
 
@@ -165,33 +146,7 @@ NSC 做的是**出站 SNAT + PAT**：本地 `127.11.x.x:port` → `{site (via NS
 
 NSC 启动瞬间，router 和 dns_records 都是空的。事件可能乱序到达：
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant M as main loop
-  participant R as NscRouter
-  participant P as ProxyManager
-  participant A as ProxyListener(127.11.0.1:22)
-  participant C as App
-
-  Note over M,R: T=0 NSC 启动，router/dns 为空
-  alt 顺序 A: routing 先到
-    M->>R: update_routing → sites + routes (gateway_* = "")
-    M->>P: proxy_mgr.update() → 启动 listener
-    C->>A: TCP 连接
-    A->>R: resolve → route 但 gateway_wss = ""
-    A-->>C: drop (warn)
-    M->>R: update_gateway → 回填字符串
-    C->>A: 重连
-    A->>R: resolve → route gateway_wss 非空
-    A->>A: WSS 到 NSGW ✓
-  else 顺序 B: gateway 先到
-    M->>R: update_gateway → primary 设置好，routes 还没建
-    M->>R: update_routing → routes 建立时直接带上 gateway_*
-    M->>P: proxy_mgr.update() → listener
-    C->>A: 连接即通 ✓
-  end
-```
+[冷启动事件顺序](./diagrams/router-cold-start.d2)
 
 所以用户在启动后立刻连接可能会遇到一两次 `warn: no gateway configured yet`，这不是 bug——等几百毫秒重试即可。后续**不会**再触发，因为 `gateway_config` 到达是一次性的。
 

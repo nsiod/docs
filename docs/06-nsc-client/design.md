@@ -14,28 +14,7 @@ NSC 是**用户侧代理**。它的目标和 NSN 恰好相反——NSN 在站点
 
 ## 与 NSN / NSD 的关系
 
-```mermaid
-flowchart LR
-  subgraph User[用户终端]
-    NSC[NSC]
-  end
-  subgraph Cloud[NSD 控制面]
-    NSD[NSD]
-  end
-  subgraph Edge[NSGW 边缘]
-    GW[NSGW traefik + WSS Relay + kernel WG]
-  end
-  subgraph Site[NSN 站点]
-    NSN[NSN]
-    SVC[(local service\n127.0.0.1:22)]
-  end
-
-  NSC -- SSE 订阅: routing / dns / gateway --> NSD
-  NSN -- SSE 订阅 --> NSD
-  NSC -- WSS (CMD_OPEN_V4) --> GW
-  GW -- WSS / WG --> NSN
-  NSN -- TCP --> SVC
-```
+[NSC / NSN / NSD 拓扑](./diagrams/nsc-nsn-nsd-topology.d2)
 
 - **NSD → NSC**: 通过 SSE 下发 `routing_config`（哪些 site/service 存在）、`dns_config`（自定义域名映射）、`gateway_config`（可用 NSGW 列表）。`ControlMessage` 的定义见 `crates/control/src/messages.rs:137`。
 - **NSC → NSGW**: 走 WSS relay（默认 userspace 模式），或 WG UDP（TUN 模式）。鉴权复用与 NSN 相同的 machinekey+peerkey 模型。

@@ -1,0 +1,19 @@
+direction: right
+
+app: "ssh ssh.office.n.ns:22\ncurl http://web.office.n.ns"
+os: OS resolver
+dns: "NSC DNS 127.53.53.53:53\n(dns.rs, 默认)"
+vip: 返回 127.11.0.1
+lst: "NSC proxy listener\n(proxy.rs + router.rs)"
+gw: NSGW
+nsn: NSN
+svc: "本地 127.0.0.1:22" { shape: cylinder }
+
+app -> os
+os -> dns
+dns -> vip
+vip -> app
+app -> lst: TCP 到 127.11.0.1:22
+lst -> gw: WSS + CMD_OPEN_V4
+gw -> nsn: WG / WSS relay
+nsn -> svc

@@ -1,0 +1,45 @@
+shape: sequence_diagram
+
+nsd: NSD
+ml: main loop (main.rs)
+a: VipAllocator (vip.rs)
+r: NscRouter (router.rs)
+d: DnsRecords (dns.rs)
+pm: ProxyManager (proxy.rs)
+l: TcpListener(vip:port)
+
+ml.t0: "T=0 NSC 启动\nallocator/router/dns 为空"
+
+nsd -> ml: "SSE routing_config\n[{site:\"office\", port:22, domain:\"ssh.office.n.ns\"},\n {site:\"office\", port:80, ...},\n {site:\"datacenter\", port:5432, ...}]"
+
+alloc: 对每个 route 分配 VIP {
+  ml -> a: allocate(\"office\")
+  a -> ml: 127.11.0.1 (new)
+  ml -> r: "update_routing → sites_by_name[\"office\"]\n= {vip:127.11.0.1, domain:\"office.n.ns\"}\nroutes[(\"office\",22)] / routes[(\"office\",80)]"
+  ml -> d: "insert(\"ssh.office.n.ns\" → 127.11.0.1)\ninsert(\"web.office.n.ns\" → 127.11.0.1)"
+
+  ml -> a: allocate(\"office\")
+  a -> ml: 127.11.0.1 (idempotent)
+
+  ml -> a: allocate(\"datacenter\")
+  a -> ml: 127.11.0.2 (new)
+  ml -> r: "sites_by_name[\"datacenter\"] = {vip:127.11.0.2, ...}"
+  ml -> d: "insert(\"db.datacenter.n.ns\" → 127.11.0.2)"
+}
+
+ml -> pm: proxy_mgr.update()
+pm -> l: "TcpListener::bind(127.11.0.1:22)"
+pm -> l: "TcpListener::bind(127.11.0.1:80)"
+pm -> l: "TcpListener::bind(127.11.0.2:5432)"
+
+running: --- 运行期 ---
+
+nsd -> ml: "SSE dns_config\n[{domain:\"git.company.com\", site:\"office\"}]"
+ml -> d: "insert(\"git.company.com\" → 127.11.0.1)\n(vip_for_site(\"office\") 已存在)"
+
+nsd -> ml: "SSE routing_config (again, 新 service)\n[..., {site:\"office\", port:443, domain:\"https.office.n.ns\"}]"
+ml -> a: "allocate(\"office\") → 127.11.0.1 (idempotent)"
+ml -> r: "routes[(\"office\",443)] = ..."
+ml -> pm: "update() → new listener on 127.11.0.1:443"
+
+note: "VIP 永不回收:进程退出前所有分配都保留在内存"

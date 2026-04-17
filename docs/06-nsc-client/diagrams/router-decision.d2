@@ -1,0 +1,73 @@
+direction: down
+
+classes: {
+  decision: {
+    shape: diamond
+    style: { fill: "#fef3c7"; stroke: "#b45309"; font-color: "#111" }
+  }
+  success: {
+    style: { fill: "#dcfce7"; stroke: "#166534"; font-color: "#111" }
+  }
+  drop: {
+    style: { fill: "#fee2e2"; stroke: "#b91c1c"; font-color: "#111" }
+  }
+  sse: {
+    style: { fill: "#e0e7ff"; stroke: "#4338ca"; font-color: "#111" }
+  }
+}
+
+start: "TCP connect to 127.11.x.x:port\n(app → NSC VIP listener)"
+
+router: "NscRouter::resolve(vip, port)" {
+  lookup1: "sites_by_vip.get(vip)?" { class: decision }
+  r_none1: return None { class: drop }
+  lookup2: "routes.get((site, port))?" { class: decision }
+  r_none2: return None { class: drop }
+  r_some: "return Some(NscRoute)\n{ site, service, fqid,\n  port, gateway_wss, gateway_wg }" { class: success }
+
+  lookup1 -> r_none1: miss
+  lookup1 -> lookup2: hit
+  lookup2 -> r_none2: miss
+  lookup2 -> r_some: hit
+}
+
+drop1: "proxy.rs: warn 'no route found'\n关闭 TCP" { class: drop }
+check: "gateway_wss\n非空?" { class: decision }
+drop2: "proxy.rs: warn 'no gateway configured yet'\n关闭 TCP" { class: drop }
+
+proxy: "proxy.rs: handle_connection" {
+  wss: "connect_async(gateway_wss + '/relay')\nAuthorization: Bearer <token>" { class: success }
+  open: "send Binary(build_open_frame)\n[stream_id:4][CMD_OPEN_V4:1]\n[127.0.0.1:4][service_port:2][PROTO_TCP:1]" { class: success }
+  pair: "spawn TCP→WS 任务\n( build_data_frame )" { class: success }
+  ws2tcp: "while ws_rx.next() → 判断\nCMD_DATA / CMD_CLOSE / CMD_CLOSE_ACK" { class: success }
+
+  wss -> open -> pair -> ws2tcp
+}
+
+sse: SSE 事件影响路由表 {
+  direction: right
+  e1: routing_config { class: sse }
+  u1: "update_routing\n(&mut allocator)\n- allocator.allocate(site)\n- sites_by_name/vip 插入\n- routes 建立/刷新" { class: sse }
+  e2: gateway_config { class: sse }
+  u2: "update_gateway\n- gateways.clear + 重建\n- primary_gateway_id = first\n- 刷新所有 routes.gateway_*" { class: sse }
+  e3: dns_config { class: sse }
+  u3: "DnsRecords 插入\n(domain → vip_for_site)" { class: sse }
+
+  e1 -> u1
+  e2 -> u2
+  e3 -> u3
+}
+
+dnsmap: DnsRecords { class: sse }
+
+start -> router.lookup1
+router.r_none1 -> drop1
+router.r_none2 -> drop1
+router.r_some -> check
+check -> drop2: 空 (gateway_config 还未到)
+check -> proxy.wss: 非空
+
+sse.u1 -> router.lookup1: 写 { style.stroke-dash: 3 }
+sse.u1 -> router.lookup2: 写 { style.stroke-dash: 3 }
+sse.u2 -> router.r_some: 写 { style.stroke-dash: 3 }
+sse.u3 -> dnsmap: 写 { style.stroke-dash: 3 }

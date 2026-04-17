@@ -1,0 +1,54 @@
+direction: down
+
+client: "浏览器 / curl\nHTTP_PROXY=127.0.0.1:8080"
+accept: accept on 127.0.0.1:8080
+parse: "读第一行 request-line\n+ headers"
+method: method? { shape: diamond }
+
+cp: parse host:port
+hp: parse_http_target
+e405: 405 Method Not Allowed
+
+res: resolve_target
+
+q1: "NscRouter 命中\n(域名∈已知 site)?" { shape: diamond }
+tun: "NscRouter.open_stream\nWSS + CMD_OPEN_V4\n直连 NSGW"
+
+q2: host 是字面 IP? { shape: diamond }
+direct_ip: "目标 = IP:port\nOS 直连"
+dns: "OS lookup_host\n第一个地址"
+direct: 直连互联网
+
+conn: TcpStream::connect
+
+ck: method? { shape: diamond }
+ack: 返回 200 Connection established
+rewrite: "改写请求行: 绝对 URI → 相对 path"
+
+bridge: copy_bidirectional
+
+client -> accept -> parse -> method
+method -> cp: CONNECT
+method -> hp: GET/POST/...
+method -> e405: 其他
+
+cp -> res
+hp -> res
+
+res -> q1
+q1 -> tun: 是
+q1 -> q2: 否
+q2 -> direct_ip: 是
+q2 -> dns: 否
+dns -> direct
+
+direct_ip -> conn
+direct -> conn
+
+tun -> ck
+conn -> ck
+ck -> ack: CONNECT
+ck -> rewrite: plain HTTP
+
+ack -> bridge
+rewrite -> bridge

@@ -1,0 +1,17 @@
+shape: sequence_diagram
+
+b: Browser
+hp: "NSC HTTP proxy\n127.0.0.1:8080"
+r: NscRouter
+gw: NSGW
+nsn: NSN
+
+b -> hp: CONNECT ssh.office.n.ns:22 HTTP/1.1
+hp -> hp: 读 headers，丢到空行
+hp -> r: "lookup_domain(\"ssh.office.n.ns\") → site=office"
+hp -> gw: "WSS + CMD_OPEN_V4 (ssh.office.n.ns:22, TCP)\n(NscRouter.open_stream)"
+gw -> nsn: relay (stream_id 映射)
+nsn -> gw: OpenAck
+gw -> hp: OpenAck
+hp -> b: "HTTP/1.1 200 Connection established\\r\\n\\r\\n"
+note: 双向透传(copy_bidirectional),本代理无状态

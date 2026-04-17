@@ -1,0 +1,22 @@
+shape: sequence_diagram
+
+nsd: NSD
+nsc: NSC main loop
+a: VipAllocator
+r: NscRouter
+d: DnsRecords
+p: ProxyManager
+
+nsd -> nsc: "SSE routing_config (routes[])"
+
+loop_routes: for each route {
+  nsc -> a: allocate(route.site)
+  a -> nsc: vip (127.11.x.x)
+  nsc -> r: update_routing → insert sites_by_name/vip + routes
+  nsc -> d: insert(route.domain.lower → vip)
+}
+
+nsc -> p: proxy_mgr.update()
+p -> p: 对新 (VIP, port) 启动 TCP listener
+
+note: 进程退出 → 所有状态丢失 (ephemeral)

@@ -1,0 +1,24 @@
+direction: right
+
+user: 用户终端 {
+  nsc: NSC
+}
+
+cloud: NSD 控制面 {
+  nsd: NSD
+}
+
+edge: NSGW 边缘 {
+  gw: NSGW traefik + WSS Relay + kernel WG
+}
+
+site: NSN 站点 {
+  nsn: NSN
+  svc: "local service\n127.0.0.1:22" { shape: cylinder }
+}
+
+user.nsc -> cloud.nsd: "SSE 订阅: routing / dns / gateway"
+site.nsn -> cloud.nsd: SSE 订阅
+user.nsc -> edge.gw: WSS (CMD_OPEN_V4)
+edge.gw -> site.nsn: WSS / WG
+site.nsn -> site.svc: TCP

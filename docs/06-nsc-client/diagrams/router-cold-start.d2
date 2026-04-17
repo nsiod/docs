@@ -1,0 +1,28 @@
+shape: sequence_diagram
+
+m: main loop
+r: NscRouter
+p: ProxyManager
+a: ProxyListener(127.11.0.1:22)
+c: App
+
+start: "T=0 NSC 启动,router/dns 为空"
+
+case_a: 顺序 A: routing 先到 {
+  m -> r: update_routing → sites + routes (gateway_* = "")
+  m -> p: proxy_mgr.update() → 启动 listener
+  c -> a: TCP 连接
+  a -> r: resolve → route 但 gateway_wss = ""
+  a -> c: drop (warn)
+  m -> r: update_gateway → 回填字符串
+  c -> a: 重连
+  a -> r: resolve → route gateway_wss 非空
+  a -> a: WSS 到 NSGW ✓
+}
+
+case_b: 顺序 B: gateway 先到 {
+  m -> r: "update_gateway → primary 设置好,routes 还没建"
+  m -> r: update_routing → routes 建立时直接带上 gateway_*
+  m -> p: proxy_mgr.update() → listener
+  c -> a: 连接即通 ✓
+}

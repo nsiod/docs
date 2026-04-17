@@ -1,0 +1,72 @@
+direction: down
+
+classes: {
+  cli: {
+    style: { fill: "#e0f2fe"; stroke: "#0369a1"; font-color: "#111" }
+  }
+  ctrl: {
+    style: { fill: "#fef3c7"; stroke: "#b45309"; font-color: "#111" }
+  }
+  state: {
+    style: { fill: "#dcfce7"; stroke: "#166534"; font-color: "#111" }
+  }
+  local: {
+    style: { fill: "#ede9fe"; stroke: "#5b21b6"; font-color: "#111" }
+  }
+  cloud: {
+    style: { fill: "#fee2e2"; stroke: "#b91c1c"; font-color: "#111" }
+  }
+}
+
+user: User terminal {
+  app: "App: ssh / curl / psql / browser"
+  osres: "OS resolver\n/etc/resolv.conf\n→ 127.53.53.53 (NSC 默认)"
+}
+
+nsc: NSC (Rust binary) {
+  cli_group: "CLI (main.rs)" {
+    args: "Cli::parse()\n--data-plane / --auth-key\n--http-proxy / --log-dir" { class: cli }
+    mloop: "main loop\ntokio::select!" { class: cli }
+  }
+  ctrl_group: Control-plane side {
+    auth: "AuthClient\n(common::MachineState)" { class: ctrl }
+    cp: "ControlPlane\n(SSE subscriber)" { class: ctrl }
+  }
+  state_group: "Shared state (Arc + RwLock)" {
+    router: "NscRouter\nsites_by_name / sites_by_vip\nroutes / gateways" { class: state }
+    dnsmap: "DnsRecords\ndomain → VIP" { class: state }
+    vipalloc: "VipAllocator\n127.11.x.x or 100.64.x.x" { class: state }
+  }
+  local_group: Local access layer {
+    dnss: "dns.rs\nUDP :53 on 127.53.53.53\n(--dns-listen 可改)" { class: local }
+    vipprox: "proxy.rs\nTCP listeners on VIP:port" { class: local }
+    httpp: "http_proxy.rs\n(optional, --http-proxy)" { class: local }
+  }
+}
+
+cloud: NSIO control plane / edge {
+  nsd: "NSD\nrouting_config\ndns_config\ngateway_config" { class: cloud }
+  nsgw: "NSGW\nWSS relay + kernel WG" { class: cloud }
+  nsn: NSN (site node) { class: cloud }
+}
+
+nsc.cli_group.args -> nsc.cli_group.mloop
+user.app -> user.osres -> nsc.local_group.dnss
+user.app -> nsc.local_group.httpp: HTTP_PROXY { style.stroke-dash: 3 }
+user.app -> nsc.local_group.vipprox: TCP
+
+nsc.ctrl_group.auth -> nsc.ctrl_group.cp
+nsc.ctrl_group.cp -> nsc.cli_group.mloop: SSE events { style.stroke-width: 3 }
+cloud.nsd -> nsc.ctrl_group.cp: SSE { style.stroke-width: 3 }
+
+nsc.cli_group.mloop -> nsc.state_group.router: "routing_rx\ndns_rx\ngw_rx"
+nsc.cli_group.mloop -> nsc.state_group.dnsmap
+nsc.cli_group.mloop -> nsc.state_group.vipalloc: allocate(site)
+
+nsc.local_group.dnss -> nsc.state_group.dnsmap: reads
+nsc.local_group.vipprox -> nsc.state_group.router: reads
+nsc.local_group.httpp -> nsc.state_group.dnsmap: reads
+
+nsc.local_group.vipprox -> cloud.nsgw: "WSS + CMD_OPEN_V4\n(WsFrame)" { style.stroke-width: 3 }
+nsc.local_group.httpp -> nsc.local_group.vipprox: internal TCP
+cloud.nsgw -> cloud.nsn: WG / WSS

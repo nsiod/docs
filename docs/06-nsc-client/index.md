@@ -27,12 +27,12 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 | [router.md](./router.md) | `NscRouter` 的数据结构与分流决策（客户端 NAT 一侧） |
 | [http-proxy.md](./http-proxy.md) | 可选的本地 HTTP/CONNECT 代理，按 NSC DNS 命中与否分流 |
 
-每份文档内嵌至少一张 Mermaid 图；源码位于 [`diagrams/`](./diagrams/)：
+每份文档内嵌至少一张 d2 图;源码位于 [`diagrams/`](./diagrams/):
 
-- [`diagrams/nsc-arch.mmd`](./diagrams/nsc-arch.mmd) — NSC 整体架构
-- [`diagrams/vip-lifecycle.mmd`](./diagrams/vip-lifecycle.mmd) — VIP 分配与刷新
+- [`diagrams/nsc-arch.d2`](./diagrams/nsc-arch.d2) — NSC 整体架构
+- [`diagrams/vip-lifecycle.d2`](./diagrams/vip-lifecycle.d2) — VIP 分配与刷新
 - [`diagrams/dns-resolve.d2`](./diagrams/dns-resolve.d2) — `*.n.ns` 解析时序
-- [`diagrams/router-decision.mmd`](./diagrams/router-decision.mmd) — 分流决策
+- [`diagrams/router-decision.d2`](./diagrams/router-decision.d2) — 分流决策
 
 ## 与其他模块的关系
 
@@ -44,16 +44,6 @@ NSC (Network Site Client) 是 NSIO 生态中运行在**用户终端**上的 Rust
 
 ## 快速心智模型
 
-```mermaid
-flowchart LR
-  APP["ssh ssh.office.n.ns:22<br/>curl http://web.office.n.ns"] --> OS[OS resolver]
-  OS --> DNS["NSC DNS 127.53.53.53:53<br/>(dns.rs, 默认)"]
-  DNS --> VIP["返回 127.11.0.1"]
-  VIP --> APP
-  APP -- "TCP 到 127.11.0.1:22" --> LST["NSC proxy listener<br/>(proxy.rs + router.rs)"]
-  LST -- "WSS + CMD_OPEN_V4" --> GW[NSGW]
-  GW -- "WG / WSS relay" --> NSN[NSN]
-  NSN --> SVC[("本地 127.0.0.1:22")]
-```
+[快速心智模型](./diagrams/mental-model.d2)
 
-这是默认的 userspace 模式；TUN / WSS-only 模式的差异见 [design.md](./design.md#三种数据面模式)。完整的组件图见 [`diagrams/nsc-arch.mmd`](./diagrams/nsc-arch.mmd)。
+这是默认的 userspace 模式；TUN / WSS-only 模式的差异见 [design.md](./design.md#三种数据面模式)。完整的组件图见 [`diagrams/nsc-arch.d2`](./diagrams/nsc-arch.d2)。

@@ -1,0 +1,33 @@
+direction: down
+
+app: 应用发起 TCP 到 127.11.x.x:port
+
+router: NscRouter {
+  lookup: "sites_by_vip[vip]?" { shape: diamond }
+  site: 取 site_name
+  drop1: 返回 None
+  route_q: "routes[(site, port)]?" { shape: diamond }
+  drop2: 返回 None
+  gw: "gateway_wss 非空?" { shape: diamond }
+  drop3: 冷启动/未收到 gateway_config
+  relay: 返回 NscRoute
+
+  lookup -> site: 命中
+  lookup -> drop1: 未命中
+  site -> route_q
+  route_q -> drop2: 未命中
+  route_q -> gw: 命中
+  gw -> drop3: 空
+  gw -> relay: 非空
+}
+
+proxy: "proxy.rs: WSS 到 gateway_wss + CMD_OPEN_V4"
+log1: "debug: proxy connection closed"
+log2: "warn: no route found"
+log3: "warn: no gateway configured yet"
+
+app -> router.lookup
+router.relay -> proxy
+router.drop1 -> log1
+router.drop2 -> log2
+router.drop3 -> log3

@@ -24,37 +24,7 @@ POST / PUT / DELETE / HEAD / OPTIONS / PATCH 同上
 
 ## 分流决策
 
-```mermaid
-flowchart TD
-  CLIENT[浏览器 / curl<br/>HTTP_PROXY=127.0.0.1:8080] --> ACCEPT[accept on 127.0.0.1:8080]
-  ACCEPT --> PARSE[读第一行 request-line<br/>+ headers]
-  PARSE --> METHOD{method?}
-
-  METHOD -->|CONNECT| CP[parse host:port]
-  METHOD -->|GET/POST/...| HP[parse_http_target]
-  METHOD -->|其他| E405[405 Method Not Allowed]
-
-  CP --> RES[resolve_target]
-  HP --> RES
-
-  RES --> Q1{NscRouter 命中<br/>(域名∈已知 site)?}
-  Q1 -->|是| TUN["NscRouter.open_stream<br/>WSS + CMD_OPEN_V4<br/>直连 NSGW"]
-  Q1 -->|否| Q2{host 是字面 IP?}
-  Q2 -->|是| DIRECT_IP[目标 = IP:port<br/>OS 直连]
-  Q2 -->|否| DNS[OS lookup_host<br/>第一个地址]
-  DNS --> DIRECT[直连互联网]
-
-  DIRECT_IP --> CONN[TcpStream::connect]
-  DIRECT --> CONN
-
-  TUN --> CK{method?}
-  CONN --> CK
-  CK -->|CONNECT| ACK[返回 200 Connection established]
-  CK -->|plain HTTP| REWRITE[改写请求行: 绝对 URI → 相对 path]
-
-  ACK --> BRIDGE[copy_bidirectional]
-  REWRITE --> BRIDGE
-```
+[HTTP 代理分流决策](./diagrams/http-proxy-flow.d2)
 
 ### `resolve_target` 的优先级
 
@@ -107,25 +77,7 @@ VIP listener 与 HTTP 代理的分工:
 
 ## `CONNECT` 流程
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant B as Browser
-  participant HP as NSC HTTP proxy<br/>127.0.0.1:8080
-  participant R as NscRouter
-  participant GW as NSGW
-  participant NSN
-
-  B->>HP: CONNECT ssh.office.n.ns:22 HTTP/1.1
-  HP->>HP: 读 headers，丢到空行
-  HP->>R: lookup_domain("ssh.office.n.ns") → site=office
-  HP->>GW: WSS + CMD_OPEN_V4 (ssh.office.n.ns:22, TCP)<br/>(NscRouter.open_stream)
-  GW->>NSN: relay (stream_id 映射)
-  NSN-->>GW: OpenAck
-  GW-->>HP: OpenAck
-  HP-->>B: HTTP/1.1 200 Connection established\r\n\r\n
-  Note over B,NSN: 双向透传（copy_bidirectional），本代理无状态
-```
+[HTTP CONNECT 时序](./diagrams/http-proxy-connect.d2)
 
 **注意**:sequence 里**没有** VIP listener 这一跳——`NscRouter::open_stream` 直接返回一个 `WssStream` 读写句柄,HTTP 代理拿它和 browser socket 做 `copy_bidirectional`。旧版本"HP → 127.11.0.1:22"的 TCP 中转已经删除。
 
