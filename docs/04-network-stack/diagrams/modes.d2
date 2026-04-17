@@ -1,0 +1,54 @@
+direction: down
+
+CLIENT: "NSC / 远端用户" {
+  U: "User"
+}
+
+GW: "NSGW" {
+  WG: "WireGuard / WSS"
+}
+
+USER: "NSN · UserSpace 模式 (default, 无 root)" {
+  G1: "gotatun decrypt"
+  NS1: "NetStack::poll\nsmoltcp"
+  SR1: "ServiceRouter.resolve\nACL + services + DNS"
+  PX1: "proxy\nTcpStream / UdpSocket"
+  SVC1A: "本地服务\n127.0.0.1:*" { shape: cylinder }
+  SVC1B: "远端服务\n192.168.x.x:*" { shape: cylinder }
+  ENC1: "gotatun encrypt"
+
+  G1 -> NS1 -> SR1 -> PX1
+  PX1 -> SVC1A
+  PX1 -> SVC1B
+  NS1 -> ENC1: "tx_out" { style.stroke-dash: 3 }
+}
+
+TUN: "NSN · TUN 模式 (需 CAP_NET_ADMIN)" {
+  G2: "gotatun decrypt"
+  H: "HybridNatSend\nACL + DNAT + SNAT + conntrack"
+  KT: "kernel TUN" { shape: cylinder }
+  LSVC: "本地服务\n零 proxy" { shape: cylinder }
+  NS2: "netstack smoltcp\n(只处理 remote)"
+  SR2: "ServiceRouter.resolve"
+  PX2: "proxy"
+  RSVC: "远端服务" { shape: cylinder }
+  HR: "HybridNatRecv\nreverse NAT + smoltcp_out merge"
+  ENC2: "gotatun encrypt"
+
+  G2 -> H
+  H -> KT: "is_local=true\nDNAT+SNAT+conntrack"
+  KT -> LSVC
+  H -> NS2: "is_local=false\nproxy_tx"
+  NS2 -> SR2 -> PX2 -> RSVC
+  LSVC -> KT: "reply" { style.stroke-dash: 3 }
+  KT -> HR
+  NS2 -> HR: "smoltcp_out_tx" { style.stroke-dash: 3 }
+  HR -> ENC2
+}
+
+CLIENT.U -> GW.WG
+GW.WG -> USER.G1
+GW.WG -> TUN.G2
+USER.ENC1 -> GW.WG
+TUN.ENC2 -> GW.WG
+GW.WG -> CLIENT.U

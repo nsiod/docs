@@ -14,26 +14,13 @@ NSN 数据面在接收到 gotatun 解密出的 IP 报文后，有两条可选通
 | [netstack.md](./netstack.md) | `smoltcp` `Device` trait 适配 (`VirtualDevice`) 与 `NetStack::poll` 主循环；TCP 监听 / UDP 直拦截；向 `ServiceRouter` 递交 `NewTcpConnection` / `NewUdpDatagram`。 |
 | [nat.md](./nat.md) | `ServiceRouter` 查表 + ACL + DNS 解析；`HybridNatSend` / `HybridNatRecv` 的 DNAT + SNAT + `ConntrackTable` 报文改写流程；`local / intercept / drop` 决策树。 |
 | [tun-vs-userspace.md](./tun-vs-userspace.md) | TUN vs UserSpace 两种数据面模式在能力要求、性能、兼容性、可观测性上的对比。 |
-| [diagrams/netstack-flow.mmd](./diagrams/netstack-flow.mmd) | UserSpace 模式：gotatun 解密 → `VirtualDevice` → smoltcp → `ServiceRouter` → proxy。 |
-| [diagrams/nat-dnat.mmd](./diagrams/nat-dnat.mmd) | TUN 模式 `HybridNatSend` 的 ACL + DNAT + local/intercept/drop 决策。 |
-| [diagrams/modes.mmd](./diagrams/modes.mmd) | TUN 与 UserSpace 两种数据通路的俯视对比。 |
+| [diagrams/netstack-flow.d2](./diagrams/netstack-flow.d2) | UserSpace 模式：gotatun 解密 → `VirtualDevice` → smoltcp → `ServiceRouter` → proxy。 |
+| [diagrams/nat-dnat.d2](./diagrams/nat-dnat.d2) | TUN 模式 `HybridNatSend` 的 ACL + DNAT + local/intercept/drop 决策。 |
+| [diagrams/modes.d2](./diagrams/modes.d2) | TUN 与 UserSpace 两种数据通路的俯视对比。 |
 
 ## 在整套架构中的位置
 
-```mermaid
-graph LR
-    GOTA[gotatun<br/>WireGuard 解密]
-    subgraph "04 · 网络栈"
-        NETSTACK[netstack<br/>smoltcp]
-        NAT[nat<br/>Router + Conntrack]
-    end
-    PROXY[05 · proxy / ACL<br/>TCP/UDP relay]
-    KERNEL[(kernel TUN)]
-
-    GOTA -- UserSpace --> NETSTACK --> NAT --> PROXY
-    GOTA -- TUN --> NAT --> KERNEL
-    NAT -- remote via smoltcp --> NETSTACK
-```
+[04 网络栈在架构中的位置](./diagrams/overview-position.d2)
 
 - 上游 `gotatun` 的输入由 [03 · 数据面](../03-data-plane/index.md) 描述；`netstack` 只消费已解密的 IP 报文字节。
 - 命中代理路径的连接最终进入 [05 · proxy / ACL](../05-proxy-acl/index.md) 模块的 `relay_*_connection` 系列函数。

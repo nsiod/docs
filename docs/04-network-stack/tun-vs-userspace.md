@@ -69,32 +69,9 @@ NSGW → gotatun decrypt → HybridNatSend
 
 ### 模式对比图
 
-```mermaid
-flowchart LR
-    subgraph UserSpace["UserSpace 模式 (默认)"]
-        G1[gotatun decrypt] --> N1[NetStack::poll smoltcp]
-        N1 -->|NewTcpConnection| R1[ServiceRouter.resolve]
-        N1 -->|NewUdpDatagram| R1
-        R1 --> P1[proxy TcpStream/UdpSocket]
-        P1 --> SVC1[(本地 / 远端服务)]
-    end
+[UserSpace vs TUN 模式对比](./diagrams/modes-compact.d2)
 
-    subgraph TUN["TUN 模式 (需 CAP_NET_ADMIN)"]
-        G2[gotatun decrypt] --> H[HybridNatSend]
-        H -->|is_local=true<br/>DNAT+SNAT+conntrack| K[(kernel TUN)]
-        K --> LOCAL[(127.0.0.1 本地服务)]
-        H -->|is_local=false<br/>proxy_tx| N2[NetStack smoltcp]
-        N2 --> R2[ServiceRouter.resolve]
-        R2 --> P2[proxy]
-        P2 --> REMOTE[(远端服务)]
-        LOCAL -. reply .-> K
-        K --> RR[HybridNatRecv]
-        N2 -. smoltcp_out_tx .-> RR
-        RR --> ENC[gotatun encrypt]
-    end
-```
-
-> 完整拓扑参见 [`diagrams/modes.mmd`](./diagrams/modes.mmd)。
+> 完整拓扑参见 [两种数据通路的俯视对比](./diagrams/modes.d2)。
 
 ## 能力需求
 

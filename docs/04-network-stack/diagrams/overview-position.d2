@@ -1,0 +1,18 @@
+direction: right
+
+GOTA: "gotatun\nWireGuard 解密"
+
+netstack_group: "04 · 网络栈" {
+  NETSTACK: "netstack\nsmoltcp"
+  NAT: "nat\nRouter + Conntrack"
+}
+
+PROXY: "05 · proxy / ACL\nTCP/UDP relay"
+KERNEL: "kernel TUN" { shape: cylinder }
+
+GOTA -> netstack_group.NETSTACK: "UserSpace"
+netstack_group.NETSTACK -> netstack_group.NAT
+netstack_group.NAT -> PROXY
+GOTA -> netstack_group.NAT: "TUN"
+netstack_group.NAT -> KERNEL
+netstack_group.NAT -> netstack_group.NETSTACK: "remote via smoltcp"

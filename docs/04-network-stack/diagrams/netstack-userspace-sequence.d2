@@ -1,0 +1,32 @@
+shape: sequence_diagram
+
+GW: "NSGW"
+GOT: "gotatun"
+DEV: "VirtualDevice"
+SMOL: "smoltcp Interface"
+POLL: "NetStack::poll"
+ROUT: "ServiceRouter"
+PROXY: "relay_connection"
+
+GW -> GOT: "加密 IP 包"
+GOT -> POLL: "inject_rx Vec u8"
+udp: "UDP 报文" {
+  POLL -> POLL: "udp_info 解析五元组"
+  POLL -> PROXY: "NewUdpDatagram { payload, reply_tx }"
+  PROXY -> ROUT: "resolve(dst_port, Udp)"
+  PROXY -> POLL: "reply_tx.send(reply_payload)"
+  POLL -> POLL: "build_udp_reply"
+}
+tcp: "TCP 报文" {
+  POLL -> POLL: "ensure_tcp_listener(dst_port)"
+  POLL -> DEV: "inject(pkt)"
+  POLL -> SMOL: "iface.poll"
+  SMOL -> POLL: "socket.state == Established"
+  POLL -> PROXY: "NewTcpConnection { data_rx, data_tx }"
+  loop: "双向转发" {
+    SMOL -> PROXY: "data_tx_to_relay (可读字节)"
+    PROXY -> SMOL: "data_rx_from_relay (待发字节)"
+  }
+}
+POLL -> GOT: "tx_out Vec u8"
+GOT -> GW: "加密返回"

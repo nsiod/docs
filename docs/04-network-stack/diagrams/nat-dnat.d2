@@ -1,0 +1,52 @@
+direction: down
+
+classes: {
+  drop: { style.fill: "#fee"; style.stroke: "#c33" }
+  accept: { style.fill: "#efe"; style.stroke: "#393" }
+}
+
+START: "Packet<Ip> into HybridNatSend::send" { shape: oval }
+FT: "parse_five_tuple\npacket_nat.rs:100"
+DROP0: "drop: return Ok()" { class: drop }
+ACL: "AclEngine 已加载?" { shape: diamond }
+LOOKUP: "services.find_named_by_port\ndst_port, proto"
+ACLQ: "acl.is_allowed?" { shape: diamond }
+DROP1: "tracing::debug\nTUN: ACL denied packet" { class: drop }
+DROP2: "drop: no matching service" { class: drop }
+ISLOCAL: "svc.is_local?" { shape: diamond }
+PARSEIP: "svc.host.parse::<Ipv4Addr>"
+DROP3: "tracing::warn\nhost not IPv4 literal" { class: drop }
+DNAT: "DNAT\ndst_ip := real_ip\ndst_port := real_port"
+SNAT: "SNAT\nsrc_ip := tun_ip"
+CT: "conntrack.insert (reverse key)\nproto, real_ip:real_port ↔ tun_ip:peer_port"
+CSUM: "recalc_ip_checksum\nrecalc_transport_checksum"
+SENDTUN: "inner.send Packet<Ip>\n→ kernel TUN" { class: accept }
+KERN: "Linux kernel\nlocal service\n127.0.0.1" { class: accept }
+RAW: "proxy_tx.send raw bytes"
+ERR: "Err: BrokenPipe" { class: drop }
+NETSTACK: "netstack::inject_rx" { class: accept }
+SMOL: "smoltcp → ServiceRouter → proxy → remote service" { class: accept }
+
+START -> FT
+FT -> DROP0: "None / ICMP / IPv6"
+FT -> ACL: "FiveTuple"
+ACL -> LOOKUP: "no"
+ACL -> ACLQ: "yes"
+ACLQ -> DROP1: "false"
+ACLQ -> LOOKUP: "true"
+LOOKUP -> DROP2: "None"
+LOOKUP -> ISLOCAL: "(name, svc)"
+
+ISLOCAL -> PARSEIP: "yes"
+PARSEIP -> DROP3: "Err (domain)"
+PARSEIP -> DNAT: "Ok real_ip"
+DNAT -> SNAT
+SNAT -> CT
+CT -> CSUM
+CSUM -> SENDTUN
+SENDTUN -> KERN
+
+ISLOCAL -> RAW: "no"
+RAW -> ERR: "channel closed"
+RAW -> NETSTACK: "ok"
+NETSTACK -> SMOL

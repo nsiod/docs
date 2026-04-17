@@ -1,0 +1,40 @@
+direction: right
+
+UserSpace: "UserSpace 模式 (默认)" {
+  G1: "gotatun decrypt"
+  N1: "NetStack::poll smoltcp"
+  R1: "ServiceRouter.resolve"
+  P1: "proxy TcpStream/UdpSocket"
+  SVC1: "本地 / 远端服务" { shape: cylinder }
+
+  G1 -> N1
+  N1 -> R1: "NewTcpConnection"
+  N1 -> R1: "NewUdpDatagram"
+  R1 -> P1
+  P1 -> SVC1
+}
+
+TUN: "TUN 模式 (需 CAP_NET_ADMIN)" {
+  G2: "gotatun decrypt"
+  H: "HybridNatSend"
+  K: "kernel TUN" { shape: cylinder }
+  LOCAL: "127.0.0.1 本地服务" { shape: cylinder }
+  N2: "NetStack smoltcp"
+  R2: "ServiceRouter.resolve"
+  P2: "proxy"
+  REMOTE: "远端服务" { shape: cylinder }
+  RR: "HybridNatRecv"
+  ENC: "gotatun encrypt"
+
+  G2 -> H
+  H -> K: "is_local=true\nDNAT+SNAT+conntrack"
+  K -> LOCAL
+  H -> N2: "is_local=false\nproxy_tx"
+  N2 -> R2
+  R2 -> P2
+  P2 -> REMOTE
+  LOCAL -> K: "reply" { style.stroke-dash: 3 }
+  K -> RR
+  N2 -> RR: "smoltcp_out_tx" { style.stroke-dash: 3 }
+  RR -> ENC
+}

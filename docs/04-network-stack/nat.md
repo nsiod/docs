@@ -44,21 +44,7 @@ pub use router::{ResolvedService, ServiceRouter};
 
 以 `resolve` 为例（`crates/nat/src/router.rs:71-111`）：
 
-```mermaid
-flowchart TD
-    A[resolve<br/>src_ip, dst_ip, dst_port, proto] --> B{find_named_by_port}
-    B -- 无命中 --> Z[return None]
-    B -- 命中 svc --> C[克隆 host / port / tunnel / gateway]
-    C --> D[drop services 读锁]
-    D --> E{AclEngine 是否加载?}
-    E -- 未加载 --> G[resolve_host]
-    E -- 已加载 --> F{acl.is_allowed?}
-    F -- allowed=false --> Z2[tracing::debug<br/>ACL denied → None]
-    F -- allowed=true --> G
-    G -- Ok ip --> H[SocketAddr ip:port]
-    G -- Err --> Z3[tracing::warn<br/>DNS failed → None]
-    H --> R[ResolvedService]
-```
+[ServiceRouter::resolve 决策流程](./diagrams/router-resolve.d2)
 
 - **ACL 顺序**：先查服务白名单，再过 ACL。这保证 ACL 规则面向「已存在的服务」，减少 `dst_port` 未定义时的 debug 日志噪音。
 - **DNS 解析**：`resolve_host`（`crates/nat/src/router.rs:204-215`）优先把 `host` 解析为 IP；否则走 `tokio::net::lookup_host`。解析失败静默返回 `None`，但会写 `tracing::warn!` —— 这是故意的：调用方 `relay_*` 在得到 `None` 后只能断开连接，不必 bubble 具体原因。
@@ -84,29 +70,7 @@ flowchart TD
 
 ### 决策树
 
-```mermaid
-flowchart TD
-    A["HybridNatSend::send<br/>Packet&lt;Ip&gt;"] --> B[parse_five_tuple]
-    B -- None / ICMP 等 --> DROP1[drop: return Ok]
-    B -- FiveTuple --> C{ACL 已加载?}
-    C -- 否 --> D[find_named_by_port]
-    C -- 是 --> E{acl.is_allowed?}
-    E -- false --> DROP2[drop: TUN ACL denied]
-    E -- true --> D
-    D -- 无 svc --> DROP3[drop: no service]
-    D -- svc --> F{svc.is_local?}
-    F -- 是 --> G[解析 svc.host 为 Ipv4Addr]
-    G -- 非 IPv4 字面量 --> DROP4[warn: skip]
-    G -- real_ip --> H[DNAT: dst→real_ip:real_port]
-    H --> I[SNAT: src→tun_ip]
-    I --> J[conntrack.insert reverse]
-    J --> K[recalc IP + L4 cksum]
-    K --> L["inner.send Packet&lt;Ip&gt;"]
-    F -- 否 remote --> M[proxy_tx.send raw]
-    M -- 通道关 --> ERR[Err BrokenPipe]
-    M -- ok --> DONE
-    L --> DONE[Ok]
-```
+[HybridNatSend 决策树](./diagrams/hybrid-nat-decision.d2)
 
 ### DNAT + SNAT 细节
 

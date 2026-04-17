@@ -133,41 +133,9 @@ tokio::spawn(async move {
 
 ## Mermaid：UserSpace 模式数据流
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant GW as NSGW
-    participant GOT as gotatun
-    participant DEV as VirtualDevice
-    participant SMOL as smoltcp Interface
-    participant POLL as NetStack::poll
-    participant ROUT as ServiceRouter
-    participant PROXY as relay_connection
+[UserSpace 模式数据流时序](./diagrams/netstack-userspace-sequence.d2)
 
-    GW->>GOT: 加密 IP 包
-    GOT->>POLL: inject_rx Vec u8
-    alt UDP 报文
-        POLL->>POLL: udp_info 解析五元组
-        POLL->>PROXY: NewUdpDatagram { payload, reply_tx }
-        PROXY->>ROUT: resolve(dst_port, Udp)
-        PROXY-->>POLL: reply_tx.send(reply_payload)
-        POLL->>POLL: build_udp_reply
-    else TCP 报文
-        POLL->>POLL: ensure_tcp_listener(dst_port)
-        POLL->>DEV: inject(pkt)
-        POLL->>SMOL: iface.poll
-        SMOL-->>POLL: socket.state == Established
-        POLL->>PROXY: NewTcpConnection { data_rx, data_tx }
-        loop 双向转发
-            SMOL->>PROXY: data_tx_to_relay (可读字节)
-            PROXY->>SMOL: data_rx_from_relay (待发字节)
-        end
-    end
-    POLL->>GOT: tx_out Vec u8
-    GOT->>GW: 加密返回
-```
-
-> 完整 crate 级视图参见 [`diagrams/netstack-flow.mmd`](./diagrams/netstack-flow.mmd)。
+> 完整 crate 级视图参见 [UserSpace 数据流详图](./diagrams/netstack-flow.d2)。
 
 ## 与上下游模块的契约
 

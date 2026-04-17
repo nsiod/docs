@@ -1,0 +1,27 @@
+direction: down
+
+A: "resolve\nsrc_ip, dst_ip, dst_port, proto"
+B: "find_named_by_port" { shape: diamond }
+Z: "return None"
+C: "克隆 host / port / tunnel / gateway"
+D: "drop services 读锁"
+E: "AclEngine 是否加载?" { shape: diamond }
+F: "acl.is_allowed?" { shape: diamond }
+G: "resolve_host"
+Z2: "tracing::debug\nACL denied → None"
+H: "SocketAddr ip:port"
+Z3: "tracing::warn\nDNS failed → None"
+R: "ResolvedService"
+
+A -> B
+B -> Z: "无命中"
+B -> C: "命中 svc"
+C -> D
+D -> E
+E -> G: "未加载"
+E -> F: "已加载"
+F -> Z2: "allowed=false"
+F -> G: "allowed=true"
+G -> H: "Ok ip"
+G -> Z3: "Err"
+H -> R

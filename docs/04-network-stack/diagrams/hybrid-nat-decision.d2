@@ -1,0 +1,42 @@
+direction: down
+
+A: "HybridNatSend::send\nPacket<Ip>"
+B: "parse_five_tuple"
+DROP1: "drop: return Ok"
+C: "ACL 已加载?" { shape: diamond }
+D: "find_named_by_port"
+E: "acl.is_allowed?" { shape: diamond }
+DROP2: "drop: TUN ACL denied"
+DROP3: "drop: no service"
+F: "svc.is_local?" { shape: diamond }
+G: "解析 svc.host 为 Ipv4Addr"
+DROP4: "warn: skip"
+H: "DNAT: dst→real_ip:real_port"
+I: "SNAT: src→tun_ip"
+J: "conntrack.insert reverse"
+K: "recalc IP + L4 cksum"
+L: "inner.send Packet<Ip>"
+M: "proxy_tx.send raw"
+ERR: "Err BrokenPipe"
+DONE: "Ok"
+
+A -> B
+B -> DROP1: "None / ICMP 等"
+B -> C: "FiveTuple"
+C -> D: "否"
+C -> E: "是"
+E -> DROP2: "false"
+E -> D: "true"
+D -> DROP3: "无 svc"
+D -> F: "svc"
+F -> G: "是"
+G -> DROP4: "非 IPv4 字面量"
+G -> H: "real_ip"
+H -> I
+I -> J
+J -> K
+K -> L
+F -> M: "否 remote"
+M -> ERR: "通道关"
+M -> DONE: "ok"
+L -> DONE

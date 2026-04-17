@@ -1,0 +1,56 @@
+direction: right
+
+gotatun: "gotatun (WG userspace)" {
+  DEC: "decrypt"
+}
+
+netstack: "netstack (this module)" {
+  INJECT: "inject_rx (mpsc 256)" { shape: cylinder }
+  POLL: "NetStack::poll\nstack.rs:66" { shape: diamond }
+  DEV: "VirtualDevice\ndevice.rs:34"
+  IFACE: "smoltcp Interface"
+  UDPPARSE: "udp_info\nstack.rs:342"
+  LISTENERS: "HashMap<port, SocketHandle>\nensure_tcp_listener"
+  TCP: "tcp::Socket\nEstablished"
+  UDPREPLY: "build_udp_reply\nstack.rs:378"
+  TXOUT: "tx_out (mpsc 256)" { shape: cylinder }
+}
+
+nat: "nat (ServiceRouter)" {
+  RESOLVE: "ServiceRouter::resolve\nrouter.rs:71"
+}
+
+proxy: "proxy (relay layer)" {
+  NEWCONN: "NewTcpConnection" { shape: cylinder }
+  NEWDGRAM: "NewUdpDatagram" { shape: cylinder }
+  RELAY_TCP: "relay_*_connection"
+  RELAY_UDP: "relay_datagram"
+  BACKEND: "backend TCP/UDP" { shape: cylinder }
+}
+
+gotatun.DEC -> netstack.INJECT: "Vec<u8> IPv4"
+netstack.INJECT -> netstack.POLL
+
+netstack.POLL -> netstack.UDPPARSE: "proto == 17"
+netstack.UDPPARSE -> proxy.NEWDGRAM
+proxy.NEWDGRAM -> proxy.RELAY_UDP
+proxy.RELAY_UDP -> nat.RESOLVE
+proxy.RELAY_UDP -> proxy.BACKEND
+proxy.RELAY_UDP -> netstack.POLL: "reply_tx.send" { style.stroke-dash: 3 }
+netstack.POLL -> netstack.UDPREPLY
+netstack.UDPREPLY -> netstack.TXOUT
+
+netstack.POLL -> netstack.LISTENERS: "proto == 6"
+netstack.LISTENERS -> netstack.DEV
+netstack.DEV -> netstack.IFACE
+netstack.IFACE -> netstack.TCP
+netstack.TCP -> proxy.NEWCONN: "state==Established"
+proxy.NEWCONN -> proxy.RELAY_TCP
+proxy.RELAY_TCP -> nat.RESOLVE
+proxy.RELAY_TCP -> proxy.BACKEND
+proxy.RELAY_TCP -> netstack.TCP: "data_tx" { style.stroke-dash: 3 }
+netstack.TCP -> proxy.RELAY_TCP: "data_rx" { style.stroke-dash: 3 }
+netstack.IFACE -> netstack.DEV
+netstack.DEV -> netstack.TXOUT: "drain_tx"
+
+netstack.TXOUT -> gotatun.DEC: "Vec<u8> IPv4"
