@@ -94,25 +94,58 @@ graph TB
 - 工作空间成员: [`Cargo.toml`](../../../nsio/Cargo.toml) 的 `[workspace] members`
 - NSN / NSC 二进制依赖: `crates/nsn/Cargo.toml` / `crates/nsc/Cargo.toml`
 
-## Crate 依赖图 (NSN / NSC)
+## Crate 架构分层
+
+先看"每个 crate 属于哪一层"的脑图,再看精确的依赖表。
 
 ```mermaid
-graph LR
-    nsn --> common & control & acl & connector & nat & netstack & proxy & telemetry & tunnel_wg & tunnel_ws
-    nsc --> common & control & acl & connector & proxy & telemetry & tunnel_wg & tunnel_ws
-    connector --> acl & common & control & tunnel_wg & tunnel_ws
-    control --> acl & common
-    nat --> acl & common & control
-    nat -.-> gotatun
-    proxy --> common & telemetry
-    netstack --> common
-    tunnel_wg --> acl & common & control & nat
-    tunnel_wg -.-> gotatun
-    tunnel_ws --> acl & common
-    acl --> common
+mindmap
+  root((NSIO<br/>Workspace))
+    二进制
+      nsn 站点节点
+      nsc 用户客户端
+    隧道
+      tunnel-wg 用户态 WG
+      tunnel-ws WSS 中继
+      connector 多网关选路
+    数据面
+      netstack smoltcp
+      nat DNAT/SNAT
+      proxy TCP/UDP 转发
+    策略
+      acl 允许规则
+    控制面
+      control SSE/Noise/QUIC
+    基础
+      common 消息与配置
+      telemetry OTel/Prom
+    外部
+      gotatun WG 用户态
 ```
 
-> 注: `gotatun` 为外部 crate(用户态 WireGuard 设备封装)。`nsc` 依赖 8 个内部 crate,**并非一个轻量客户端** —— 对 NSC 的架构/安全评审几乎等同于评审整个数据面栈。
+### 精确依赖关系
+
+| Crate | 作用 | 依赖(内部) | 外部关键依赖 |
+|-------|------|-----------|-------------|
+| `nsn` | 站点节点二进制 | `common` `control` `acl` `connector` `nat` `netstack` `proxy` `telemetry` `tunnel-wg` `tunnel-ws` | — |
+| `nsc` | 客户端二进制 | `common` `control` `acl` `connector` `proxy` `telemetry` `tunnel-wg` `tunnel-ws` | — |
+| `connector` | 多网关管理 · 两跳独立选路 | `acl` `common` `control` `tunnel-wg` `tunnel-ws` | — |
+| `tunnel-wg` | WG 隧道实现 | `acl` `common` `control` `nat` | `gotatun` |
+| `tunnel-ws` | WSS 隧道实现 | `acl` `common` | — |
+| `nat` | DNAT / SNAT / HybridNatSend | `acl` `common` `control` | `gotatun` |
+| `netstack` | smoltcp VirtualDevice | `common` | `smoltcp` |
+| `proxy` | TCP / UDP 双向转发 | `common` `telemetry` | — |
+| `acl` | 仅允许 ACL 引擎 | `common` | — |
+| `control` | SSE / Noise / QUIC 控制面 | `acl` `common` | `quinn` `snow` |
+| `telemetry` | OTel / Prometheus | — | `opentelemetry` |
+| `common` | 消息 schema / 配置 / 类型(叶子) | — | `serde` |
+
+**关键观察**:
+
+- **`common` 是叶子**,几乎所有 crate 都依赖它 —— 单一事实源的 schema 层,改它会触发最大的重编译范围。
+- **`nsc` 依赖 8 个内部 crate**,不是一个轻量客户端 —— 对 NSC 的架构/安全评审几乎等同于评审整个数据面栈。
+- **`nat` 和 `tunnel-wg` 都直接依赖外部 `gotatun`**,是 WireGuard 用户态的两个消费者;这也是为什么 `netstack` 不依赖 `gotatun`—— 它走 `tun` crate 的内核 TUN 路径,与用户态 WG 是并列的两套数据面。
+- **`control` 只依赖 `acl + common`**,说明控制面协议(外壳 SSE/Noise/QUIC)与数据面完全解耦 —— 换 transport 不影响业务逻辑。
 
 ## 多控制面 (多 NSD) 架构
 
