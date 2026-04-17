@@ -152,51 +152,13 @@ result = proxy_done_rx.recv() => {
 
 ### 4.1 正常 auto 启动 + fallback
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant NSN
-    participant GW as NSGW peer :51820
-    participant Relay as wss://GW/relay
-
-    NSN->>GW: probe_udp #1 (148B)
-    Note right of GW: UDP 被封 / ICMP unreach
-    GW--xNSN: timeout 5s / err
-    NSN->>NSN: sleep 3s
-    NSN->>GW: probe_udp #2
-    GW--xNSN: fail
-    NSN->>NSN: sleep 3s
-    NSN->>GW: probe_udp #3
-    GW--xNSN: fail
-    NSN->>Relay: WsTunnel::connect (Bearer <JWT>, 15s timeout)
-    Relay-->>NSN: 101 Switching Protocols
-    NSN->>NSN: active = Transport::Wss
-    Note over NSN,Relay: enter run(): per-stream relay + 300s upgrade tick
-```
+[正常 auto 启动 + fallback 时序](./diagrams/fallback-auto-startup.d2)
 
 ### 4.2 WSS→UDP 升级
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant NSN
-    participant GW
-    participant Relay
+[WSS→UDP 升级时序](./diagrams/fallback-wss-to-udp.d2)
 
-    loop in WSS mode
-        NSN->>Relay: WsFrame Open/Data/Close
-        Relay-->>NSN: WsFrame Open/Data/Close
-    end
-    Note right of NSN: 300s tick (upgrade_interval)
-    NSN->>GW: probe_udp
-    GW-->>NSN: send OK / any reply
-    NSN->>NSN: proxy_handle.abort()
-    Note over NSN: active = Transport::Udp
-    Note over Relay: all stream tasks cancelled<br/>local TcpStreams closed
-    NSN->>GW: (Real WireGuard handshake<br/>via TunnelManager)
-```
-
-完整版：[`diagrams/fallback.mmd`](./diagrams/fallback.mmd)。
+完整版：[UDP↔WSS 切换时序](./diagrams/fallback.d2)。
 
 ---
 

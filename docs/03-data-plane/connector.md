@@ -134,19 +134,7 @@ pub enum GatewayStatus {
 | `mark_reconnecting(id, attempt)` `multi.rs:248` | Failed / Connected | `Reconnecting{attempt}` | `Reconnecting{id, attempt}` |
 | `update_latency(id, lat)` `multi.rs:259` | 保持不变 | — | `LatencyUpdate{id, latency}` |
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending : config.enabled=true
-    [*] --> Disabled : config.enabled=false
-    Pending --> Connected : mark_connected
-    Pending --> Failed : mark_failed
-    Connected --> Failed : mark_failed
-    Connected --> Reconnecting : mark_reconnecting
-    Failed --> Reconnecting : mark_reconnecting
-    Reconnecting --> Connected : mark_connected
-    Reconnecting --> Failed : mark_failed
-    Disabled --> Pending : admin enable (未在代码中暴露)
-```
+[GatewayStatus 状态机](./diagrams/gateway-status-state.d2)
 
 > 源码里不区分 "healthy / degraded / failed" 三档。**"healthy"** 对应 `Connected`；**"degraded"** 并未建模——策略层通过 latency 阈值 / 带宽配额自行判断；**"failed"** 对应 `Failed`。这与 NSIO 现有实现保持一致，不做臆测扩展。
 
@@ -226,38 +214,7 @@ pub enum GatewayEvent {
 
 ## 3. 完整流程：N 个网关并发上线
 
-```mermaid
-sequenceDiagram
-    participant Cfg as NSD gateway_config SSE
-    participant App as NSN main / AppState
-    participant MGM as MultiGatewayManager
-    participant CM1 as ConnectorManager(nsgw-1)
-    participant CM2 as ConnectorManager(nsgw-2)
-    participant TM as TunnelManager
-
-    Cfg->>App: gateway_config{gateways:[nsgw-1, nsgw-2]}
-    App->>MGM: new(configs, LowestLatency)
-    par parallel connect
-        App->>CM1: connect(wg_config_for_nsgw_1)
-        CM1->>CM1: probe_udp x3
-        CM1-->>App: Transport::Udp
-        App->>MGM: mark_connected("nsgw-1", "udp", None)
-        MGM-->>App: GatewayEvent::Connected
-    and
-        App->>CM2: connect(wg_config_for_nsgw_2)
-        CM2->>CM2: probe_udp x3 (fail)
-        CM2->>CM2: try_wss()
-        CM2-->>App: Transport::Wss
-        App->>MGM: mark_connected("nsgw-2", "wss", None)
-    end
-    App->>TM: start (pushes Wg peers union)
-    TM->>App: GatewayStatusUpdate (bytes, handshake)
-    App->>MGM: mark_connected/update_latency periodically
-
-    Note over App,MGM: service request arrives
-    App->>MGM: select_gateway_for(Auto)
-    MGM-->>App: nsgw-1 (lowest latency)
-```
+[N 个网关并发上线时序](./diagrams/multi-nsgw-concurrent-up.d2)
 
 ---
 

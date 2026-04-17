@@ -1,0 +1,50 @@
+direction: down
+
+Config: "Static config (GatewayConfig x N)" {
+  G1: "nsgw-1\npriority=1"
+  G2: "nsgw-2\npriority=2"
+  G3: "nsgw-3\npriority=3 disabled"
+}
+
+MGM: "MultiGatewayManager (multi.rs:152)" {
+  Strat: "GatewayStrategy\nmulti.rs:84" { shape: diamond }
+  Selector: "select_gateway()\nmulti.rs:272"
+  EventTx: "event_tx\nGatewayEvent::*\nmulti.rs:24"
+
+  FSM: "GatewayStatus state machine (multi.rs:50)" {
+    Pending: "Pending" { shape: circle }
+    Reconn: "Reconnecting\nattempt=n" { shape: circle }
+    Conn: "Connected\nsince=t" { shape: circle }
+    Failed: "Failed\nreason" { shape: circle }
+    Disabled: "Disabled" { shape: circle }
+
+    Pending -> Conn: "mark_connected(id,transport,latency)"
+    Pending -> Failed: "mark_failed"
+    Conn -> Failed: "mark_failed"
+    Failed -> Reconn: "mark_reconnecting(attempt)"
+    Reconn -> Conn: "mark_connected"
+    Reconn -> Failed: "mark_failed"
+    Disabled -> Pending: "admin enable" { style.stroke-dash: 3 }
+  }
+}
+
+Consumers: "Consumers" {
+  AppState: "AppState / Monitor API\n/api/gateways"
+  NsdReport: "NSD gateway_report"
+  Router: "ServiceRouter\ngateway selection"
+}
+
+Config.G1 -> MGM
+Config.G2 -> MGM
+Config.G3 -> MGM
+
+MGM.Strat -> MGM.Selector: "LowestLatency"
+MGM.Strat -> MGM.Selector: "RoundRobin\nrr_cursor"
+MGM.Strat -> MGM.Selector: "PriorityFailover"
+
+MGM.FSM.Conn -> MGM.Selector
+MGM.Selector -> Consumers.Router
+
+MGM.FSM -> MGM.EventTx: "emit()"
+MGM.EventTx -> Consumers.AppState: "try_send"
+MGM.EventTx -> Consumers.NsdReport: "mark_* hooks"

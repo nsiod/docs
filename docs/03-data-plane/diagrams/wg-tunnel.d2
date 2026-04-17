@@ -1,0 +1,64 @@
+direction: down
+
+ControlPlane: "Control Plane" {
+  WgCfg: "WgConfig event\nvia wg_config_rx"
+}
+
+TunnelManager: "TunnelManager (tunnel-wg/src/lib.rs:117)" {
+  RunLoop: "run() select loop\nlib.rs:186"
+  BuildDev: "build_device()\nlib.rs:269"
+  StatusPoll: "spawn_status_poller()\nlib.rs:516"
+}
+
+Device: "gotatun Device (generation N)" {
+  UAPI: "UapiServer\ndevice.uapi.UapiServer"
+  CryptoCore: "Noise + AEAD\nhandshake / encrypt / decrypt"
+  UDPSock: "UdpSocketFactory"
+  PeerTable: "Peer table\nallowed_ips routing"
+}
+
+IPAdapter: "IP Adapter (userspace mode)" {
+  IpSend: "NsnIpSend::send()\nip_adapter.rs:25"
+  IpRecv: "NsnIpRecv::recv()\nip_adapter.rs:50"
+  AclFilter: "AclFilteredSend\nacl_ip_adapter.rs:90"
+}
+
+TunPath: "TUN Hybrid Path (TUN mode)" {
+  HybridSend: "HybridNatSend\ntunnel-wg/src/lib.rs:47"
+  HybridRecv: "HybridNatRecv"
+  TunFD: "TunDevice\nMTU 1420"
+}
+
+Downstream: "Downstream" {
+  Netstack: "smoltcp netstack"
+  KernTCP: "Kernel TCP\nlocal services"
+}
+
+ControlPlane.WgCfg -> TunnelManager.RunLoop: "WgConfig"
+TunnelManager.RunLoop -> TunnelManager.BuildDev: "1. stop old dev\n2. build new"
+TunnelManager.BuildDev -> Device.UAPI: "with_uapi"
+TunnelManager.BuildDev -> Device.PeerTable: "with_peer"
+TunnelManager.BuildDev -> IPAdapter.IpSend: "with_ip_pair"
+TunnelManager.BuildDev -> IPAdapter.IpRecv: "with_ip_pair"
+TunnelManager.BuildDev -> Device.UDPSock: "with_default_udp"
+
+Device.UDPSock -> Device.CryptoCore: "encrypted UDP:51820"
+Device.CryptoCore -> IPAdapter.IpSend: "decrypted IP"
+IPAdapter.IpSend -> IPAdapter.AclFilter: "mpsc" { style.stroke-dash: 3 }
+IPAdapter.AclFilter -> Downstream.Netstack: "allowed TCP/UDP"
+
+Downstream.Netstack -> IPAdapter.IpRecv: "reply pkt"
+IPAdapter.IpRecv -> Device.CryptoCore: "mpsc"
+Device.CryptoCore -> Device.UDPSock: "encrypted"
+
+Device.CryptoCore -> TunPath.HybridSend: "TUN mode" { style.stroke-dash: 3 }
+TunPath.HybridSend -> TunPath.TunFD: "local DNAT"
+TunPath.HybridSend -> Downstream.Netstack: "remote proxy_tx"
+TunPath.TunFD -> Downstream.KernTCP
+Downstream.KernTCP -> TunPath.HybridRecv
+TunPath.HybridRecv -> Device.CryptoCore: "reverse NAT"
+
+TunnelManager.RunLoop -> TunnelManager.StatusPoll
+TunnelManager.StatusPoll -> Device.UAPI: "Request::Get"
+Device.UAPI -> TunnelManager.StatusPoll: "Response::Get\nlast_handshake / bytes"
+TunnelManager.StatusPoll -> ControlPlane: "GatewayStatusUpdate"

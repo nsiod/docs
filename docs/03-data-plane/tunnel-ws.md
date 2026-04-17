@@ -165,34 +165,7 @@ let write_task = tokio::spawn(async move {
 
 ### 3.3 开流流程（Open）
 
-```mermaid
-sequenceDiagram
-    participant GW as NSGW (relay peer)
-    participant WS as WsTunnel.run()
-    participant D as dispatch_frame()
-    participant T as relay_tcp task
-    participant S as local service
-
-    GW->>WS: Binary(WsFrame Open V4 s=1 dst=10.0.0.5:80 tcp)
-    WS->>D: decode + dispatch
-    D->>D: check_target_allowed(services, acl)
-    alt allow
-        D->>D: streams.insert(1, StreamHandle{data_tx})
-        D-->>GW: WssConnectionEvent::Open (try_send)
-        D->>T: spawn relay_tcp(s=1, 10.0.0.5:80, data_rx, write_tx)
-        T->>S: TcpStream::connect(10.0.0.5:80)
-        loop bidirectional
-            GW->>D: Data s=1 (payload)
-            D->>T: handle.data_tx.send(payload)
-            T->>S: local.write_all(payload)
-            S->>T: local.read(buf) -> n bytes
-            T->>GW: Binary(Data s=1 payload=buf[..n])
-        end
-    else deny
-        D-->>GW: Binary(Close s=1)
-        Note over D,GW: no registry entry created
-    end
-```
+[WsFrame Open 流程时序](./diagrams/ws-open-flow.d2)
 
 ### 3.4 关流两阶段
 
@@ -305,23 +278,9 @@ pub struct WssConnectionEvent {
 
 ## 7. WsFrame mux 总览（Mermaid）
 
-```mermaid
-graph TB
-    A[NSGW Open/Data/Close<br/>Message::Binary] --> B["WsFrame::decode()<br/>lib.rs:183"]
-    B --> C{command}
-    C -->|Open V4/V6| D["check_target_allowed()<br/>lib.rs:434"]
-    D -->|allow| E[DashMap.insert stream_id]
-    E --> F[spawn relay_tcp/udp]
-    D -->|deny| G[Binary Close → write_tx]
-    C -->|Data| H[StreamHandle.data_tx.send]
-    C -->|Close| I[registry.remove → CloseAck → write_tx]
-    C -->|CloseAck| J[registry.remove]
-    F --> K[local TcpStream / UdpSocket]
-    K -.payload.-> L["WsFrame Data.encode() → write_tx"]
-    L --> M[Write task → ws_sink.send]
-```
+[WsFrame mux 总览](./diagrams/ws-frame-mux.d2)
 
-完整版见 [`diagrams/ws-tunnel.mmd`](./diagrams/ws-tunnel.mmd)。
+完整版见 [WsFrame 多路复用详图](./diagrams/ws-tunnel.d2)。
 
 ---
 

@@ -1,0 +1,28 @@
+direction: down
+
+A: "NSGW Open/Data/Close\nMessage::Binary"
+B: "WsFrame::decode()\nlib.rs:183"
+C: "command" { shape: diamond }
+D: "check_target_allowed()\nlib.rs:434"
+E: "DashMap.insert stream_id"
+F: "spawn relay_tcp/udp"
+G: "Binary Close → write_tx"
+H: "StreamHandle.data_tx.send"
+I: "registry.remove → CloseAck → write_tx"
+J: "registry.remove"
+K: "local TcpStream / UdpSocket"
+L: "WsFrame Data.encode() → write_tx"
+M: "Write task → ws_sink.send"
+
+A -> B
+B -> C
+C -> D: "Open V4/V6"
+D -> E: "allow"
+E -> F
+D -> G: "deny"
+C -> H: "Data"
+C -> I: "Close"
+C -> J: "CloseAck"
+F -> K
+K -> L: "payload" { style.stroke-dash: 3 }
+L -> M

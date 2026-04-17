@@ -1,0 +1,56 @@
+direction: right
+
+Client: "NSGW relay peer" {
+  OpenA: "Open stream_id=1\ntarget 10.0.0.5:80 TCP"
+  OpenB: "Open stream_id=2\ntarget 10.0.0.5:53 UDP"
+  Data1: "Data stream_id=1"
+  Data2: "Data stream_id=2"
+}
+
+WS: "Single wss:// connection\nMessage::Binary frames" {
+  Pipe: "WsFrame stream" { shape: circle }
+}
+
+NSN: "NSN WsTunnel (tunnel-ws/src/lib.rs:279)" {
+  Decode: "WsFrame::decode()\nlib.rs:183"
+  Dispatch: "dispatch_frame()\nlib.rs:470"
+  ACLCheck: "check_target_allowed()\nlib.rs:434"
+  Registry: "DashMap<u32, StreamHandle>\nlib.rs:371"
+  WriteTask: "Write task\nlib.rs:362"
+  Close: "Close frame back"
+
+  RelayTasks: "Per-stream relay tasks" {
+    TcpRelay: "relay_tcp()\nlib.rs:593"
+    UdpRelay: "relay_udp()\nlib.rs:648"
+  }
+}
+
+Services: "Local services" {
+  Tcp80: "TCP :80"
+  Udp53: "UDP :53"
+}
+
+Client.OpenA -> WS.Pipe
+Client.OpenB -> WS.Pipe
+Client.Data1 -> WS.Pipe
+Client.Data2 -> WS.Pipe
+
+WS.Pipe -> NSN.Decode: "Message::Binary"
+NSN.Decode -> NSN.Dispatch
+NSN.Dispatch -> NSN.ACLCheck: "Open"
+NSN.ACLCheck -> NSN.Registry: "allow"
+NSN.ACLCheck -> NSN.Close: "deny" { style.stroke-dash: 3 }
+NSN.Registry -> NSN.RelayTasks.TcpRelay: "spawn"
+NSN.Registry -> NSN.RelayTasks.UdpRelay: "spawn"
+
+NSN.Dispatch -> NSN.Registry: "Data"
+NSN.Registry -> NSN.RelayTasks.TcpRelay: "data_tx mpsc"
+NSN.Registry -> NSN.RelayTasks.UdpRelay: "data_tx mpsc"
+
+NSN.RelayTasks.TcpRelay -> Services.Tcp80: "TcpStream::connect"
+NSN.RelayTasks.UdpRelay -> Services.Udp53: "UdpSocket bind+connect"
+
+NSN.RelayTasks.TcpRelay -> NSN.WriteTask: "encode Data/Close"
+NSN.RelayTasks.UdpRelay -> NSN.WriteTask: "encode Data"
+NSN.WriteTask -> WS.Pipe: "Message::Binary"
+NSN.Close -> NSN.WriteTask

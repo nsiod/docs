@@ -1,0 +1,25 @@
+direction: down
+
+start: "起点" { shape: circle }
+Starting: "Starting"
+Awaiting: "Awaiting"
+Building: "Building"
+Active: "Active"
+TearDown: "TearDown"
+Polling: "Polling"
+StatusEmit: "StatusEmit"
+Stopped: "Stopped"
+end: "终点" { shape: circle }
+
+start -> Starting
+Starting -> Awaiting: "TunnelManager::new()"
+Awaiting -> Building: "wg_config_rx.recv()"
+Building -> Active: "build_device() Ok"
+Building -> Awaiting: "build fail (warn, keep old device None)"
+Active -> TearDown: "next WgConfig arrives"
+TearDown -> Building: "stop old, build new"
+Active -> Polling: "every 5s UAPI GET"
+Polling -> StatusEmit: "connected_changed or tick"
+StatusEmit -> Active
+Active -> Stopped: "wg_config_rx closed"
+Stopped -> end

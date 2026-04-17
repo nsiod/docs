@@ -1,0 +1,34 @@
+shape: sequence_diagram
+
+Cfg: "NSD gateway_config SSE"
+App: "NSN main / AppState"
+MGM: "MultiGatewayManager"
+CM1: "ConnectorManager(nsgw-1)"
+CM2: "ConnectorManager(nsgw-2)"
+TM: "TunnelManager"
+
+Cfg -> App: "gateway_config{gateways:[nsgw-1, nsgw-2]}"
+App -> MGM: "new(configs, LowestLatency)"
+par: "parallel connect" {
+  c1: "connect nsgw-1" {
+    App -> CM1: "connect(wg_config_for_nsgw_1)"
+    CM1 -> CM1: "probe_udp x3"
+    CM1 -> App: "Transport::Udp"
+    App -> MGM: "mark_connected('nsgw-1', 'udp', None)"
+    MGM -> App: "GatewayEvent::Connected"
+  }
+  c2: "connect nsgw-2" {
+    App -> CM2: "connect(wg_config_for_nsgw_2)"
+    CM2 -> CM2: "probe_udp x3 (fail)"
+    CM2 -> CM2: "try_wss()"
+    CM2 -> App: "Transport::Wss"
+    App -> MGM: "mark_connected('nsgw-2', 'wss', None)"
+  }
+}
+App -> TM: "start (pushes Wg peers union)"
+TM -> App: "GatewayStatusUpdate (bytes, handshake)"
+App -> MGM: "mark_connected/update_latency periodically"
+
+App."service request arrives"
+App -> MGM: "select_gateway_for(Auto)"
+MGM -> App: "nsgw-1 (lowest latency)"

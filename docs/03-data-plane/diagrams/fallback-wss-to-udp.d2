@@ -1,0 +1,17 @@
+shape: sequence_diagram
+
+NSN
+GW
+Relay
+
+wss_mode: "in WSS mode" {
+  NSN -> Relay: "WsFrame Open/Data/Close"
+  Relay -> NSN: "WsFrame Open/Data/Close"
+}
+NSN."300s tick (upgrade_interval)"
+NSN -> GW: "probe_udp"
+GW -> NSN: "send OK / any reply"
+NSN -> NSN: "proxy_handle.abort()"
+NSN."active = Transport::Udp"
+Relay."all stream tasks cancelled\nlocal TcpStreams closed"
+NSN -> GW: "(Real WireGuard handshake\nvia TunnelManager)"

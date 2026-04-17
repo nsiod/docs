@@ -1,0 +1,19 @@
+shape: sequence_diagram
+
+NSN
+GW: "NSGW peer :51820"
+Relay: "wss://GW/relay"
+
+NSN -> GW: "probe_udp #1 (148B)"
+GW."UDP 被封 / ICMP unreach"
+GW -> NSN: "timeout 5s / err" { style.stroke-dash: 3 }
+NSN -> NSN: "sleep 3s"
+NSN -> GW: "probe_udp #2"
+GW -> NSN: "fail" { style.stroke-dash: 3 }
+NSN -> NSN: "sleep 3s"
+NSN -> GW: "probe_udp #3"
+GW -> NSN: "fail" { style.stroke-dash: 3 }
+NSN -> Relay: "WsTunnel::connect (Bearer <JWT>, 15s timeout)"
+Relay -> NSN: "101 Switching Protocols"
+NSN -> NSN: "active = Transport::Wss"
+NSN."enter run(): per-stream relay + 300s upgrade tick"

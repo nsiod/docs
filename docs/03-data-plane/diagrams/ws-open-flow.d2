@@ -1,0 +1,28 @@
+shape: sequence_diagram
+
+GW: "NSGW (relay peer)"
+WS: "WsTunnel.run()"
+D: "dispatch_frame()"
+T: "relay_tcp task"
+S: "local service"
+
+GW -> WS: "Binary(WsFrame Open V4 s=1 dst=10.0.0.5:80 tcp)"
+WS -> D: "decode + dispatch"
+D -> D: "check_target_allowed(services, acl)"
+allow: "allow" {
+  D -> D: "streams.insert(1, StreamHandle{data_tx})"
+  D -> GW: "WssConnectionEvent::Open (try_send)"
+  D -> T: "spawn relay_tcp(s=1, 10.0.0.5:80, data_rx, write_tx)"
+  T -> S: "TcpStream::connect(10.0.0.5:80)"
+  loop: "bidirectional" {
+    GW -> D: "Data s=1 (payload)"
+    D -> T: "handle.data_tx.send(payload)"
+    T -> S: "local.write_all(payload)"
+    S -> T: "local.read(buf) -> n bytes"
+    T -> GW: "Binary(Data s=1 payload=buf[..n])"
+  }
+}
+deny: "deny" {
+  D -> GW: "Binary(Close s=1)"
+  D."no registry entry created"
+}

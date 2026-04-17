@@ -1,0 +1,19 @@
+direction: down
+
+start: "起点" { shape: circle }
+Pending: "Pending"
+Connected: "Connected"
+Failed: "Failed"
+Reconnecting: "Reconnecting"
+Disabled: "Disabled"
+
+start -> Pending: "config.enabled=true"
+start -> Disabled: "config.enabled=false"
+Pending -> Connected: "mark_connected"
+Pending -> Failed: "mark_failed"
+Connected -> Failed: "mark_failed"
+Connected -> Reconnecting: "mark_reconnecting"
+Failed -> Reconnecting: "mark_reconnecting"
+Reconnecting -> Connected: "mark_connected"
+Reconnecting -> Failed: "mark_failed"
+Disabled -> Pending: "admin enable (未在代码中暴露)"

@@ -1,0 +1,25 @@
+direction: right
+
+Remote: "Remote peer (NSGW/NSC)" {
+  RU: "UDP:51820\nencrypted"
+}
+
+Local: "NSN process" {
+  DEV: "gotatun Device\nNoise + AEAD"
+  UAPI: "UapiServer"
+  ADAPT: "NsnIpSend / NsnIpRecv"
+  NS: "smoltcp netstack\nor TUN kernel"
+  MGR: "TunnelManager"
+}
+
+Control: "control plane"
+
+Remote.RU <-> Local.DEV: "UDP"
+Local.DEV -> Local.ADAPT: "decrypted Packet<Ip>"
+Local.ADAPT -> Local.NS: "mpsc Vec<u8>"
+Local.NS -> Local.ADAPT: "reply Vec<u8>"
+Local.ADAPT -> Local.DEV: "Packet<Ip>"
+Local.MGR -> Local.UAPI: "Request::Get" { style.stroke-dash: 3 }
+Local.UAPI -> Local.MGR: "Response::Get" { style.stroke-dash: 3 }
+Local.MGR -> Local.DEV: "WgConfig"
+Local.MGR -> Control: "GatewayStatusUpdate"

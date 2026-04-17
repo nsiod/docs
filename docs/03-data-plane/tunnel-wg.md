@@ -197,21 +197,7 @@ if let Ok(Response::Get(resp)) = uapi_client.send(Request::Get(Get::default())).
 
 `handshake_count` 在 `curr > prev + 10` 时递增（`lib.rs:572`），避免 5s 轮询抖动导致重复计数。`gateway_id` 通过 `find_gateway_id_by_port`（`lib.rs:619`）按 peer endpoint 端口匹配 `GatewayInfo.wg_endpoint`。
 
-```mermaid
-stateDiagram-v2
-    [*] --> Starting
-    Starting --> Awaiting: TunnelManager::new()
-    Awaiting --> Building: wg_config_rx.recv()
-    Building --> Active: build_device() Ok
-    Building --> Awaiting: build fail (warn, keep old device None)
-    Active --> TearDown: next WgConfig arrives
-    TearDown --> Building: stop old, build new
-    Active --> Polling: every 5s UAPI GET
-    Polling --> StatusEmit: connected_changed or tick
-    StatusEmit --> Active
-    Active --> Stopped: wg_config_rx closed
-    Stopped --> [*]
-```
+[TunnelManager 状态机](./diagrams/wg-tunnelmanager-state.d2)
 
 ---
 
@@ -243,30 +229,9 @@ pub fn is_packet_allowed(packet: &[u8]) -> bool {
 
 ## 5. 报文流总览（Mermaid）
 
-```mermaid
-graph LR
-    subgraph Remote["Remote peer (NSGW/NSC)"]
-        RU[UDP:51820<br/>encrypted]
-    end
-    subgraph Local["NSN process"]
-        DEV[gotatun Device<br/>Noise + AEAD]
-        UAPI[UapiServer]
-        ADAPT[NsnIpSend / NsnIpRecv]
-        NS[smoltcp netstack<br/>or TUN kernel]
-        MGR[TunnelManager]
-    end
-    RU <-- UDP --> DEV
-    DEV -- decrypted Packet&lt;Ip&gt; --> ADAPT
-    ADAPT -- mpsc Vec&lt;u8&gt; --> NS
-    NS -- reply Vec&lt;u8&gt; --> ADAPT
-    ADAPT -- Packet&lt;Ip&gt; --> DEV
-    MGR -. Request::Get .- UAPI
-    UAPI -. Response::Get .- MGR
-    MGR -- WgConfig --> DEV
-    MGR -- GatewayStatusUpdate --> Control[control plane]
-```
+[WireGuard 报文流总览](./diagrams/wg-packet-flow.d2)
 
-完整版见 [`diagrams/wg-tunnel.mmd`](./diagrams/wg-tunnel.mmd)。
+完整版见 [WireGuard 隧道报文流](./diagrams/wg-tunnel.d2)。
 
 ---
 
