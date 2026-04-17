@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run build:d2 && rspress dev",
-    "build": "bun run build:d2 && rspress build",
+    "dev": "bun run build:d2 && bun run build:excalidraw && rspress dev",
+    "build": "bun run build:d2 && bun run build:excalidraw && rspress build",
     "preview": "rspress preview",
     "build:d2": "node scripts/build-d2.mjs",
-    "build:d2:force": "node scripts/build-d2.mjs --force"
+    "build:d2:force": "node scripts/build-d2.mjs --force",
+    "build:excalidraw": "node scripts/build-excalidraw.mjs",
+    "build:excalidraw:force": "node scripts/build-excalidraw.mjs --force"
   },
   "dependencies": {
     "rspress": "2.0.0-beta.21",

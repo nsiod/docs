@@ -80,5 +80,12 @@
     "label": "11 · 控制面演进",
     "collapsible": true,
     "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "99-sandbox",
+    "label": "99 · Excalidraw 沙盒",
+    "collapsible": true,
+    "collapsed": true
   }
 ]

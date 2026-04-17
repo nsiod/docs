@@ -3,6 +3,7 @@ import { defineConfig } from 'rspress/config';
 import { pluginShiki } from '@rspress/plugin-shiki';
 import remarkLangAliases from './scripts/remark-lang-aliases.mjs';
 import remarkD2Include from './scripts/remark-d2-include.mjs';
+import remarkExcalidrawInclude from './scripts/remark-excalidraw-include.mjs';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -14,7 +15,7 @@ export default defineConfig({
   markdown: {
     // mdxRs must be disabled so JS-side remark plugins are honored.
     mdxRs: false,
-    remarkPlugins: [remarkLangAliases, remarkD2Include],
+    remarkPlugins: [remarkLangAliases, remarkD2Include, remarkExcalidrawInclude],
   },
   plugins: [
     pluginShiki({

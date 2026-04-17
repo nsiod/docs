@@ -1,0 +1,209 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "type": "text",
+      "x": 280,
+      "y": -40,
+      "width": 240,
+      "height": 32,
+      "text": "NSIO 数据面链路（示意）",
+      "fontSize": 26,
+      "textAlign": "center",
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "rectangle",
+      "x": 0,
+      "y": 40,
+      "width": 200,
+      "height": 90,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#e0f2fe",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 }
+    },
+    {
+      "type": "text",
+      "x": 30,
+      "y": 60,
+      "width": 140,
+      "height": 28,
+      "text": "NSC 客户端",
+      "fontSize": 22,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "x": 20,
+      "y": 92,
+      "width": 160,
+      "height": 22,
+      "text": "TUN + netstack",
+      "fontSize": 14,
+      "strokeColor": "#6b7280"
+    },
+    {
+      "type": "arrow",
+      "x": 200,
+      "y": 85,
+      "width": 140,
+      "height": 0,
+      "points": [[0, 0], [140, 0]],
+      "strokeColor": "#2563eb",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "text",
+      "x": 215,
+      "y": 62,
+      "width": 110,
+      "height": 20,
+      "text": "WireGuard",
+      "fontSize": 14,
+      "strokeColor": "#2563eb"
+    },
+    {
+      "type": "rectangle",
+      "x": 340,
+      "y": 40,
+      "width": 200,
+      "height": 90,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#fef3c7",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 }
+    },
+    {
+      "type": "text",
+      "x": 374,
+      "y": 60,
+      "width": 140,
+      "height": 28,
+      "text": "NSGW 网关",
+      "fontSize": 22,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "x": 360,
+      "y": 92,
+      "width": 160,
+      "height": 22,
+      "text": "隧道中继 · 对称接入",
+      "fontSize": 14,
+      "strokeColor": "#6b7280"
+    },
+    {
+      "type": "arrow",
+      "x": 540,
+      "y": 85,
+      "width": 140,
+      "height": 0,
+      "points": [[0, 0], [140, 0]],
+      "strokeColor": "#2563eb",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "text",
+      "x": 555,
+      "y": 62,
+      "width": 110,
+      "height": 20,
+      "text": "WireGuard",
+      "fontSize": 14,
+      "strokeColor": "#2563eb"
+    },
+    {
+      "type": "ellipse",
+      "x": 680,
+      "y": 40,
+      "width": 200,
+      "height": 90,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#dcfce7",
+      "strokeWidth": 2
+    },
+    {
+      "type": "text",
+      "x": 716,
+      "y": 60,
+      "width": 130,
+      "height": 28,
+      "text": "NSN 节点",
+      "fontSize": 22,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "x": 700,
+      "y": 92,
+      "width": 160,
+      "height": 22,
+      "text": "站点数据面 · ACL",
+      "fontSize": 14,
+      "strokeColor": "#6b7280"
+    },
+    {
+      "type": "diamond",
+      "x": 340,
+      "y": 240,
+      "width": 200,
+      "height": 100,
+      "strokeColor": "#7c3aed",
+      "backgroundColor": "#ede9fe",
+      "strokeWidth": 2
+    },
+    {
+      "type": "text",
+      "x": 380,
+      "y": 275,
+      "width": 120,
+      "height": 26,
+      "text": "NSD 控制面",
+      "fontSize": 18,
+      "strokeColor": "#7c3aed"
+    },
+    {
+      "type": "arrow",
+      "x": 100,
+      "y": 135,
+      "width": 330,
+      "height": 105,
+      "points": [[0, 0], [330, 105]],
+      "strokeColor": "#7c3aed",
+      "strokeWidth": 1,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "arrow",
+      "x": 540,
+      "y": 240,
+      "width": 240,
+      "height": -105,
+      "points": [[0, 0], [240, -105]],
+      "strokeColor": "#7c3aed",
+      "strokeWidth": 1,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "text",
+      "x": 150,
+      "y": 200,
+      "width": 120,
+      "height": 18,
+      "text": "SSE / Noise",
+      "fontSize": 13,
+      "strokeColor": "#7c3aed"
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff"
+  }
+}
