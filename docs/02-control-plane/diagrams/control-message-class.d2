@@ -1,0 +1,47 @@
+direction: right
+
+ControlMessage: {
+  shape: class
+  "+WgConfig(WgConfig)": ""
+  "+ProxyConfig(ProxyConfig)": ""
+  "+AclConfig(AclConfig)": ""
+  "+GatewayConfig(GatewayConfig)": ""
+  "+RoutingConfig(RoutingConfig)": ""
+  "+DnsConfig(DnsConfig)": ""
+  "+TokenRefresh{token}": ""
+  "+ServicesReport(ServiceReport)": ""
+  "+ServicesAck(ServicesAck)": ""
+  "+Ping / Pong": ""
+}
+
+WgConfig: { shape: class }
+ProxyConfig: { shape: class }
+AclConfig: { shape: class }
+GatewayConfig: { shape: class }
+RoutingConfig: { shape: class }
+DnsConfig: { shape: class }
+ServiceReport: { shape: class }
+PeerConfig: { shape: class }
+SubnetRule: { shape: class }
+RewriteTarget: { shape: class }
+AclPolicy: { shape: class }
+GatewayInfo: { shape: class }
+RouteEntry: { shape: class }
+DnsRecord: { shape: class }
+ServiceInfo: { shape: class }
+
+ControlMessage -> WgConfig
+ControlMessage -> ProxyConfig
+ControlMessage -> AclConfig
+ControlMessage -> GatewayConfig
+ControlMessage -> RoutingConfig
+ControlMessage -> DnsConfig
+ControlMessage -> ServiceReport
+WgConfig -> PeerConfig
+ProxyConfig -> SubnetRule
+SubnetRule -> RewriteTarget
+AclConfig -> AclPolicy: "来自 acl crate"
+GatewayConfig -> GatewayInfo
+RoutingConfig -> RouteEntry
+DnsConfig -> DnsRecord
+ServiceReport -> ServiceInfo

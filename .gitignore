@@ -13,6 +13,9 @@ out/
 doc_build/
 .rspress/
 
+# Generated diagram SVGs (built from .d2 sources via prebuild hook)
+docs/public/**/diagrams/*.svg
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

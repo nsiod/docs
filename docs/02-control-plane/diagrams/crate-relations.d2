@@ -1,0 +1,22 @@
+direction: right
+
+workspace: workspace {
+  common: "common\n共享类型"
+  acl: "acl\n策略引擎"
+  control: "control\n认证 + SSE"
+}
+
+tunnel_wg: "tunnel-wg"
+nat: "nat"
+connector: "connector"
+nsn: "nsn 主二进制"
+nsc: "nsc 主二进制"
+
+workspace.common -> workspace.acl
+workspace.common -> workspace.control
+workspace.acl -> workspace.control
+workspace.control -> tunnel_wg
+workspace.control -> nat
+workspace.control -> connector
+workspace.control -> nsn
+workspace.control -> nsc

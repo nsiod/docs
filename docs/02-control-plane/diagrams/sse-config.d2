@@ -1,0 +1,90 @@
+shape: sequence_diagram
+
+auth: AuthClient
+cp: "ControlPlane (lib.rs:159 run)"
+sse: "SseControl (sse.rs:55)"
+nsd: NSD
+wg: "wg_config_tx → tunnel-wg"
+proxy: "proxy_config_tx → nat"
+acl: "acl_config_tx → acl"
+gw: "gateway_config_tx → connector"
+route: "routing_config_tx → nsgw/nsc"
+dns: "dns_config_tx → nsc"
+tkr: "token_refresh_tx → heartbeat/monitor"
+
+cp -> auth: "authenticate() (Ed25519 signature, see auth-sequence.d2)"
+auth -> nsd: "POST /api/v1/machine/auth"
+nsd -> auth: "200 {token: JWT}"
+auth -> cp: token
+
+outer: "reconnect / backoff outer loop" {
+  cp -> sse: "SseControl::new(server_url, token, max_per_sec, max_size)"
+  cp -> sse: "post_services_report(report)"
+  sse -> nsd: "POST /api/v1/services/report\nAuthorization: Bearer JWT\n{services, strict_mode, system_info?}"
+
+  ok: "2xx" {
+    nsd -> sse: "200"
+  }
+
+  err: "error" {
+    nsd -> sse: "status >= 300"
+    note_bk: "backoff_secs *= 2 up to 60s, continue outer loop"
+  }
+
+  cp -> sse: "connect()"
+  sse -> nsd: "GET /api/v1/config/stream\nAuthorization: Bearer JWT"
+  nsd -> sse: "200 (SSE long-lived stream opens)"
+  note_reset: "backoff_secs reset to 1"
+
+  inner: "next_message()" {
+    nsd -> sse: "data: type=wg_config"
+    sse -> cp: "ControlMessage::WgConfig"
+    cp -> wg: "send(cfg)"
+
+    nsd -> sse: "data: type=proxy_config"
+    sse -> cp: "ControlMessage::ProxyConfig"
+    cp -> proxy: "send(cfg)"
+
+    nsd -> sse: "data: type=acl_config"
+    sse -> cp: "ControlMessage::AclConfig"
+    cp -> acl: "send(cfg)"
+
+    nsd -> sse: "data: type=gateway_config"
+    sse -> cp: "ControlMessage::GatewayConfig"
+    cp -> gw: "send(cfg)"
+
+    nsd -> sse: "data: type=routing_config"
+    sse -> cp: "ControlMessage::RoutingConfig"
+    cp -> route: "send(cfg)"
+
+    nsd -> sse: "data: type=dns_config"
+    sse -> cp: "ControlMessage::DnsConfig"
+    cp -> dns: "send(cfg)"
+
+    nsd -> sse: "data: type=services_ack matched=... unmatched=... rejected=..."
+    sse -> cp: "ControlMessage::ServicesAck"
+    note_ack: "log only (info matched / warn unmatched / warn rejected)"
+
+    nsd -> sse: "data: type=ping (server keep-alive)"
+    sse -> cp: "ControlMessage::Ping"
+    note_ping: "ignore (SSE one-way, no pong)"
+
+    nsd -> sse: "data: type=token_refresh token=<new JWT>"
+    sse -> cp: "ControlMessage::TokenRefresh{token}"
+    cp -> sse: "set_token(new)"
+    cp -> tkr: "send(new)"
+
+    rate: "rate exceeded (TokenBucket empty)" {
+      note_rate: "drop event with WARN (sse.rs:226)"
+    }
+
+    size: "size > max_message_size" {
+      note_size: "drop event with WARN (sse.rs:217)"
+    }
+  }
+
+  nsd -> sse: "stream ended / chunk error"
+  note_backoff: "sleep(backoff_secs), backoff *= 2 up to 60s\nre-authenticate(), retry outer loop"
+}
+
+note_end: "Any downstream Receiver dropped\n=> dispatch_message returns Ok(true)\n=> ControlPlane::run() returns"

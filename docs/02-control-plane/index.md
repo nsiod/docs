@@ -60,29 +60,7 @@
 
 `ControlPlane::run()` (`lib.rs:159`) 在每个 NSD 连接上维护一个独立的状态机；多 NSD 由 `MultiControlPlane::run()` (`multi.rs:131`) 派生 N 个并发 task，每个内部循环结构相同：
 
-```mermaid
-stateDiagram-v2
-    [*] --> Discovering : ControlPlane::run()
-    Discovering --> Registering : MachineState 未注册
-    Discovering --> Authenticating : 已注册 / 复用现有 state
-    Registering --> Authenticating : POST /machine/register 成功
-    Registering --> Backoff : 注册失败 / authkey 无效
-
-    Authenticating --> ReportingServices : POST /machine/auth 返回 JWT
-    Authenticating --> Backoff : 401/网络错误
-
-    ReportingServices --> StreamingConfig : POST /services/report 成功
-    ReportingServices --> Backoff : 失败
-
-    StreamingConfig --> StreamingConfig : 收到 wg/proxy/acl/... 事件\n并 dispatch_message()
-    StreamingConfig --> RefreshingToken : 收到 token_refresh
-    RefreshingToken --> StreamingConfig : 更新 token，继续读流
-
-    StreamingConfig --> Backoff : SSE 错误 / 流关闭
-    Backoff --> Authenticating : sleep(1..60s, 指数退避)\n 再次 authenticate()
-
-    StreamingConfig --> [*] : 下游 receiver drop\n（dispatch 返回 true）
-```
+[ControlPlane::run() 状态机](./diagrams/controlplane-state-machine.d2)
 
 要点：
 
@@ -121,7 +99,7 @@ common/
 |------|------|
 | [design.md](./design.md) | 认证流程、SSE 事件契约、多 NSD 合并策略、keep-alive / 重连、限流、可插拔传输 |
 | [implementation.md](./implementation.md) | 逐文件职责说明、关键类型签名、消息分派表、跨 crate 协作 |
-| [diagrams/auth-sequence.mmd](./diagrams/auth-sequence.mmd) | 三种认证路径的时序图 |
-| [diagrams/sse-config.mmd](./diagrams/sse-config.mmd) | SSE 事件流时序 |
-| [diagrams/multi-nsd-merge.mmd](./diagrams/multi-nsd-merge.mmd) | 多 NSD 配置合并数据流 |
-| [diagrams/common-state.mmd](./diagrams/common-state.mmd) | `common` 共享状态与服务注册关系图 |
+| [diagrams/auth-sequence.d2](./diagrams/auth-sequence.d2) | 三种认证路径的时序图 |
+| [diagrams/sse-config.d2](./diagrams/sse-config.d2) | SSE 事件流时序 |
+| [diagrams/multi-nsd-merge.d2](./diagrams/multi-nsd-merge.d2) | 多 NSD 配置合并数据流 |
+| [diagrams/common-state.d2](./diagrams/common-state.d2) | `common` 共享状态与服务注册关系图 |

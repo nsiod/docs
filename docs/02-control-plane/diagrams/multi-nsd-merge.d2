@@ -1,0 +1,58 @@
+direction: down
+
+classes: {
+  nsd: { style: { fill: "#fee"; stroke: "#a33" } }
+  cp: { style: { fill: "#eef"; stroke: "#33a" } }
+  merge: { style: { fill: "#efe"; stroke: "#393" } }
+  out: { style: { fill: "#fff8e1"; stroke: "#aa8" } }
+}
+
+nsds: "NSD Endpoints" {
+  nsd1: "NSD-1\nprimary" { class: nsd }
+  nsd2: "NSD-2\nsecondary" { class: nsd }
+  nsd3: "NSD-3\ntenant-X" { class: nsd }
+}
+
+mcp: "MultiControlPlane multi.rs:131" {
+  cp1: "ControlPlane #1\n+ AuthClient #1\n+ ServiceReport" { class: cp }
+  cp2: "ControlPlane #2\n+ AuthClient #2\n+ ServiceReport" { class: cp }
+  cp3: "ControlPlane #3\n+ AuthClient #3\n+ ServiceReport" { class: cp }
+
+  upd: "mpsc::Sender NsdUpdate (cap 64)"
+  store: "NsdConfigStore\nmerge.rs:149\nHashMap nsd_id → cfg" { class: merge }
+  merger: "Merger loop\nmulti.rs:295" { shape: diamond; class: merge }
+}
+
+down: "Downstream Receivers" {
+  wg_out: "wg_rx → tunnel-wg" { class: out }
+  proxy_out: "proxy_rx → nat" { class: out }
+  acl_out: "acl_rx → acl" { class: out }
+  gw_out: "gateway_rx → connector" { class: out }
+  route_out: "routing_rx → nsgw/nsc" { class: out }
+  dns_out: "dns_rx → nsc" { class: out }
+  status_out: "status_rx → monitor /api/status" { class: out }
+  token_out: "token_refresh_rx → heartbeat" { class: out }
+}
+
+nsds.nsd1 -> mcp.cp1: "SSE wg/proxy/acl/gateway/routing/dns/token_refresh"
+nsds.nsd2 -> mcp.cp2: "SSE wg/proxy/acl/gateway/routing/dns/token_refresh"
+nsds.nsd3 -> mcp.cp3: "SSE wg/proxy/acl/gateway/routing/dns/token_refresh"
+
+mcp.cp1 -> mcp.upd: "tag id=NSD-1"
+mcp.cp2 -> mcp.upd: "tag id=NSD-2"
+mcp.cp3 -> mcp.upd: "tag id=NSD-3"
+
+mcp.upd -> mcp.merger
+mcp.merger -> mcp.store
+mcp.store -> mcp.merger: "merged_wg() peers UNION (dedupe public_key)" { style.stroke-dash: 3 }
+mcp.store -> mcp.merger: "merged_proxy() rules UNION (dedupe resource_id)" { style.stroke-dash: 3 }
+mcp.store -> mcp.merger: "merged_acl() hosts/acls/tests INTERSECTION" { style.stroke-dash: 3 }
+
+mcp.merger -> down.wg_out: "merged WgConfig"
+mcp.merger -> down.proxy_out: "merged ProxyConfig"
+mcp.merger -> down.acl_out: "merged AclConfig"
+mcp.merger -> down.gw_out: "pass-through GatewayConfig"
+mcp.merger -> down.route_out: "pass-through RoutingConfig"
+mcp.merger -> down.dns_out: "pass-through DnsConfig"
+mcp.merger -> down.status_out: "nsd_id on each cfg arrival"
+mcp.merger -> down.token_out: "token_refresh forwarded"

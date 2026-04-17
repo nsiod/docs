@@ -1,0 +1,32 @@
+direction: down
+
+start: "起点" { shape: circle }
+discovering: "Discovering"
+registering: "Registering"
+authenticating: "Authenticating"
+reporting: "ReportingServices"
+streaming: "StreamingConfig"
+refreshing: "RefreshingToken"
+backoff: "Backoff"
+end: "终点" { shape: circle }
+
+start -> discovering: "ControlPlane::run()"
+discovering -> registering: "MachineState 未注册"
+discovering -> authenticating: "已注册 / 复用现有 state"
+registering -> authenticating: "POST /machine/register 成功"
+registering -> backoff: "注册失败 / authkey 无效"
+
+authenticating -> reporting: "POST /machine/auth 返回 JWT"
+authenticating -> backoff: "401 / 网络错误"
+
+reporting -> streaming: "POST /services/report 成功"
+reporting -> backoff: "失败"
+
+streaming -> streaming: "收到 wg/proxy/acl/... 事件\n并 dispatch_message()"
+streaming -> refreshing: "收到 token_refresh"
+refreshing -> streaming: "更新 token, 继续读流"
+
+streaming -> backoff: "SSE 错误 / 流关闭"
+backoff -> authenticating: "sleep(1..60s, 指数退避)\n再次 authenticate()"
+
+streaming -> end: "下游 receiver drop\n(dispatch 返回 true)"

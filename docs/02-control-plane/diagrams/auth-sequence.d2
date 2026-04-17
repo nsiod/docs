@@ -1,0 +1,57 @@
+shape: sequence_diagram
+
+nsn: "NSN (control crate)"
+state: "MachineState\n(local, on disk)"
+browser: User Browser
+nsd: "NSD (control center)"
+
+note_id: "Generate / load identity\nEd25519 (machinekey) + X25519 (peerkey)\nstate.rs:147 load_or_create_for_realm()"
+
+nsn -> nsd: "GET /api/v1/info"
+nsd -> nsn: "NsdInfo {nsd_type, realm, auth_methods, version}"
+
+first_authkey: "First run with authkey" {
+  nsn -> nsd: "POST /api/v1/machine/register\n{auth_key, machine_id?, machine_key_pub, peer_key_pub, hostname, os, version, system_info}"
+  nsd -> nsn: "200 {machine_id, server_peer_key_pub, server_endpoint, domain_base?}"
+  nsn -> state: "set_registered(...)"
+  nsn -> state: "save() machinekey.json + registrations/realm.json (0600)"
+}
+
+first_oauth: "First run with OAuth2 device flow (RFC 8628)" {
+  nsn -> nsd: "POST /api/v1/device/code {client_id: nsio-connector}"
+  nsd -> nsn: "{device_code, user_code, verification_uri, expires_in, interval}"
+  nsn -> browser: "print(verification_uri_complete + user_code)"
+  browser -> nsd: "User opens URL and approves device"
+
+  poll: "poll every interval seconds (deadline = expires_in + 5s)" {
+    nsn -> nsd: "POST /api/v1/device/token\n{device_code, grant_type: device_code}"
+
+    pending: "pending" {
+      nsd -> nsn: "{error: authorization_pending | slow_down}"
+    }
+
+    approved: "approved" {
+      nsd -> nsn: "{access_token}"
+    }
+
+    error: "error" {
+      nsd -> nsn: "{error: expired_token | access_denied}"
+      nsn -> nsn: "Error::Auth(...)"
+    }
+  }
+
+  nsn -> nsd: "POST /api/v1/machine/register\nAuthorization: Bearer access_token"
+  nsd -> nsn: "200 {machine_id, server_peer_key_pub, server_endpoint, domain_base?}"
+  nsn -> state: "set_registered + save"
+}
+
+subseq: "Subsequent run (already registered)" {
+  note2: "skip register, reuse machine_id\nauth.rs:238 authenticate()"
+}
+
+note_sig: "Build message = machine_id:unix_secs\nsignature = Ed25519(signing_key, message)"
+
+nsn -> nsd: "POST /api/v1/machine/auth\n{machine_id, machine_key_pub, timestamp, signature}"
+nsd -> nsn: "200 {token: JWT}"
+
+note_ready: "Now ready to POST /services/report and\nopen SSE GET /api/v1/config/stream\n(see sse-config.d2)"

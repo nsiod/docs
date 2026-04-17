@@ -342,16 +342,7 @@ pub trait ControlTransport: Send + Sync {
 
 NSN / NSC 本地只需要长期保管 **root 公钥** `realm_root_key_pub`。每次收到事件，按下面流程校验：
 
-```mermaid
-flowchart LR
-    E["SSE 事件<br/>{payload, sig{kid,value}}"] --> L1["查找 kid 对应的<br/>SigningCert (来自 signing_certs 事件)"]
-    L1 -->|未找到或已过期| DROP1["丢弃 + WARN"]
-    L1 --> L2["验 root_sig:<br/>realm_root_key_pub 是否签了这张 cert?"]
-    L2 -->|失败| DROP2["丢弃 + WARN"]
-    L2 --> L3["验事件 sig.value:<br/>cert.pub 是否签了 payload digest?"]
-    L3 -->|失败| DROP3["丢弃 + WARN"]
-    L3 --> APPLY["应用到 merge.rs / 数据面"]
-```
+[SigningCert 两步验签流程](./diagrams/signing-cert-verify.d2)
 
 两步验签缓存友好：`SigningCert` 的 `root_sig` 只在**第一次见到这张 cert** 时验证一次，后续同 `kid` 的事件只走 cert.pub 的签名校验；cert 过期或被吊销时从缓存中清除。
 

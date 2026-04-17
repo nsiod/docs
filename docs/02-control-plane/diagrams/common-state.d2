@@ -1,0 +1,164 @@
+direction: right
+
+classes: {
+  class_box: { shape: class }
+}
+
+ConnectorConfig: {
+  shape: class
+  "+server_url": String
+  "+control_centers": "Vec<ControlCenterConfig>"
+  "+gateways": "Vec<GatewayConfig>"
+  "+state_dir": String
+  "+auth_key": "Option<String>"
+  "+machine_id": "Option<String>"
+  "+ws_max_messages_per_sec": u32
+  "+ws_max_message_size": usize
+  "+control_mode": String
+  "+nsd_pubkey": "Option<String>"
+  "+effective_control_centers()": "()"
+  "+effective_gateways()": "()"
+  "+has_endpoint()": "()"
+}
+
+ControlCenterConfig: {
+  shape: class
+  "+id": String
+  "+url": String
+  "+priority": u32
+}
+
+GatewayConfig: {
+  shape: class
+  "+id": String
+  "+endpoint": String
+  "+priority": u32
+  "+transport_mode": String
+  "+enabled": bool
+}
+
+MachineState: {
+  shape: class
+  "-signing_key": "Ed25519 SigningKey"
+  "+machine_key_pub": bytes32
+  "-peer_key_priv": SecretBox
+  "+peer_key_pub": bytes32
+  "+realm": String
+  "+machine_id": "Option<String>"
+  "+registered": bool
+  "+server_peer_pub": "Option<bytes32>"
+  "+server_endpoint": "Option<SocketAddr>"
+  "+domain_base": "Option<String>"
+  "+load_or_create_for_realm(state_dir, realm)": "()"
+  "+from_credentials(auth_key, machine_id)": "()"
+  "+sign(message)": bytes64
+  "+set_registered(...)": "()"
+  "+save(state_dir)": "()"
+}
+
+MachineIdentity: {
+  shape: class
+  "+machine_key_pub": bytes32
+  "+peer_key_pub": bytes32
+  "+signing_key": SigningKey
+  "+peer_key_priv": SecretBox
+}
+
+RealmRegistration: {
+  shape: class
+  "+realm": String
+  "+machine_id": "Option<String>"
+  "+registered": bool
+  "+server_peer_pub": "Option<bytes32>"
+  "+server_endpoint": "Option<SocketAddr>"
+}
+
+NsdInfo: {
+  shape: class
+  "+nsd_type": NsdType
+  "+realm": String
+  "+auth_methods": "Vec<AuthMethod>"
+  "+provider": String
+  "+version": String
+}
+
+NsdType: {
+  shape: class
+  "<<enum>>": ""
+  "Cloud": ""
+  "SelfHosted": ""
+}
+
+AuthMethod: {
+  shape: class
+  "<<enum>>": ""
+  "AuthKey": ""
+  "OAuth2": ""
+  "DeviceFlow": ""
+}
+
+ServicesConfig: {
+  shape: class
+  "+settings": ServiceSettings
+  "+services": "HashMap<String, ServiceDef>"
+  "+load(path)": "fail-closed"
+  "+is_strict()": "()"
+  "+is_allowed(host, port, proto)": "()"
+  "+is_cidr_allowed(cidr, range, proto)": "()"
+  "+find_by_port(port, proto)": "()"
+  "+find_by_domain(host)": "()"
+}
+
+ServiceDef: {
+  shape: class
+  "+protocol": Protocol
+  "+host": String
+  "+port": u16
+  "+domain": "Option<String>"
+  "+description": "Option<String>"
+  "+enabled": bool
+  "+tunnel": TunnelPreference
+  "+gateway": GatewayPreference
+  "+is_local()": "()"
+  "+fqid(name, node_id)": "()"
+}
+
+TunnelPreference: {
+  shape: class
+  "<<enum>>": ""
+  "Auto": ""
+  "Wg": ""
+  "Ws": ""
+}
+
+GatewayPreference: {
+  shape: class
+  "<<enum>>": ""
+  "Auto": ""
+  "Specific(String)": ""
+}
+
+Tunnel: {
+  shape: class
+  "<<trait>>": ""
+  "+transport_type()": TransportType
+  "+is_connected()": bool
+}
+
+TransportType: {
+  shape: class
+  "<<enum>>": ""
+  "WireGuard": ""
+  "WebSocket": ""
+}
+
+ConnectorConfig -> ControlCenterConfig: "1..* control_centers"
+ConnectorConfig -> GatewayConfig: "1..* gateways"
+MachineState -> MachineIdentity: "embeds (identity fields)" { style.stroke-dash: 3 }
+MachineState -> RealmRegistration: "embeds (realm fields)" { style.stroke-dash: 3 }
+NsdInfo -> NsdType
+NsdInfo -> AuthMethod
+ServicesConfig -> ServiceDef: "1..* services"
+ServiceDef -> TunnelPreference
+ServiceDef -> GatewayPreference
+Tunnel -> TransportType: "returns"

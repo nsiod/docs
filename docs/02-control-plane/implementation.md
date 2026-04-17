@@ -4,22 +4,7 @@
 
 ## 1. crate 关系图
 
-```mermaid
-graph LR
-    subgraph workspace
-        common[common<br/>共享类型]
-        acl[acl<br/>策略引擎]
-        control[control<br/>认证 + SSE]
-    end
-    common --> acl
-    common --> control
-    acl --> control
-    control --> tunnel_wg[tunnel-wg]
-    control --> nat[nat]
-    control --> connector[connector]
-    control --> nsn[nsn 主二进制]
-    control --> nsc[nsc 主二进制]
-```
+[control 与下游 crate 依赖关系](./diagrams/crate-relations.d2)
 
 `control` 仅依赖 `common` + `acl`。下游通过 `mpsc::Receiver<*Config>` 拉取配置，跨 crate 解耦。
 
@@ -178,36 +163,7 @@ fn new(
 
 ## 8. `crates/control/src/messages.rs`
 
-```mermaid
-classDiagram
-    class ControlMessage {
-        +WgConfig(WgConfig)
-        +ProxyConfig(ProxyConfig)
-        +AclConfig(AclConfig)
-        +GatewayConfig(GatewayConfig)
-        +RoutingConfig(RoutingConfig)
-        +DnsConfig(DnsConfig)
-        +TokenRefresh{token}
-        +ServicesReport(ServiceReport)
-        +ServicesAck(ServicesAck)
-        +Ping / Pong
-    }
-    ControlMessage --> WgConfig
-    ControlMessage --> ProxyConfig
-    ControlMessage --> AclConfig
-    ControlMessage --> GatewayConfig
-    ControlMessage --> RoutingConfig
-    ControlMessage --> DnsConfig
-    ControlMessage --> ServiceReport
-    WgConfig --> PeerConfig
-    ProxyConfig --> SubnetRule
-    SubnetRule --> RewriteTarget
-    AclConfig --> AclPolicy : 来自 acl crate
-    GatewayConfig --> GatewayInfo
-    RoutingConfig --> RouteEntry
-    DnsConfig --> DnsRecord
-    ServiceReport --> ServiceInfo
-```
+[ControlMessage 类型层次](./diagrams/control-message-class.d2)
 
 约束（由测试守住）：
 
