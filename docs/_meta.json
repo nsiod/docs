@@ -83,6 +83,34 @@
   },
   {
     "type": "dir",
+    "name": "nsn",
+    "label": "NSN · 主题门户",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "nsc",
+    "label": "NSC · 主题门户",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "nsd",
+    "label": "NSD · 主题门户",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "nsgw",
+    "label": "NSGW · 主题门户",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
     "name": "99-sandbox",
     "label": "99 · Excalidraw 沙盒",
     "collapsible": true,
